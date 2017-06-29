@@ -295,14 +295,28 @@ void diagram_check_consistency(struct diagram_t *dgr)
 double diagram_weight(struct diagram_t *dgr)
 {
 	int c;
-	double ret=0.0f;
+	double ret=1.0f;
 	
 	for(c=0;c<get_nr_free_propagators(dgr);c++)
 	{
+		struct g0_t *g0=get_free_propagator(dgr,c);
+	
+		ret*=exp(-g0->j*(g0->j+1)*(g0->endtau-g0->starttau));
 	}
 
 	for(c=0;c<get_nr_phonons(dgr);c++)
 	{
+		struct arc_t *arc;
+		double timediff;
+		
+		arc=get_phonon_line(dgr,c);
+		timediff=arc->endtau-arc->starttau;
+	
+		// FIXME : we need to decide which interaction potential to use!
+		// Maybe it would be better to precalculate it...
+		// \chi_\lambda(\Delta \tau) = \sum_{k} |U_\lambda (k)|^2 \exp(- \Delta \tau \omega_k)
+		
+		ret*=1.0f;
 	}
 
 	return ret;
