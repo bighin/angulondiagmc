@@ -47,6 +47,10 @@ int main(void)
 	print_diagram(dgr);
 	diagram_check_consistency(dgr);
 
+	diagram_update_length(dgr,1.9f);
+	print_diagram(dgr);
+	diagram_check_consistency(dgr);
+
 	diagram_remove_phonon_line(dgr,0);
 	print_diagram(dgr);
 	diagram_check_consistency(dgr);

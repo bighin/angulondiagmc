@@ -485,9 +485,11 @@ void diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 
 void diagram_update_length(struct diagram_t *dgr,double newmaxtau)
 {	
-	//assert(dgr->maxtau==dgr->taus[2*(dgr->nphonons)]);
-	//assert(newmaxtau>dgr->taus[2*(dgr->nphonons)-1]);
+	int nr_midpoints=get_nr_midpoints(dgr);
 
-	//dgr->maxtau=newmaxtau;
-	//dgr->taus[2*(dgr->nphonons)]=newmaxtau;
+	assert(dgr->maxtau==get_midpoint(dgr,nr_midpoints));
+	assert(newmaxtau>get_midpoint(dgr,nr_midpoints-1));
+
+	dgr->maxtau=newmaxtau;
+	get_free_propagator(dgr,get_nr_free_propagators(dgr)-1)->endtau=newmaxtau;
 }
