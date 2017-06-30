@@ -28,8 +28,6 @@ struct g0_t
 	/*
 		The first and last line in a diagram have immutable j and m.
 	*/
-	
-	bool immutable;
 };
 
 /*

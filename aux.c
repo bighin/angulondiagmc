@@ -11,7 +11,7 @@
 	Variable length list
 */
 
-struct vlist_t *init_vlist(size_t elementsize,int blocksize)
+struct vlist_t *init_vlist(size_t elementsize,int maxsz)
 {
 	struct vlist_t *ret;
 	
@@ -19,12 +19,10 @@ struct vlist_t *init_vlist(size_t elementsize,int blocksize)
 		return NULL;
 
 	assert(elementsize>0);
-	assert(blocksize>0);
 	
 	ret->elementsize=elementsize;
 	ret->nelements=0;
-	ret->nalloced=blocksize;
-	ret->blocksize=blocksize;
+	ret->nalloced=maxsz;
 
 	if(!(ret->mem=malloc(elementsize*ret->nalloced)))
 		return NULL;
@@ -76,13 +74,7 @@ void *vlist_add_element(struct vlist_t *lst,void *element,int position)
 	void *base,*target;
 
 	assert(lst);
-	assert(!(lst->nelements>lst->nalloced));
-
-	if(lst->nelements==lst->nalloced)
-	{
-		lst->nalloced+=lst->blocksize;
-		lst->mem=realloc(lst->mem,lst->elementsize*lst->nalloced);
-	}
+	assert(lst->nelements<lst->nalloced);
 
 	base=lst->mem+lst->elementsize*position;
 	target=lst->mem+lst->elementsize*(position+1);
@@ -108,6 +100,7 @@ void *vlist_add_empty(struct vlist_t *lst,int position)
 	void *data,*ret;
 
 	assert(lst->elementsize>0);
+	assert(lst->nelements<lst->nalloced);
 	
 	data=malloc(lst->elementsize);
 	assert(data);
@@ -126,13 +119,7 @@ void *vlist_append(struct vlist_t *lst,void *element)
 	void *end;
 
 	assert(lst);
-	assert(!(lst->nelements>lst->nalloced));
-
-	if(lst->nelements==lst->nalloced)
-	{
-		lst->nalloced+=lst->blocksize;
-		lst->mem=realloc(lst->mem,lst->elementsize*lst->nalloced);
-	}
+	assert(lst->nelements<lst->nalloced);
 
 	end=lst->mem+(lst->elementsize*lst->nelements);
 

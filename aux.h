@@ -6,10 +6,10 @@ struct vlist_t
 	void *mem;
 
 	size_t elementsize;
-	int nelements,nalloced,blocksize;
+	int nelements,nalloced;
 };
 
-struct vlist_t *init_vlist(size_t elementsize,int blocksize);
+struct vlist_t *init_vlist(size_t elementsize,int maxsz);
 void fini_vlist(struct vlist_t *lst);
 
 void *vlist_get_element(struct vlist_t *lst,int n);

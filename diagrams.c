@@ -52,10 +52,10 @@ struct diagram_t *init_diagram(double maxtau,int j,int m,double chempot)
 	ret->maxtau=maxtau;
 	ret->chempot=chempot;
 	
-	ret->phonons=init_vlist(sizeof(struct arc_t),1024);
-	ret->midpoints=init_vlist(sizeof(double),1024);
-	ret->free_propagators=init_vlist(sizeof(struct g0_t),1024);
-	ret->vertices=init_vlist(sizeof(struct vertex_info_t),1024);
+	ret->phonons=init_vlist(sizeof(struct arc_t),16*1024);
+	ret->midpoints=init_vlist(sizeof(double),16*1024);
+	ret->free_propagators=init_vlist(sizeof(struct g0_t),1+32*1024);
+	ret->vertices=init_vlist(sizeof(struct vertex_info_t),32*1024);
 
 	/*
 		Finally we add the initial, lone propagator.
@@ -68,7 +68,6 @@ struct diagram_t *init_diagram(double maxtau,int j,int m,double chempot)
 
 	g0->startmidpoint=-1;
 	g0->endmidpoint=0;
-	g0->immutable=true;
 
 	g0->starttau=0.0f;
 	g0->endtau=maxtau;
@@ -161,10 +160,6 @@ void delete_right_neighbour(struct diagram_t *dgr,int midpoint)
 
 struct arc_t *get_phonon_line_after_propagator(struct diagram_t *dgr,int c)
 {
-	/*
-		Remember that the number of propagators is one more than the vertices!
-	*/
-	
 	assert(c<get_nr_vertices(dgr));
 	
 	return get_vertex(dgr,c)->phononline;
@@ -186,8 +181,11 @@ void diagram_check_consistency(struct diagram_t *dgr)
 	int c;
 
 	/*
-		Check that taus are ordered
+		Check that taus are correctly ordered
 	*/
+
+	assert(get_free_propagator(dgr,0)->starttau==0.0f);
+	assert(get_free_propagator(dgr,get_nr_free_propagators(dgr)-1)->endtau==dgr->maxtau);
 
 	for(c=0;c<get_nr_midpoints(dgr)-1;c++)
 		assert(get_midpoint(dgr,c)<get_midpoint(dgr,c+1));
@@ -210,6 +208,10 @@ void diagram_check_consistency(struct diagram_t *dgr)
 			assert(get_free_propagator(dgr,c)->endtau==get_free_propagator(dgr,c+1)->starttau);
 		}
 	}
+
+	/*
+		Check the consistency of vertices and phonon lines attached to them
+	*/
 
 	for(c=0;c<get_nr_vertices(dgr);c++)
 	{
@@ -238,6 +240,7 @@ void diagram_check_consistency(struct diagram_t *dgr)
 		assert(d>0);
 	}
 
+#if 0
 	/*
 		Check for consistency of angular momentum couplings
 	*/
@@ -258,21 +261,21 @@ void diagram_check_consistency(struct diagram_t *dgr)
 		j3=thisvertex->phononline->lambda;
 		m3=thisvertex->phononline->mu;
 
-#ifdef DEBUG10
-		printf("Checking the coupling of (%d, %d), (%d, %d) and (%d, %d)\n",j1,m1,j2,m2,j3,m3);
-#endif
-
 		coupling=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,2*m1,2*m2,2*m3);		
 		epsilon=1e-10;
 
+		if(fabs(coupling)<=epsilon)
+		{
+			printf("Wrong coupling: (%d, %d) (%d, %d) (%d, %d)",j1,m1,j2,m2,j3,m3);
+			print_diagram(dgr);
+		}
+
 		assert(fabs(coupling)>epsilon);
 	}
-
-#ifdef DEBUG10
-	printf("\n");
 #endif
+
 	/*
-		More checks...
+		More checks: again we check propagators...
 	*/
 
 	for(c=0;c<get_nr_free_propagators(dgr);c++)
@@ -282,6 +285,10 @@ void diagram_check_consistency(struct diagram_t *dgr)
 		diagram_check_consistency_of_times(dgr,thisg0->starttau,thisg0->startmidpoint);
 		diagram_check_consistency_of_times(dgr,thisg0->endtau,thisg0->endmidpoint);
 	}
+
+	/*
+		...and phonon lines
+	*/
 
 	for(c=0;c<get_nr_phonons(dgr);c++)
 	{
@@ -297,12 +304,22 @@ double diagram_weight(struct diagram_t *dgr)
 	int c;
 	double ret=1.0f;
 	
+	/*
+		We calculate the weight associated to each free rotor line...
+	*/
+	
+#warning FIXME Probabilmente mancano dei fattori (-1)^\mu che pero non dovrebbero contare
+	
 	for(c=0;c<get_nr_free_propagators(dgr);c++)
 	{
 		struct g0_t *g0=get_free_propagator(dgr,c);
-	
+
 		ret*=exp(-g0->j*(g0->j+1)*(g0->endtau-g0->starttau));
 	}
+
+	/*
+		...then we add the phonon arcs...
+	*/
 
 	for(c=0;c<get_nr_phonons(dgr);c++)
 	{
@@ -311,12 +328,41 @@ double diagram_weight(struct diagram_t *dgr)
 		
 		arc=get_phonon_line(dgr,c);
 		timediff=arc->endtau-arc->starttau;
-	
+
+#warning FIXME
+
 		// FIXME : we need to decide which interaction potential to use!
 		// Maybe it would be better to precalculate it...
 		// \chi_\lambda(\Delta \tau) = \sum_{k} |U_\lambda (k)|^2 \exp(- \Delta \tau \omega_k)
 		
 		ret*=1.0f;
+	}
+
+	/*
+		...and finally we consider the vertices.
+	*/
+
+	for(c=0;c<get_nr_vertices(dgr);c++)
+	{
+		int j1,m1,j2,m2,j3,m3;
+		double coupling;
+
+		struct vertex_info_t *thisvertex=get_vertex(dgr,c);
+
+		j1=thisvertex->left->j;
+		m1=thisvertex->left->m;
+
+		j2=thisvertex->right->j;
+		m2=thisvertex->right->m;
+
+		j3=thisvertex->phononline->lambda;
+		m3=thisvertex->phononline->mu;
+
+		coupling=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,2*m1,2*m2,2*m3)*
+			 gsl_sf_coupling_3j(2*j1,2*j2,2*j3,0,0,0)*
+		         sqrtf((2.0f*j1+1)*(2.0f*j2+1)*(2.0f*j3+1)/(4.0f*M_PI));
+	
+		ret*=coupling;
 	}
 
 	return ret;
@@ -341,7 +387,7 @@ void print_diagram(struct diagram_t *dgr)
 	char *pattern;
 	int pattern_len;
 	
-	pattern_len=(dashing+3)*(get_nr_free_propagators(dgr));
+	pattern_len=(dashing+4)*(get_nr_free_propagators(dgr));
 	pattern=malloc(sizeof(char)*pattern_len);
 
 	for(c=0;c<pattern_len-1;c++)
@@ -353,21 +399,25 @@ void print_diagram(struct diagram_t *dgr)
 	{
 		struct arc_t *thisline=vlist_get_element(dgr->phonons,c);
 		
-		print_chars(' ',2+(dashing+3)*(1+thisline->startmidpoint));
-		print_chars('_',-1+(dashing+3)*(thisline->endmidpoint-thisline->startmidpoint));
+		print_chars(' ',2+(dashing+4)*(1+thisline->startmidpoint));
+		print_chars('_',-1+(dashing+4)*(thisline->endmidpoint-thisline->startmidpoint));
 
-		pattern[1+(dashing+3)*(1+thisline->startmidpoint)]='|';
-		pattern[1+(dashing+3)*(1+thisline->endmidpoint)]='|';
+		pattern[1+(dashing+4)*(1+thisline->startmidpoint)]='|';
+		pattern[1+(dashing+4)*(1+thisline->endmidpoint)]='|';
 
 		printf("\n%s\n",pattern);
 	}
 
-	printf("|%d|",0);
+	printf("| %d|",0);
 
 	for(c=0;c<get_nr_free_propagators(dgr);c++)
 	{
 		print_chars('-',dashing);
-		printf("|%d|",c+1);
+		
+		if(c+1<10)
+			printf("| %d|",c+1);
+		else
+			printf("|%d|",c+1);
 	}
 
 	printf("\n\n");
@@ -380,12 +430,8 @@ void print_diagram(struct diagram_t *dgr)
 			printf("|%d| %f ---> (lambda=%d, mu=%d)\n",c,get_midpoint(dgr,c-1),get_vertex(dgr,c-1)->phononline->lambda,get_vertex(dgr,c-1)->phononline->mu);
 
 		printf(" |\n");
-		printf(" | G0(j=%d, m=%d)",get_free_propagator(dgr,c)->j,get_free_propagator(dgr,c)->m);
-
-		if(get_free_propagator(dgr,c)->immutable==true)
-			printf(" [attr=immutable]");
-
-		printf("\n|\n");
+		printf(" | G0(j=%d, m=%d)\n",get_free_propagator(dgr,c)->j,get_free_propagator(dgr,c)->m);
+		printf(" |\n");
 	}
 
 	printf("|%d| %f\n",1+get_nr_midpoints(dgr),dgr->maxtau);
