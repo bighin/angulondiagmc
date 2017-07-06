@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdbool.h>
 #include <assert.h>
 
@@ -308,21 +309,23 @@ void diagram_remove_end_midpoint(struct diagram_t *dgr,int c)
 	assert((c+1)<get_nr_free_propagators(dgr));
 
 	/*
-		The left propagator is removed, and connections between propagators are fixed...
+		The left propagator is removed, and connections between propagators are fixed.
 	*/
 
 	delete_left_neighbour(dgr,c);
 
 	vlist_remove_element(dgr->midpoints,c);
 	vlist_remove_element(dgr->vertices,c);
+	
+	/*
+		The value of c is decreased because a propagator
+		has been deleted to the left...
+	*/
 
 	c--;
 
 	/*
-		Special handling of the c=0 case...
-
-		If endmidpoint is zero, the only possibility is that we	are removing the
-		last midpoint and going back to a single free propagator.
+		...but then we have to check everywhere for negative zero!
 	*/
 
 	if(c>=0)
@@ -336,7 +339,7 @@ void diagram_remove_end_midpoint(struct diagram_t *dgr,int c)
 	right->starttau=get_midpoint(dgr,c);
 
 	/*
-		...and also the connection between vertices are fixed.
+		Finally the connections between vertices are fixed.
 	*/
 
 	thisvertex=(c>=0)?(get_vertex(dgr,c)):(NULL);
@@ -461,4 +464,69 @@ void diagram_update_length(struct diagram_t *dgr,double newmaxtau)
 
 	dgr->maxtau=newmaxtau;
 	get_free_propagator(dgr,get_nr_free_propagators(dgr)-1)->endtau=newmaxtau;
+}
+
+#warning TESTME
+
+bool recouple(struct diagram_t *dgr,int lo,int hi)
+{
+	struct randomized_list_t *lst;
+	int j1,m1,j2,m2,j3,m3;
+
+	if(lo==hi+1)
+		return true;
+
+	j1=get_free_propagator(dgr,lo-1)->j;
+	m1=get_free_propagator(dgr,lo-1)->m;
+
+	j2=get_phonon_line_after_propagator(dgr,lo-1)->lambda;
+	m2=get_phonon_line_after_propagator(dgr,lo-1)->mu;
+
+	m3=-m1-m2;
+
+	lst=init_rlist();
+
+	for(j3=0;j3<=j1+j2;j3++)
+	{
+		/*
+			m3 cannot exceed j3
+		*/
+
+		if(abs(m3)>j3)
+			continue;
+
+		/*
+			If all ms are zero, then the sum of all js must be even.
+		*/
+
+		if((m1==m2)&&(m2==m3)&&(m3==0))
+			if(((j1+j2+j3)%2)==1)
+				continue;
+
+		/*
+			Check if the angular momenta satisfy the triangular inequality
+		*/
+
+		if(abs(j1-j2)>j3)
+			continue;
+
+		if(abs(j2-j3)>j1)
+			continue;
+
+		if(abs(j3-j1)>j2)
+			continue;
+
+		rlist_add_item(lst,j3);
+	}
+
+	while(rlist_get_elements(lst)>0)
+	{
+		get_free_propagator(dgr,lo)->j=rlist_pop_random_item(lst);
+		get_free_propagator(dgr,lo)->m=m3;
+
+		if(recouple(dgr,lo+1,hi)==true)
+			return true;
+	}
+
+	return false;
 }

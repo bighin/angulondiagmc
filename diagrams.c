@@ -313,8 +313,12 @@ double diagram_weight(struct diagram_t *dgr)
 	for(c=0;c<get_nr_free_propagators(dgr);c++)
 	{
 		struct g0_t *g0=get_free_propagator(dgr,c);
+		double en,tau;
+		
+		en=g0->j*(g0->j+1.0f)-dgr->chempot;
+		tau=g0->endtau-g0->starttau;
 
-		ret*=exp(-g0->j*(g0->j+1)*(g0->endtau-g0->starttau));
+		ret*=exp(-en*tau);
 	}
 
 	/*

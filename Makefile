@@ -11,7 +11,7 @@ LDFLAGS = -lgsl -L/opt/local/lib/
 default: $(TARGET)
 all: default
 
-OBJECTS = $(patsubst %.c, %.o, $(wildcard *.c))
+OBJECTS = $(patsubst %.c, %.o, $(wildcard *.c inih/*.c))
 HEADERS = $(wildcard *.h)
 
 %.o: %.c $(HEADERS)

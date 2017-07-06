@@ -1,10 +1,13 @@
 #include <stdio.h>
+#include <string.h>
 #include <stdbool.h>
 #include <assert.h>
 #include <gsl/gsl_rng.h>
 
 #include "diagrams.h"
 #include "updates.h"
+#include "stat.h"
+#include "inih/ini.h"
 
 /*
 	A pointer to a GSL random number generator object
@@ -26,7 +29,7 @@ void stresstest(void)
 		return;
 	}
 
-	dgr=init_diagram(1.0f,7,6,0.5f);
+	dgr=init_diagram(1.0f,2,1,5.0f);
 
 	parx=64;
 	pary=128;
@@ -91,57 +94,84 @@ void stresstest(void)
 	}
 }
 
-int main(void)
+struct configuration_t
 {
-	stresstest();
-	
-	return 0;
+	int iterations;
+	char *prefix;
+};
+
+static int configuration_handler(void *user,const char *section,const char *name,const char *value)
+{
+	struct configuration_t *pconfig=(struct configuration_t *)(user);
+
+#define MATCH(s,n) ((strcmp(section,s)==0)&&(strcmp(name,n)==0))
+
+	if(MATCH("diagmc","iterations"))
+	{
+		pconfig->iterations=atoi(value);
+	}
+	else if(MATCH("diagmc","prefix"))
+	{
+		pconfig->prefix=strdup(value);
+	}
+	else
+	{
+		/* Unknown section/name, error */
+		return 0;
+	}
+
+	return 1;
 }
 
-int main_old(void)
+int do_diagmc(char *configfile)
 {
 	struct diagram_t *dgr;
+	struct configuration_t config;
+	struct samples_t *samples;
+
+	int c;
+
+        if(ini_parse(configfile,configuration_handler,&config)<0)
+	{
+		fprintf(stderr,"Couldn't read or parse '%s'\n",configfile);
+		exit(0);
+	}
+
+	fprintf(stderr,"Loaded '%s'\n",configfile);
+	fprintf(stderr,"Performing %d iterations\n",config.iterations);
+	fprintf(stderr,"Writing results to prefix '%s'\n",config.prefix);
 
 	if((rng_ctx=gsl_rng_alloc(gsl_rng_mt19937))==NULL)
 	{
 		printf("Couldn't initialize the random number generator\n");
+		exit(0);
+	}
+
+	dgr=init_diagram(1.0f,2,1,5.0f);
+	samples=samples_init();
+
+	for(c=0;c<config.iterations;c++)
+	{
+		samples_add_entry(samples,diagram_weight(dgr));
+	}
+
+	printf("%f %f\n",samples_get_average(samples),samples_get_variance(samples));
+
+	samples_fini(samples);
+	fini_diagram(dgr);
+
+	return 0;
+}
+
+int main(int argc,char *argv[])
+{
+	if(argc!=2)
+	{
+		printf("Usage: %s <inifile>\n",argv[0]);
 		return 0;
 	}
-		
-	dgr=init_diagram(1.0f,7,6,0.5f);
-	print_diagram(dgr);
-
-	diagram_add_phonon_line(dgr,0.5,0.6,1,3,2);
-	print_diagram(dgr);
-	diagram_check_consistency(dgr);
-
-	diagram_add_phonon_line(dgr,0.3,0.9,1,4,-1);
-	print_diagram(dgr);
-	diagram_check_consistency(dgr);
-
-	diagram_add_phonon_line(dgr,0.05,0.95,1,2,0);
-	print_diagram(dgr);
-	diagram_check_consistency(dgr);
-
-	diagram_remove_phonon_line(dgr,0);
-	print_diagram(dgr);
-	diagram_check_consistency(dgr);
-
-	diagram_remove_phonon_line(dgr,0);
-	print_diagram(dgr);
-	diagram_check_consistency(dgr);
-
-	diagram_update_length(dgr,1.9f);
-	print_diagram(dgr);
-	diagram_check_consistency(dgr);
-
-	diagram_remove_phonon_line(dgr,0);
-	print_diagram(dgr);
-	diagram_check_consistency(dgr);
-
-	fini_diagram(dgr);
 	
-	gsl_rng_free(rng_ctx);
-
+	do_diagmc(argv[1]);
+	
 	return 0;
 }

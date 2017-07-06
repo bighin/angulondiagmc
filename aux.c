@@ -197,3 +197,36 @@ int rlist_get_random_item(struct randomized_list_t *lst)
 	
 	return lst->items[gsl_rng_uniform_int(rng_ctx,lst->nitems)];
 }
+
+int rlist_get_elements(struct randomized_list_t *lst)
+{
+	return lst->nitems;
+}
+
+void rlist_remove_element(struct randomized_list_t *lst,int position)
+{
+	void *base,*target;
+
+	base=lst->items+sizeof(int)*position;
+	target=lst->items+sizeof(int)*(position+1);
+
+	memmove(base,target,sizeof(int)*(lst->nitems-position));
+	lst->nitems--;
+}
+
+#warning TESTME
+
+int rlist_pop_random_item(struct randomized_list_t *lst)
+{
+	extern gsl_rng *rng_ctx;
+	int target,result;
+	
+	assert(lst->nitems>0);
+	
+	target=gsl_rng_uniform_int(rng_ctx,lst->nitems);
+	result=lst->items[target];
+
+	rlist_remove_element(lst,target);
+
+	return result;
+}
