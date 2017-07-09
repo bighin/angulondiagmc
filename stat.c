@@ -214,3 +214,69 @@ double slope_error(struct linreg_ctx_t *lct)
 
 	return sqrt(ret/((double)(lct->n)));
 }
+
+/*
+	A simple histogram
+*/
+
+struct histogram_t
+{
+	int *bins;
+
+	int nbins;
+	double width;
+};
+
+struct histogram_t *init_histogram(int nbins,double width)
+{
+	struct histogram_t *ret=malloc(sizeof(struct histogram_t));
+	int c;
+	
+	assert(ret);
+	assert(nbins>0);
+	assert(width>0.0f);
+
+	ret->bins=malloc(sizeof(int)*(nbins+1));
+	ret->nbins=nbins;
+	ret->width=width;
+
+	for(c=0;c<=ret->nbins;c++)
+		ret->bins[c]=0;
+
+	return ret;
+}
+
+void histogram_add_sample(struct histogram_t *htt,double sample)
+{
+	int targetbin;
+	
+	targetbin=((int)(sample/htt->width));
+
+	/* Overflow bin, the two conditions should be equivalent. */
+	if(targetbin>htt->nbins)
+		targetbin=htt->nbins;
+
+	if(sample>(htt->width*htt->nbins))
+		targetbin=htt->nbins;
+
+	htt->bins[targetbin]++;
+}
+
+int histogram_get_bin(struct histogram_t *htt,int bin)
+{
+	assert(bin>=0);
+	assert(bin<=htt->nbins);
+
+	return htt->bins[bin];
+}
+
+void fini_histogram(struct histogram_t *htt)
+{
+	if(htt)
+	{
+		if(htt->bins)
+			free(htt->bins);
+
+		free(htt);
+	}
+}

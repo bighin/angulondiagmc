@@ -17,6 +17,20 @@
 
 gsl_rng *rng_ctx;
 
+void seed_rng(gsl_rng *rng)
+{
+	FILE *dev;
+        unsigned long seed;
+
+	if(!(dev=fopen("/dev/random","r")))
+	{
+		fread(&seed,sizeof(unsigned long),1,dev);
+		fclose(dev);
+	}
+
+	gsl_rng_set(rng,seed);
+}
+
 void stresstest(void)
 {
 	struct diagram_t *dgr;
@@ -147,11 +161,83 @@ int do_diagmc(char *configfile)
 		exit(0);
 	}
 
+	//seed_rng(rng_ctx);
+
 	dgr=init_diagram(1.0f,2,1,5.0f);
 	samples=samples_init();
 
+#define DIAGRAM_UPDATE_LENGTH	(1)
+#define DIAGRAM_ADD_LINE	(2)
+#define DIAGRAM_REMOVE_LINE	(3)
+#define DIAGRAM_NR_UPDATES	(4)
+
 	for(c=0;c<config.iterations;c++)
 	{
+		int update_type;
+		double oldweight=diagram_weight(dgr);
+		bool accepted;
+		
+		update_type=gsl_rng_uniform_int(rng_ctx,DIAGRAM_NR_UPDATES);
+		
+		switch(update_type)
+		{
+			case DIAGRAM_UPDATE_LENGTH:
+			{
+				int nr_midpoints=get_nr_midpoints(dgr);
+				double mintau=get_midpoint(dgr,nr_midpoints-1);
+				double newtau;
+				
+				// Calculate newtau between mintau and infinity
+				// newtau = ...
+				
+				// Calculate the accepted variable
+				// accepted = ...
+				
+				if(accepted==false)
+				{
+					diagram_update_length(dgr,oldmaxtau);
+					assert(diagram_weight(dgr)==oldweight)
+				}
+			}
+			break;
+
+			case DIAGRAM_ADD_LINE:
+			{
+				//double k=
+				//int lambda=
+				//int mu=
+				//double tau1=
+				//double tau2=
+				//diagram_add_phonon_line(dgr,tau1,tau2,k,lambda,mu);
+				//recouple
+
+				// Calculate the accepted variable
+				// accepted = ...
+
+				if(accepted==false)
+				{
+					int lastline=get_nr_phonon_lines(dgr-1);
+					diagram_remove_line(dgr,lastline);
+					// Fix free propagators
+					assert(diagram_weight(dgr)==oldweight);
+				}
+
+			}
+			break;
+			
+			case DIAGRAM_REMOVE_LINE:
+			{
+				//int target=gsl_rng_uniform_int(rng_ctx,get_nr_phonon_lines(nr));
+				//diagram_remove_line(dgr,target);
+				//recouple
+			}
+			break;
+		}
+
+		// Update stats here!
+		// Update type
+		// accepted?
+
 		samples_add_entry(samples,diagram_weight(dgr));
 	}
 
