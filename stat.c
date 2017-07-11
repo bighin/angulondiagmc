@@ -2,6 +2,7 @@
 	This struct helps in collecting and (very simply) analyzing Monte Carlo samples
 */
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
 #include <assert.h>
@@ -219,38 +220,28 @@ double slope_error(struct linreg_ctx_t *lct)
 	A simple histogram
 */
 
-struct histogram_t
-{
-	int *bins;
-
-	int nbins;
-	double width;
-};
-
 struct histogram_t *init_histogram(int nbins,double width)
 {
 	struct histogram_t *ret=malloc(sizeof(struct histogram_t));
-	int c;
 	
 	assert(ret);
 	assert(nbins>0);
 	assert(width>0.0f);
 
-	ret->bins=malloc(sizeof(int)*(nbins+1));
+	ret->sctx=sampling_ctx_init(nbins+1);
 	ret->nbins=nbins;
 	ret->width=width;
 
-	for(c=0;c<=ret->nbins;c++)
-		ret->bins[c]=0;
+	assert(ret->sctx);
 
 	return ret;
 }
 
-void histogram_add_sample(struct histogram_t *htt,double sample)
+void histogram_add_sample(struct histogram_t *htt,double sample,double time)
 {
 	int targetbin;
 	
-	targetbin=((int)(sample/htt->width));
+	targetbin=((int)(time/htt->width));
 
 	/* Overflow bin, the two conditions should be equivalent. */
 	if(targetbin>htt->nbins)
@@ -259,24 +250,37 @@ void histogram_add_sample(struct histogram_t *htt,double sample)
 	if(sample>(htt->width*htt->nbins))
 		targetbin=htt->nbins;
 
-	htt->bins[targetbin]++;
+	sampling_ctx_add_entry_to_channel(htt->sctx,targetbin,sample);
 }
 
-int histogram_get_bin(struct histogram_t *htt,int bin)
+double histogram_get_bin_average(struct histogram_t *htt,int bin)
 {
 	assert(bin>=0);
 	assert(bin<=htt->nbins);
 
-	return htt->bins[bin];
+	if(htt->sctx->smpls[bin]->next==0)
+		return 0.0f;
+
+	return samples_get_average(htt->sctx->smpls[bin]);
+}
+
+double histogram_get_bin_variance(struct histogram_t *htt,int bin)
+{
+	assert(bin>=0);
+	assert(bin<=htt->nbins);
+
+	if(htt->sctx->smpls[bin]->next==0)
+		return 0.0f;
+
+	return samples_get_variance(htt->sctx->smpls[bin]);
 }
 
 void fini_histogram(struct histogram_t *htt)
 {
 	if(htt)
 	{
-		if(htt->bins)
-			free(htt->bins);
-
+		sampling_ctx_fini(htt->sctx);
+		
 		free(htt);
 	}
 }

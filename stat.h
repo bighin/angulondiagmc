@@ -39,4 +39,18 @@ double slope(struct linreg_ctx_t *lct);
 double intercept(struct linreg_ctx_t *lct);
 double slope_error(struct linreg_ctx_t *lct);
 
+struct histogram_t
+{
+	struct sampling_ctx_t *sctx;
+
+	int nbins;
+	double width;
+};
+
+struct histogram_t *init_histogram(int nbins,double width);
+void histogram_add_sample(struct histogram_t *htt,double sample,double time);
+double histogram_get_bin_average(struct histogram_t *htt,int bin);
+double histogram_get_bin_variance(struct histogram_t *htt,int bin);
+void fini_histogram(struct histogram_t *htt);
+
 #endif

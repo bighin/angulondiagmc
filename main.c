@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <math.h>
 #include <string.h>
 #include <stdbool.h>
 #include <assert.h>
@@ -110,8 +111,24 @@ void stresstest(void)
 
 struct configuration_t
 {
-	int iterations;
+	/* "general" section */
+
 	char *prefix;
+	bool seedrng;
+
+	/* "parameters" section */
+
+	int lambda;
+	int mu;
+	double endtau;
+	double chempot;
+	double maxtau;
+
+	/* "sampling" section */
+
+	int iterations;
+	int bins;
+	double width;
 };
 
 static int configuration_handler(void *user,const char *section,const char *name,const char *value)
@@ -120,14 +137,52 @@ static int configuration_handler(void *user,const char *section,const char *name
 
 #define MATCH(s,n) ((strcmp(section,s)==0)&&(strcmp(name,n)==0))
 
-	if(MATCH("diagmc","iterations"))
-	{
-		pconfig->iterations=atoi(value);
-	}
-	else if(MATCH("diagmc","prefix"))
+	if(MATCH("general","prefix"))
 	{
 		pconfig->prefix=strdup(value);
 	}
+	else if(MATCH("general","seedrng"))
+	{
+		if(!strcmp(value,"true"))
+			pconfig->seedrng=true;
+		else if(!strcmp(value,"false"))
+			pconfig->seedrng=false;
+		else
+			return 0;
+	}
+	else if(MATCH("parameters","lambda"))
+	{
+		pconfig->lambda=atoi(value);
+	}
+	else if(MATCH("parameters","mu"))
+	{
+		pconfig->mu=atoi(value);
+	}
+	else if(MATCH("parameters","endtau"))
+	{
+		pconfig->endtau=atof(value);
+	}
+	else if(MATCH("parameters","chempot"))
+	{
+		pconfig->chempot=atof(value);
+	}
+	else if(MATCH("parameters","maxtau"))
+	{
+		pconfig->maxtau=atof(value);
+	}
+	else if(MATCH("sampling","iterations"))
+	{
+		pconfig->iterations=atoi(value);
+	}
+	else if(MATCH("sampling","bins"))
+	{
+		pconfig->bins=atoi(value);
+	}
+	else if(MATCH("sampling","width"))
+	{
+		pconfig->width=atof(value);
+	}
+
 	else
 	{
 		/* Unknown section/name, error */
@@ -137,13 +192,31 @@ static int configuration_handler(void *user,const char *section,const char *name
 	return 1;
 }
 
+/*
+	Returns a random number from a doubly truncated exponential distribution,
+	i.e. a distribution with probability density
+
+	\frac{lambda \exp(-\lambda \tau)}{\exp(-\lambda \tau_1) - \exp(-\lambda \tau_2)}
+
+	See DTED.nb for the derivation.
+*/
+
+double doubly_truncated_exp_dist(gsl_rng *rctx,double lambda,double tau1,double tau2)
+{
+	double x= gsl_rng_uniform(rctx);
+	
+	return (tau1-log(1.0f-x+x*exp((tau1-tau2)*lambda)))/lambda;
+}
+
 int do_diagmc(char *configfile)
 {
 	struct diagram_t *dgr;
 	struct configuration_t config;
-	struct samples_t *samples;
+	struct histogram_t *ht;
 
 	int c;
+
+#warning FIXME Load sensible defaults in case they are not in the .ini file
 
         if(ini_parse(configfile,configuration_handler,&config)<0)
 	{
@@ -161,15 +234,18 @@ int do_diagmc(char *configfile)
 		exit(0);
 	}
 
-	//seed_rng(rng_ctx);
+	if(config.seedrng)
+		seed_rng(rng_ctx);
 
-	dgr=init_diagram(1.0f,2,1,5.0f);
-	samples=samples_init();
+	dgr=init_diagram(config.endtau,config.lambda,config.mu,config.chempot);
+	ht=init_histogram(config.bins,config.width);
 
 #define DIAGRAM_UPDATE_LENGTH	(1)
 #define DIAGRAM_ADD_LINE	(2)
 #define DIAGRAM_REMOVE_LINE	(3)
-#define DIAGRAM_NR_UPDATES	(4)
+
+#warning FIXME
+#define DIAGRAM_NR_UPDATES	(2)
 
 	for(c=0;c<config.iterations;c++)
 	{
@@ -184,19 +260,39 @@ int do_diagmc(char *configfile)
 			case DIAGRAM_UPDATE_LENGTH:
 			{
 				int nr_midpoints=get_nr_midpoints(dgr);
-				double mintau=get_midpoint(dgr,nr_midpoints-1);
-				double newtau;
+				int nr_free_propagators=get_nr_free_propagators(dgr);
+
+				struct g0_t *lastg0;				
+				double lasttau,oldendtau,newendtau,rate;
+
+				lasttau=get_midpoint(dgr,nr_midpoints-1);
+				lastg0=get_free_propagator(dgr,nr_free_propagators-1);
 				
-				// Calculate newtau between mintau and infinity
-				// newtau = ...
-				
-				// Calculate the accepted variable
-				// accepted = ...
-				
+				/*
+					We calculate newendtau between lasttau and maxtau
+					using an exponential distribution with rate rate.
+				*/
+
+				oldendtau=dgr->endtau;
+				rate=lastg0->j*(lastg0->j+1.0f)-dgr->chempot;
+				newendtau=doubly_truncated_exp_dist(rng_ctx,rate,lasttau,config.maxtau);
+
+				/*
+					This update is always accepted
+				*/
+	
+				diagram_update_length(dgr,newendtau);
+				accepted=true;
+
+				/*
+					This codepath is taken only when debugging, as the
+					update is always accepted
+				*/
+
 				if(accepted==false)
 				{
-					diagram_update_length(dgr,oldmaxtau);
-					assert(diagram_weight(dgr)==oldweight)
+					diagram_update_length(dgr,oldendtau);
+					assert(diagram_weight(dgr)==oldweight);
 				}
 			}
 			break;
@@ -214,11 +310,15 @@ int do_diagmc(char *configfile)
 				// Calculate the accepted variable
 				// accepted = ...
 
+				diagram_add_phonon_line(dgr,0.5,0.6,1,1,0);
+
+				accepted=false;
+
 				if(accepted==false)
 				{
-					int lastline=get_nr_phonon_lines(dgr-1);
-					diagram_remove_line(dgr,lastline);
-					// Fix free propagators
+					int lastline=get_nr_phonons(dgr)-1;
+					diagram_remove_phonon_line(dgr,lastline);
+					// Fix free propagators, they should have be saved!
 					assert(diagram_weight(dgr)==oldweight);
 				}
 
@@ -238,12 +338,15 @@ int do_diagmc(char *configfile)
 		// Update type
 		// accepted?
 
-		samples_add_entry(samples,diagram_weight(dgr));
+		histogram_add_sample(ht,diagram_weight(dgr),dgr->endtau);
+	
+		// FIXME Optimization: this weight can be used later in oldweight, no need to recalculate
 	}
 
-	printf("%f %f\n",samples_get_average(samples),samples_get_variance(samples));
+	for(c=0;c<=config.bins;c++)
+		printf("%f %f %f\n",config.width*c,histogram_get_bin_average(ht,c),histogram_get_bin_variance(ht,c));
 
-	samples_fini(samples);
+	fini_histogram(ht);
 	fini_diagram(dgr);
 
 	return 0;

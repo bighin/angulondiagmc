@@ -40,7 +40,7 @@ int vertex_get_mu(struct vertex_info_t *vif)
 	return vif->phononline->mu;
 }
 
-struct diagram_t *init_diagram(double maxtau,int j,int m,double chempot)
+struct diagram_t *init_diagram(double endtau,int j,int m,double chempot)
 {
 	struct diagram_t *ret;
 	struct g0_t *g0;
@@ -49,7 +49,7 @@ struct diagram_t *init_diagram(double maxtau,int j,int m,double chempot)
 		return NULL;
 
 	ret->mintau=0.0f;
-	ret->maxtau=maxtau;
+	ret->endtau=endtau;
 	ret->chempot=chempot;
 	
 	ret->phonons=init_vlist(sizeof(struct arc_t),16*1024);
@@ -70,7 +70,7 @@ struct diagram_t *init_diagram(double maxtau,int j,int m,double chempot)
 	g0->endmidpoint=0;
 
 	g0->starttau=0.0f;
-	g0->endtau=maxtau;
+	g0->endtau=endtau;
 
 	return ret;
 }
@@ -98,7 +98,7 @@ double get_midpoint(struct diagram_t *dgr,int c)
 	double *data;
 	
 	if(c==dgr->midpoints->nelements)
-		return dgr->maxtau;
+		return dgr->endtau;
 
 	if(c==-1)
 		return 0.0f;
@@ -171,7 +171,7 @@ void diagram_check_consistency_of_times(struct diagram_t *dgr,double tau,int c)
 		assert(tau==0.0f);
 
 	if(c==get_nr_midpoints(dgr))
-		assert(tau==dgr->maxtau);
+		assert(tau==dgr->endtau);
 
 	assert(get_midpoint(dgr,c)==tau);
 }
@@ -185,7 +185,7 @@ void diagram_check_consistency(struct diagram_t *dgr)
 	*/
 
 	assert(get_free_propagator(dgr,0)->starttau==0.0f);
-	assert(get_free_propagator(dgr,get_nr_free_propagators(dgr)-1)->endtau==dgr->maxtau);
+	assert(get_free_propagator(dgr,get_nr_free_propagators(dgr)-1)->endtau==dgr->endtau);
 
 	for(c=0;c<get_nr_midpoints(dgr)-1;c++)
 		assert(get_midpoint(dgr,c)<get_midpoint(dgr,c+1));
@@ -338,7 +338,7 @@ double diagram_weight(struct diagram_t *dgr)
 		// FIXME : we need to decide which interaction potential to use!
 		// Maybe it would be better to precalculate it...
 		// \chi_\lambda(\Delta \tau) = \sum_{k} |U_\lambda (k)|^2 \exp(- \Delta \tau \omega_k)
-		
+
 		ret*=1.0f;
 	}
 
@@ -438,7 +438,7 @@ void print_diagram(struct diagram_t *dgr)
 		printf(" |\n");
 	}
 
-	printf("|%d| %f\n",1+get_nr_midpoints(dgr),dgr->maxtau);
+	printf("|%d| %f\n",1+get_nr_midpoints(dgr),dgr->endtau);
 	
 	if(pattern)
 		free(pattern);

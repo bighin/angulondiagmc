@@ -54,7 +54,7 @@ int vertex_get_mu(struct vertex_info_t *vif);
 
 struct diagram_t
 {
-	double mintau,maxtau,chempot;
+	double mintau,endtau,chempot;
 
 	struct vlist_t *phonons;
 	struct vlist_t *midpoints;
@@ -62,7 +62,7 @@ struct diagram_t
 	struct vlist_t *vertices;
 };
 
-struct diagram_t *init_diagram(double maxtau,int j,int m,double chempot);
+struct diagram_t *init_diagram(double endtau,int j,int m,double chempot);
 void fini_diagram(struct diagram_t *dgr);
 
 struct arc_t *get_phonon_line(struct diagram_t *dgr,int c);

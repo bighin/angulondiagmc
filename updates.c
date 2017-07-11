@@ -204,7 +204,7 @@ void diagram_add_phonon_line(struct diagram_t *dgr,double tau1,double tau2,doubl
 	arc->starttau=tau1;
 	arc->endtau=tau2;
 
-	assert(tau1<dgr->maxtau);
+	assert(tau1<dgr->endtau);
 	assert(tau1>0.0f);
 
 	/*
@@ -230,7 +230,7 @@ void diagram_add_phonon_line(struct diagram_t *dgr,double tau1,double tau2,doubl
 	arc->startmidpoint=lo;
 
 	assert(tau2>tau1);
-	assert(tau2<dgr->maxtau);
+	assert(tau2<dgr->endtau);
 	assert(tau2>0.0f);
 
 	/*
@@ -455,18 +455,24 @@ void diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 	diagram_remove_end_midpoint(dgr,endmidpoint);
 }
 
-void diagram_update_length(struct diagram_t *dgr,double newmaxtau)
+void diagram_update_length(struct diagram_t *dgr,double newendtau)
 {	
 	int nr_midpoints=get_nr_midpoints(dgr);
 
-	assert(dgr->maxtau==get_midpoint(dgr,nr_midpoints));
-	assert(newmaxtau>get_midpoint(dgr,nr_midpoints-1));
+	assert(dgr->endtau==get_midpoint(dgr,nr_midpoints));
+	assert(newendtau>get_midpoint(dgr,nr_midpoints-1));
 
-	dgr->maxtau=newmaxtau;
-	get_free_propagator(dgr,get_nr_free_propagators(dgr)-1)->endtau=newmaxtau;
+	dgr->endtau=newendtau;
+	get_free_propagator(dgr,get_nr_free_propagators(dgr)-1)->endtau=newendtau;
 }
 
 #warning TESTME
+
+/*
+	This function recalculates the angular momenta in the free propagators in a diagram,
+	between the lo-th and hi-th propagators, included. A random configuration, between all
+	allowed ones is chosen.
+*/
 
 bool recouple(struct diagram_t *dgr,int lo,int hi)
 {
@@ -475,6 +481,22 @@ bool recouple(struct diagram_t *dgr,int lo,int hi)
 
 	if(lo==hi+1)
 		return true;
+
+	/*
+		The momenta are assigned as follows:
+
+	                |
+		        |
+	                | (j2,m2)
+	                |
+		________|________
+	        (j1,m1)   (j3,m3)
+	        
+		where (j1,m1) is the (lo-1)-th propagator, (j3,m3) is the lo-th propagator
+		and (j2,m2) is the (lo-1)-th phonon arc.
+	
+		We read (j1,m1) and (j2,m2) and we have to find a list of suitable (j3,m3).
+	*/
 
 	j1=get_free_propagator(dgr,lo-1)->j;
 	m1=get_free_propagator(dgr,lo-1)->m;
@@ -485,6 +507,13 @@ bool recouple(struct diagram_t *dgr,int lo,int hi)
 	m3=-m1-m2;
 
 	lst=init_rlist();
+
+	/*
+		We iterate over all possible values of j3, while identifing the physically allowed ones.
+	
+		FIXME: probably the range of the for loop could be optimized, to run from abs(j1-j2) to (j1+j2).
+		However, this is not critical, it just makes the code a bit slower.
+	*/
 
 	for(j3=0;j3<=j1+j2;j3++)
 	{
@@ -515,6 +544,10 @@ bool recouple(struct diagram_t *dgr,int lo,int hi)
 
 		if(abs(j3-j1)>j2)
 			continue;
+
+		/*
+			If all conditions are met, then j3 is a good candidate and can be added to the list.
+		*/
 
 		rlist_add_item(lst,j3);
 	}
