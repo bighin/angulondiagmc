@@ -8,7 +8,9 @@
 #include "diagrams.h"
 #include "updates.h"
 #include "stat.h"
+
 #include "inih/ini.h"
+#include "libprogressbar/progressbar.h"
 
 /*
 	A pointer to a GSL random number generator object
@@ -115,11 +117,12 @@ struct configuration_t
 
 	char *prefix;
 	bool seedrng;
+	bool progressbar;
 
 	/* "parameters" section */
 
-	int lambda;
-	int mu;
+	int j;
+	int m;
 	double endtau;
 	double chempot;
 	double maxtau;
@@ -150,13 +153,22 @@ static int configuration_handler(void *user,const char *section,const char *name
 		else
 			return 0;
 	}
-	else if(MATCH("parameters","lambda"))
+	else if(MATCH("general","progressbar"))
 	{
-		pconfig->lambda=atoi(value);
+		if(!strcmp(value,"true"))
+			pconfig->progressbar=true;
+		else if(!strcmp(value,"false"))
+			pconfig->progressbar=false;
+		else
+			return 0;
 	}
-	else if(MATCH("parameters","mu"))
+	else if(MATCH("parameters","j"))
 	{
-		pconfig->mu=atoi(value);
+		pconfig->j=atoi(value);
+	}
+	else if(MATCH("parameters","m"))
+	{
+		pconfig->m=atoi(value);
 	}
 	else if(MATCH("parameters","endtau"))
 	{
@@ -179,10 +191,9 @@ static int configuration_handler(void *user,const char *section,const char *name
 		pconfig->bins=atoi(value);
 	}
 	else if(MATCH("sampling","width"))
-	{
+	{	
 		pconfig->width=atof(value);
 	}
-
 	else
 	{
 		/* Unknown section/name, error */
@@ -203,9 +214,10 @@ static int configuration_handler(void *user,const char *section,const char *name
 
 double doubly_truncated_exp_dist(gsl_rng *rctx,double lambda,double tau1,double tau2)
 {
-	double x= gsl_rng_uniform(rctx);
-	
-	return (tau1-log(1.0f-x+x*exp((tau1-tau2)*lambda)))/lambda;
+	double x=gsl_rng_uniform(rctx);
+	double delta=-x+x*exp((tau1-tau2)*lambda);
+
+	return (tau1-log1p(delta))/lambda;
 }
 
 int do_diagmc(char *configfile)
@@ -213,6 +225,10 @@ int do_diagmc(char *configfile)
 	struct diagram_t *dgr;
 	struct configuration_t config;
 	struct histogram_t *ht;
+	
+	FILE *out;
+	char fname[1024];
+	progressbar *progress;
 
 	int c;
 
@@ -224,9 +240,19 @@ int do_diagmc(char *configfile)
 		exit(0);
 	}
 
+	fprintf(stderr,"Diagrammatic Monte Carlo for the angulon\n");
 	fprintf(stderr,"Loaded '%s'\n",configfile);
 	fprintf(stderr,"Performing %d iterations\n",config.iterations);
-	fprintf(stderr,"Writing results to prefix '%s'\n",config.prefix);
+
+	snprintf(fname,1024,"%s.dat",config.prefix);
+	
+	if(!(out=fopen(fname,"w+")))
+	{
+		fprintf(stderr,"Error: couldn't open %s for writing\n",fname);
+		return 0;
+	}
+
+	fprintf(stderr,"Writing results to '%s'\n",fname);
 
 	if((rng_ctx=gsl_rng_alloc(gsl_rng_mt19937))==NULL)
 	{
@@ -237,15 +263,20 @@ int do_diagmc(char *configfile)
 	if(config.seedrng)
 		seed_rng(rng_ctx);
 
-	dgr=init_diagram(config.endtau,config.lambda,config.mu,config.chempot);
+	dgr=init_diagram(config.endtau,config.j,config.m,config.chempot);
 	ht=init_histogram(config.bins,config.width);
 
-#define DIAGRAM_UPDATE_LENGTH	(1)
-#define DIAGRAM_ADD_LINE	(2)
-#define DIAGRAM_REMOVE_LINE	(3)
+#define DIAGRAM_UPDATE_LENGTH	(0)
+#define DIAGRAM_ADD_LINE	(1)
+#define DIAGRAM_REMOVE_LINE	(2)
 
-#warning FIXME
-#define DIAGRAM_NR_UPDATES	(2)
+#warning FIXME Should be 3
+#define DIAGRAM_NR_UPDATES	(1)
+
+	if(config.progressbar)
+		progress=progressbar_new("Progress",config.iterations/16384);
+	else
+		progress=NULL;
 
 	for(c=0;c<config.iterations;c++)
 	{
@@ -254,7 +285,7 @@ int do_diagmc(char *configfile)
 		bool accepted;
 		
 		update_type=gsl_rng_uniform_int(rng_ctx,DIAGRAM_NR_UPDATES);
-		
+			
 		switch(update_type)
 		{
 			case DIAGRAM_UPDATE_LENGTH:
@@ -332,6 +363,9 @@ int do_diagmc(char *configfile)
 				//recouple
 			}
 			break;
+			
+			//default:
+			//assert(false);
 		}
 
 		// Update stats here!
@@ -339,12 +373,41 @@ int do_diagmc(char *configfile)
 		// accepted?
 
 		histogram_add_sample(ht,diagram_weight(dgr),dgr->endtau);
-	
+
+		if((config.progressbar)&&((c%16384)==0))
+			progressbar_inc(progress);
+
 		// FIXME Optimization: this weight can be used later in oldweight, no need to recalculate
 	}
 
+	if(config.progressbar)
+		progressbar_finish(progress);
+
+	fprintf(out,"# Diagrammatic Monte Carlo for the angulon\n");
+	fprintf(out,"#\n");
+	fprintf(out,"# Configuration loaded from '%s'\n",configfile);
+	fprintf(out,"# Output file is '%s'\n",fname);
+	fprintf(out,"#\n");
+	fprintf(out,"# Initial and final state: (j=%d, m=%d)\n",config.j,config.m);
+	fprintf(out,"# Chemical potential: %f\n",config.chempot);
+	fprintf(out,"# Initial diagram length: %f\n",config.endtau);
+	fprintf(out,"# Max length: %f\n",config.maxtau);
+	fprintf(out,"#\n");
+	fprintf(out,"# Sampled quantity: Green's function (G)\n");
+	fprintf(out,"# Iterations: %d\n",config.iterations);
+	fprintf(out,"# Nr of bins: %d\n",config.bins);
+	fprintf(out,"# Bin width: %f\n",config.width);
+	fprintf(out,"# (last bin is overflow)\n");
+	fprintf(out,"#\n");
+
+	//fprintf(out,"# Update statistics:\n");
+	//fprintf(out,"# Update #1: proposed %d (%f%%), accepted %d (%f%%), rejected %d (%f%%).\n");
+	//fprintf(out,"# Update #2: proposed %d (%f%%), accepted %d (%f%%), rejected %d (%f%%).\n");
+	//fprintf(out,"# Update #3: proposed %d (%f%%), accepted %d (%f%%), rejected %d (%f%%).\n");
+	//fprintf(out,"# Total: proposed %d (%f%%), accepted %d (%f%%), rejected %d (%f%%).\n");
+
 	for(c=0;c<=config.bins;c++)
-		printf("%f %f %f\n",config.width*c,histogram_get_bin_average(ht,c),histogram_get_bin_variance(ht,c));
+		fprintf(out,"%f %f %f\n",config.width*c+config.width/2.0f,histogram_get_bin_average(ht,c),histogram_get_bin_variance(ht,c));
 
 	fini_histogram(ht);
 	fini_diagram(dgr);

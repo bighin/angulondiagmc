@@ -4,15 +4,15 @@ CC = gcc-mp-6
 #CC = clang-mp-3.8
 CFLAGS = -O2 -Wall -fopenmp -std=c11 -I/opt/local/include/
 #CFLAGS = -Wall -g -pg
-LDFLAGS = -lgsl -L/opt/local/lib/
+LDFLAGS = -lncurses -lgsl -L/opt/local/lib/
 
 .PHONY: clean all default
 
 default: $(TARGET)
 all: default
 
-OBJECTS = $(patsubst %.c, %.o, $(wildcard *.c inih/*.c))
-HEADERS = $(wildcard *.h)
+OBJECTS = $(patsubst %.c, %.o, $(wildcard *.c libprogressbar/*.c inih/*.c))
+HEADERS = $(wildcard *.h  libprogressbar/*.h inih/*.h)
 
 %.o: %.c $(HEADERS)
 	$(CC) $(CFLAGS) -c $< -o $@
