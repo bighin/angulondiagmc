@@ -220,6 +220,23 @@ double doubly_truncated_exp_dist(gsl_rng *rctx,double lambda,double tau1,double 
 	return (tau1-log1p(delta))/lambda;
 }
 
+void show_update_statistics(FILE *out,int proposed,int accepted,int rejected)
+{
+	double accepted_pct,rejected_pct;
+
+	if(proposed>0)
+	{
+		accepted_pct=100.0f*((double)(accepted))/((double)(proposed));
+		rejected_pct=100.0f*((double)(rejected))/((double)(proposed));
+	}
+	else
+	{
+		accepted_pct=rejected_pct=0.0f;
+	}
+
+	fprintf(out,"proposed %d, accepted %d (%f%%), rejected %d (%f%%).\n",proposed,accepted,accepted_pct,rejected,rejected_pct);
+}
+
 int do_diagmc(char *configfile)
 {
 	struct diagram_t *dgr;
@@ -230,7 +247,19 @@ int do_diagmc(char *configfile)
 	char fname[1024];
 	progressbar *progress;
 
+	/*
+		The following macro defines the maximum number of
+		different updates... 256 should be more than enough!
+	*/
+
+#define MAX_UPDATES	(256)
+
+	int proposed[MAX_UPDATES],accepted[MAX_UPDATES],rejected[MAX_UPDATES];
 	int c;
+
+	for(c=0;c<MAX_UPDATES;c++)
+		proposed[c]=accepted[c]=rejected[c]=0;
+	
 
 #warning FIXME Load sensible defaults in case they are not in the .ini file
 
@@ -282,7 +311,7 @@ int do_diagmc(char *configfile)
 	{
 		int update_type;
 		double oldweight=diagram_weight(dgr);
-		bool accepted;
+		bool is_accepted;
 		
 		update_type=gsl_rng_uniform_int(rng_ctx,DIAGRAM_NR_UPDATES);
 			
@@ -313,15 +342,20 @@ int do_diagmc(char *configfile)
 				*/
 	
 				diagram_update_length(dgr,newendtau);
-				accepted=true;
+				is_accepted=true;
+
+				proposed[DIAGRAM_UPDATE_LENGTH]++;
+				accepted[DIAGRAM_UPDATE_LENGTH]++;
+
 
 				/*
 					This codepath is taken only when debugging, as the
 					update is always accepted
 				*/
 
-				if(accepted==false)
+				if(is_accepted==false)
 				{
+					rejected[DIAGRAM_UPDATE_LENGTH]++;
 					diagram_update_length(dgr,oldendtau);
 					assert(diagram_weight(dgr)==oldweight);
 				}
@@ -343,9 +377,9 @@ int do_diagmc(char *configfile)
 
 				diagram_add_phonon_line(dgr,0.5,0.6,1,1,0);
 
-				accepted=false;
+				is_accepted=false;
 
-				if(accepted==false)
+				if(is_accepted==false)
 				{
 					int lastline=get_nr_phonons(dgr)-1;
 					diagram_remove_phonon_line(dgr,lastline);
@@ -391,7 +425,7 @@ int do_diagmc(char *configfile)
 	fprintf(out,"# Initial and final state: (j=%d, m=%d)\n",config.j,config.m);
 	fprintf(out,"# Chemical potential: %f\n",config.chempot);
 	fprintf(out,"# Initial diagram length: %f\n",config.endtau);
-	fprintf(out,"# Max length: %f\n",config.maxtau);
+	fprintf(out,"# Max diagram length: %f\n",config.maxtau);
 	fprintf(out,"#\n");
 	fprintf(out,"# Sampled quantity: Green's function (G)\n");
 	fprintf(out,"# Iterations: %d\n",config.iterations);
@@ -400,14 +434,34 @@ int do_diagmc(char *configfile)
 	fprintf(out,"# (last bin is overflow)\n");
 	fprintf(out,"#\n");
 
-	//fprintf(out,"# Update statistics:\n");
-	//fprintf(out,"# Update #1: proposed %d (%f%%), accepted %d (%f%%), rejected %d (%f%%).\n");
-	//fprintf(out,"# Update #2: proposed %d (%f%%), accepted %d (%f%%), rejected %d (%f%%).\n");
-	//fprintf(out,"# Update #3: proposed %d (%f%%), accepted %d (%f%%), rejected %d (%f%%).\n");
-	//fprintf(out,"# Total: proposed %d (%f%%), accepted %d (%f%%), rejected %d (%f%%).\n");
+	{
+		int total_proposed,total_accepted,total_rejected;
+
+		total_proposed=total_accepted=total_rejected=0;
+
+		fprintf(out,"# Update statistics:\n");
+
+		for(c=0;c<DIAGRAM_NR_UPDATES;c++)
+		{
+			fprintf(out,"# Update #%d: ",c);
+			show_update_statistics(out,proposed[c],accepted[c],rejected[c]);
+	
+			total_proposed+=proposed[c];
+			total_accepted+=accepted[c];
+			total_rejected+=rejected[c];
+		}
+
+		fprintf(out,"# Total: ");
+		show_update_statistics(out,total_proposed,total_accepted,total_rejected);
+		fprintf(out,"#\n");
+	}
+
+	fprintf(out,"# <Bin center> <Average> <Stddev>\n");
+
+#warning Is this the correct way of calculating stddev??????
 
 	for(c=0;c<=config.bins;c++)
-		fprintf(out,"%f %f %f\n",config.width*c+config.width/2.0f,histogram_get_bin_average(ht,c),histogram_get_bin_variance(ht,c));
+		fprintf(out,"%f %f %f\n",config.width*c+config.width/2.0f,histogram_get_bin_average(ht,c),sqrtf(histogram_get_bin_variance(ht,c)));
 
 	fini_histogram(ht);
 	fini_diagram(dgr);
