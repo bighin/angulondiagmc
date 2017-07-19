@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-
 #include <gsl/gsl_rng.h>
 
 #include "aux.h"
@@ -189,10 +188,8 @@ void rlist_add_item(struct randomized_list_t *lst,int item)
 	lst->nitems++;
 }
 
-int rlist_get_random_item(struct randomized_list_t *lst)
+int rlist_get_random_item(struct randomized_list_t *lst,gsl_rng *rng_ctx)
 {
-	extern gsl_rng *rng_ctx;
-	
 	assert(lst->nitems>0);
 	
 	return lst->items[gsl_rng_uniform_int(rng_ctx,lst->nitems)];
@@ -216,9 +213,8 @@ void rlist_remove_element(struct randomized_list_t *lst,int position)
 
 #warning TESTME
 
-int rlist_pop_random_item(struct randomized_list_t *lst)
+int rlist_pop_random_item(struct randomized_list_t *lst,gsl_rng *rng_ctx)
 {
-	extern gsl_rng *rng_ctx;
 	int target,result;
 	
 	assert(lst->nitems>0);
@@ -229,4 +225,18 @@ int rlist_pop_random_item(struct randomized_list_t *lst)
 	rlist_remove_element(lst,target);
 
 	return result;
+}
+
+void seed_rng(gsl_rng *rng)
+{
+	FILE *dev;
+        unsigned long seed;
+
+	if(!(dev=fopen("/dev/random","r")))
+	{
+		fread(&seed,sizeof(unsigned long),1,dev);
+		fclose(dev);
+	}
+
+	gsl_rng_set(rng,seed);
 }

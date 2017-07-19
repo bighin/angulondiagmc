@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <assert.h>
+#include <gsl/gsl_rng.h>
 
 #include "stat.h"
 
@@ -44,6 +45,10 @@ void samples_fini(struct samples_t *smpls)
 
 void samples_add_entry(struct samples_t *smpls,double x)
 {
+	assert(smpls);
+
+	assert(!(smpls->next>smpls->nalloced));
+
 	if(smpls->next==smpls->nalloced)
 	{
 		smpls->nalloced+=1024;
@@ -58,7 +63,9 @@ double samples_get_average(struct samples_t *smpls)
 {
 	int c;
 	double total=0.0f;
-		
+
+	assert(!(smpls->next>smpls->nalloced));
+
 	for(c=0;c<smpls->next;c++)
 		total+=smpls->data[c];
 	
@@ -69,7 +76,9 @@ double samples_get_variance(struct samples_t *smpls)
 {
 	int c;
 	double total,average,variance,n;
-	
+
+	assert(!(smpls->next>smpls->nalloced));
+
 	total=variance=0.0f;
 	n=smpls->next;
 
@@ -250,6 +259,8 @@ void histogram_add_sample(struct histogram_t *htt,double sample,double time)
 	if(sample>(htt->width*htt->nbins))
 		targetbin=htt->nbins;
 
+	assert(targetbin<=htt->nbins);
+
 	sampling_ctx_add_entry_to_channel(htt->sctx,targetbin,sample);
 }
 
@@ -283,4 +294,26 @@ void fini_histogram(struct histogram_t *htt)
 		
 		free(htt);
 	}
+}
+
+/*
+	Returns a random number from a doubly truncated exponential distribution,
+	i.e. a distribution with probability density
+
+	\frac{lambda \exp(-\lambda \tau)}{\exp(-\lambda \tau_1) - \exp(-\lambda \tau_2)}
+
+	See DTED.nb for the derivation.
+*/
+
+double doubly_truncated_exp_dist(gsl_rng *rctx,double lambda,double tau1,double tau2)
+{
+	double x=gsl_rng_uniform(rctx);
+	double delta=-x+x*exp((tau1-tau2)*lambda);
+
+	return (lambda*tau1-log1p(delta))/lambda;
+}
+
+double doubly_truncated_exp_pdf(gsl_rng *rctx,double lambda,double tau1,double tau2,double tau)
+{
+	return lambda*exp(-lambda*tau)/(exp(-lambda*tau1)-exp(-lambda*tau2));
 }

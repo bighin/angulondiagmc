@@ -1,12 +1,25 @@
 #include <stdio.h>
+#include <math.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <assert.h>
+#include <gsl/gsl_sf.h>
 
 #include "diagrams.h"
 #include "aux.h"
 #include "debug.h"
 #include "updates.h"
+
+#warning README
+
+/*
+	Le funzioni che aggiungono un worm tengono conto se la modifica ha senso fisico o no,
+	e per questo ritornano un bool.
+
+	Le funzioni che aggiungono una linea fononica invece non tengono conto di questo.
+
+	Qual è la soluzione migliore?
+*/
 
 /*
 	This function updates all the cross-referencing inside a diagram,
@@ -386,7 +399,7 @@ void diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 
 	/*
 		Before removing a midpoint we have to update all the references:
-		the index of any midpoint after the removed one will be decreased
+		the index of every midpoint after the removed one will be decreased
 		by one, and so we have to update all the structures point to a midpoint.
 	*/
 
@@ -466,100 +479,105 @@ void diagram_update_length(struct diagram_t *dgr,double newendtau)
 	get_free_propagator(dgr,get_nr_free_propagators(dgr)-1)->endtau=newendtau;
 }
 
-#warning TESTME
+bool diagram_add_worm(struct diagram_t *dgr,int target1,int target2,int deltalambda)
+{	
+	int c;
+	struct worm_t *worm;
 
-/*
-	This function recalculates the angular momenta in the free propagators in a diagram,
-	between the lo-th and hi-th propagators, included. A random configuration, between all
-	allowed ones is chosen.
-*/
+	assert(target1<get_nr_midpoints(dgr));
+	assert(target2<get_nr_midpoints(dgr));
+	assert(target1<target2);
+	
+	/*
+		At first we try to add the worm, looking if the diagram is still physically correct
+	*/
 
-bool recouple(struct diagram_t *dgr,int lo,int hi)
+	for(c=target1;c<=target2;c++)
+	{
+		struct vertex_info_t *thisvertex=get_vertex(dgr,c);
+		int j1,m1,j2,m2,j3,m3;
+
+		j1=thisvertex->left->j;
+		m1=thisvertex->left->m;
+
+		j2=thisvertex->right->j;
+		m2=thisvertex->right->m;
+
+		j3=thisvertex->phononline->lambda;
+		m3=thisvertex->phononline->mu;
+
+		if(c!=target1)
+			j1+=deltalambda;
+
+		if(c!=target2)
+			j2+=deltalambda;
+
+		if(j1+j2<j3)
+			return false;
+
+		if(j2+j3<j1)
+			return false;
+
+		if(j3+j1<j2)
+			return false;
+		
+		if(abs(m1)>j1)
+			return false;
+
+		if(abs(m2)>j2)
+			return false;
+
+		if((m1==0)&&(m2==0)&&(m3==0))
+			if(!ISEVEN(j1+j2+j3))
+				return false;
+	}
+
+	/*
+		If we arrived here, it means that the diagram is physical and we
+		can actually go on and implement the change.
+	*/
+
+	for(c=target1;c<target2;c++)
+	{
+		struct vertex_info_t *thisvertex=get_vertex(dgr,c);
+
+		thisvertex->right->j+=deltalambda;
+	}
+
+	/*
+		At last we keep track of the worm by adding it on the global list
+	*/
+
+	worm=vlist_append_empty(dgr->worms);
+	
+	worm->startmidpoint=target1;
+	worm->endmidpoint=target2;
+	worm->deltalambda=deltalambda;
+
+	return true;
+}
+
+bool diagram_remove_worm(struct diagram_t *dgr,int index)
 {
-	struct randomized_list_t *lst;
-	int j1,m1,j2,m2,j3,m3;
-
-	if(lo==hi+1)
-		return true;
-
-	/*
-		The momenta are assigned as follows:
-
-	                |
-		        |
-	                | (j2,m2)
-	                |
-		________|________
-	        (j1,m1)   (j3,m3)
-	        
-		where (j1,m1) is the (lo-1)-th propagator, (j3,m3) is the lo-th propagator
-		and (j2,m2) is the (lo-1)-th phonon arc.
+	int c,target1,target2,deltalambda;
+	struct worm_t *worm;
 	
-		We read (j1,m1) and (j2,m2) and we have to find a list of suitable (j3,m3).
-	*/
+	worm=vlist_get_element(dgr->worms,index);
 
-	j1=get_free_propagator(dgr,lo-1)->j;
-	m1=get_free_propagator(dgr,lo-1)->m;
+	target1=worm->startmidpoint;
+	target2=worm->endmidpoint;
+	deltalambda=worm->deltalambda;
 
-	j2=get_phonon_line_after_propagator(dgr,lo-1)->lambda;
-	m2=get_phonon_line_after_propagator(dgr,lo-1)->mu;
+	vlist_remove_element(dgr->worms,index);
 
-	m3=-m1-m2;
-
-	lst=init_rlist();
-
-	/*
-		We iterate over all possible values of j3, while identifing the physically allowed ones.
-	
-		FIXME: probably the range of the for loop could be optimized, to run from abs(j1-j2) to (j1+j2).
-		However, this is not critical, it just makes the code a bit slower.
-	*/
-
-	for(j3=0;j3<=j1+j2;j3++)
+	for(c=target1;c<target2;c++)
 	{
-		/*
-			m3 cannot exceed j3
-		*/
+		struct vertex_info_t *thisvertex=get_vertex(dgr,c);
 
-		if(abs(m3)>j3)
-			continue;
-
-		/*
-			If all ms are zero, then the sum of all js must be even.
-		*/
-
-		if((m1==m2)&&(m2==m3)&&(m3==0))
-			if(((j1+j2+j3)%2)==1)
-				continue;
-
-		/*
-			Check if the angular momenta satisfy the triangular inequality
-		*/
-
-		if(abs(j1-j2)>j3)
-			continue;
-
-		if(abs(j2-j3)>j1)
-			continue;
-
-		if(abs(j3-j1)>j2)
-			continue;
-
-		/*
-			If all conditions are met, then j3 is a good candidate and can be added to the list.
-		*/
-
-		rlist_add_item(lst,j3);
+		thisvertex->right->j-=deltalambda;
 	}
 
-	while(rlist_get_elements(lst)>0)
-	{
-		get_free_propagator(dgr,lo)->j=rlist_pop_random_item(lst);
-		get_free_propagator(dgr,lo)->m=m3;
+#warning Forse dovrei controllare se il diagramma ha senso fisico qui!
 
-		if(recouple(dgr,lo+1,hi)==true)
-			return true;
-	}
-
-	return false;
+	return true;
 }

@@ -1,6 +1,17 @@
 #ifndef __DIAGRAMS_H__
 #define __DIAGRAMS_H__
 
+#include <gsl/gsl_rng.h>
+
+/*
+	A worm
+*/
+
+struct worm_t
+{
+	int startmidpoint,endmidpoint,deltalambda;
+};
+
 /*
 	The following structure defines an arc, i.e. a phonon line
 */
@@ -52,6 +63,34 @@ int vertex_get_mu(struct vertex_info_t *vif);
 	This structure defines a diagram
 */
 
+struct diagram_cfg_t
+{
+	/*
+		General configuration parameters, to be specified
+		when creating a diagram:
+	
+		- Angular momenta of the initial and final line
+		- Initial length in imaginary time
+		- Chemical potential
+	*/
+
+	int j;
+	int m;
+	double endtau;
+	double chempot;
+
+	/*
+		Parameters defining the interaction potential
+	*/
+	
+	double c0;
+	double c1;
+	double c2;
+	double omega0;
+	double omega1;
+	double omega2;
+};
+
 struct diagram_t
 {
 	double mintau,endtau,chempot;
@@ -60,9 +99,22 @@ struct diagram_t
 	struct vlist_t *midpoints;
 	struct vlist_t *free_propagators;
 	struct vlist_t *vertices;
+	struct vlist_t *worms;
+
+	/*
+		Parameters defining the interaction potential
+	*/
+
+	double c0,c1,c2,omega0,omega1,omega2;
+
+	/*
+		A GSL random number generator context
+	*/
+
+	gsl_rng *rng_ctx;
 };
 
-struct diagram_t *init_diagram(double endtau,int j,int m,double chempot);
+struct diagram_t *init_diagram(struct diagram_cfg_t *cfg);
 void fini_diagram(struct diagram_t *dgr);
 
 struct arc_t *get_phonon_line(struct diagram_t *dgr,int c);
@@ -74,6 +126,7 @@ int get_nr_phonons(struct diagram_t *dgr);
 int get_nr_midpoints(struct diagram_t *dgr);
 int get_nr_free_propagators(struct diagram_t *dgr);
 int get_nr_vertices(struct diagram_t *dgr);
+int get_nr_worms(struct diagram_t *dgr);
 
 struct g0_t *get_left_neighbour(struct diagram_t *dgr,int midpoint);
 struct g0_t *get_right_neighbour(struct diagram_t *dgr,int midpoint);
@@ -86,5 +139,6 @@ void diagram_check_consistency(struct diagram_t *dgr);
 double diagram_weight(struct diagram_t *dgr);
 void print_diagram(struct diagram_t *dgr);
 
-#endif //__DIAGRAMS_H__
+bool check_triangle_condition(struct diagram_t *dgr,struct vertex_info_t *thisvertex);
 
+#endif //__DIAGRAMS_H__

@@ -5,6 +5,7 @@
 #include <string.h>
 #include <assert.h>
 #include <gsl/gsl_sf.h>
+#include <gsl/gsl_rng.h>
 
 #include "diagrams.h"
 #include "aux.h"
@@ -40,7 +41,7 @@ int vertex_get_mu(struct vertex_info_t *vif)
 	return vif->phononline->mu;
 }
 
-struct diagram_t *init_diagram(double endtau,int j,int m,double chempot)
+struct diagram_t *init_diagram(struct diagram_cfg_t *cfg)
 {
 	struct diagram_t *ret;
 	struct g0_t *g0;
@@ -49,28 +50,43 @@ struct diagram_t *init_diagram(double endtau,int j,int m,double chempot)
 		return NULL;
 
 	ret->mintau=0.0f;
-	ret->endtau=endtau;
-	ret->chempot=chempot;
-	
+	ret->endtau=cfg->endtau;
+	ret->chempot=cfg->chempot;
+
+	ret->c0=cfg->c0;
+	ret->c1=cfg->c1;
+	ret->c2=cfg->c2;
+	ret->omega0=cfg->omega0;
+	ret->omega1=cfg->omega1;
+	ret->omega2=cfg->omega2;
+
 	ret->phonons=init_vlist(sizeof(struct arc_t),16*1024);
 	ret->midpoints=init_vlist(sizeof(double),16*1024);
 	ret->free_propagators=init_vlist(sizeof(struct g0_t),1+32*1024);
 	ret->vertices=init_vlist(sizeof(struct vertex_info_t),32*1024);
+	ret->worms=init_vlist(sizeof(struct worm_t),16*1024);
 
 	/*
-		Finally we add the initial, lone propagator.
+		We add the initial, lone propagator.
 	*/
 
 	g0=vlist_append_empty(ret->free_propagators);
 
-	g0->j=j;
-	g0->m=m;
+	g0->j=cfg->j;
+	g0->m=cfg->m;
 
 	g0->startmidpoint=-1;
 	g0->endmidpoint=0;
 
 	g0->starttau=0.0f;
-	g0->endtau=endtau;
+	g0->endtau=cfg->endtau;
+
+	/*
+		And finally we initialize the RNG associated with this diagram
+	*/
+
+	ret->rng_ctx=gsl_rng_alloc(gsl_rng_mt19937);
+	assert(ret->rng_ctx!=NULL);
 
 	return ret;
 }
@@ -83,6 +99,8 @@ void fini_diagram(struct diagram_t *dgr)
 		fini_vlist(dgr->midpoints);
 		fini_vlist(dgr->free_propagators);
 		fini_vlist(dgr->vertices);
+		
+		gsl_rng_free(dgr->rng_ctx);
 		
 		free(dgr);
 	}
@@ -136,6 +154,11 @@ int get_nr_free_propagators(struct diagram_t *dgr)
 int get_nr_vertices(struct diagram_t *dgr)
 {
 	return vlist_get_nr_elements(dgr->vertices);
+}
+
+int get_nr_worms(struct diagram_t *dgr)
+{
+	return vlist_get_nr_elements(dgr->worms);
 }
 
 struct g0_t *get_left_neighbour(struct diagram_t *dgr,int midpoint)
@@ -240,7 +263,6 @@ void diagram_check_consistency(struct diagram_t *dgr)
 		assert(d>0);
 	}
 
-#if 0
 	/*
 		Check for consistency of angular momentum couplings
 	*/
@@ -266,13 +288,12 @@ void diagram_check_consistency(struct diagram_t *dgr)
 
 		if(fabs(coupling)<=epsilon)
 		{
-			printf("Wrong coupling: (%d, %d) (%d, %d) (%d, %d)",j1,m1,j2,m2,j3,m3);
+			printf("Wrong coupling: (%d, %d) (%d, %d) (%d, %d)\n",j1,m1,j2,m2,j3,m3);
 			print_diagram(dgr);
 		}
 
 		assert(fabs(coupling)>epsilon);
 	}
-#endif
 
 	/*
 		More checks: again we check propagators...
@@ -298,6 +319,8 @@ void diagram_check_consistency(struct diagram_t *dgr)
 		diagram_check_consistency_of_times(dgr,thisline->endtau,thisline->endmidpoint);
 	}
 }
+
+#warning FIXME Lo update dovrebbe essere incrementale!
 
 double diagram_weight(struct diagram_t *dgr)
 {
@@ -329,17 +352,38 @@ double diagram_weight(struct diagram_t *dgr)
 	{
 		struct arc_t *arc;
 		double timediff;
+
+		double c0,c1,c2,omega0,omega1,omega2;
 		
+		c0=dgr->c0;
+		c1=dgr->c1;
+		c2=dgr->c2;
+		omega0=dgr->omega0;
+		omega1=dgr->omega1;
+		omega2=dgr->omega2;
+
 		arc=get_phonon_line(dgr,c);
 		timediff=arc->endtau-arc->starttau;
 
-#warning FIXME
+		assert(timediff>=0);
 
-		// FIXME : we need to decide which interaction potential to use!
-		// Maybe it would be better to precalculate it...
-		// \chi_\lambda(\Delta \tau) = \sum_{k} |U_\lambda (k)|^2 \exp(- \Delta \tau \omega_k)
+		switch(arc->lambda)
+		{
+			case 0:
+			ret*=c0*exp(-timediff*omega0);
+			break;
 
-		ret*=1.0f;
+			case 1:
+			ret*=c1*exp(-timediff*omega1);
+			break;
+
+			case 2:
+			ret*=c2*exp(-timediff*omega2);
+			break;
+			
+			//default:
+			//assert(false);
+		}
 	}
 
 	/*
@@ -442,4 +486,83 @@ void print_diagram(struct diagram_t *dgr)
 	
 	if(pattern)
 		free(pattern);
+}
+
+bool check_triangle_condition(struct diagram_t *dgr,struct vertex_info_t *thisvertex)
+{
+	int j1,j2,j3;
+	bool result;
+
+	j1=thisvertex->left->j;
+	j2=thisvertex->right->j;
+	j3=thisvertex->phononline->lambda;
+
+	result=true;
+
+	if(j1+j2<j3)
+		result=false;
+
+	if(j2+j3<j1)
+		result=false;
+
+	if(j3+j1<j2)
+		result=false;
+
+	/*
+		This additional condition is not stricly the triangular condition,
+		however we must check them because of the 3j symbols with all the
+		magnetic quantum numbers to zero, that appear at every vertex.
+	*/
+
+	if(!ISEVEN(j1+j2+j3))
+		result=false;
+
+#if 0
+
+#ifndef NDEBUG
+
+	{
+		int j1,m1,j2,m2,j3,m3;
+		double coupling,epsilon;
+
+		j1=thisvertex->left->j;
+		m1=thisvertex->left->m;
+
+		j2=thisvertex->right->j;
+		m2=thisvertex->right->m;
+
+		j3=thisvertex->phononline->lambda;
+		m3=thisvertex->phononline->mu;
+
+		epsilon=1e-10;
+
+		coupling=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,2*m1,2*m2,2*m3)*
+			 gsl_sf_coupling_3j(2*j1,2*j2,2*j3,0,0,0)*
+		         sqrtf((2.0f*j1+1)*(2.0f*j2+1)*(2.0f*j3+1)/(4.0f*M_PI));
+
+		if((fabs(coupling)>epsilon)&&(result==false))
+		{
+			printf("\nWrong coupling: (%d, %d) (%d, %d) (%d, %d)\n",j1,m1,j2,m2,j3,m3);
+			printf("triangle_condition: %s, coupling: %f\n",result?"true":"false",coupling);
+			
+			print_diagram(dgr);
+
+			assert(false);
+		}
+
+		if((fabs(coupling)<=epsilon)&&(result==true))
+		{
+			printf("\nWrong coupling: (%d, %d) (%d, %d) (%d, %d)\n",j1,m1,j2,m2,j3,m3);
+			printf("triangle_condition: %s, coupling: %f\n",result?"true":"false",coupling);
+
+			print_diagram(dgr);
+
+			assert(false);
+		}
+	}
+
+#endif
+#endif
+
+	return result;
 }

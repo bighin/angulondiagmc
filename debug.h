@@ -6,5 +6,8 @@
 void debug_propagators(struct diagram_t *dgr);
 void debug_vertices(struct diagram_t *dgr);
 void debug_vertices_ext(struct diagram_t *dgr);
+void debug_weight(struct diagram_t *dgr);
+
+void stresstest(void);
 
 #endif //__DEBUG_H__

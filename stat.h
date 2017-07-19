@@ -53,4 +53,7 @@ double histogram_get_bin_average(struct histogram_t *htt,int bin);
 double histogram_get_bin_variance(struct histogram_t *htt,int bin);
 void fini_histogram(struct histogram_t *htt);
 
+double doubly_truncated_exp_dist(gsl_rng *rctx,double lambda,double tau1,double tau2);
+double doubly_truncated_exp_pdf(gsl_rng *rctx,double lambda,double tau1,double tau2,double tau);
+
 #endif

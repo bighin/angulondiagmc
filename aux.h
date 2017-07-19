@@ -1,6 +1,13 @@
 #ifndef __AUX_H__
 #define __AUX_H__
 
+#include <gsl/gsl_rng.h>
+
+#define MIN(a,b)	(((a)<(b))?(a):(b))
+#define MAX(a,b)	(((a)>(b))?(a):(b))
+
+#define ISEVEN(x)	(((x)%2)==0)
+
 struct vlist_t
 {
 	void *mem;
@@ -30,10 +37,11 @@ struct randomized_list_t *init_rlist(void);
 void fini_rlist(struct randomized_list_t *lst);
 
 void rlist_add_item(struct randomized_list_t *lst,int item);
-int rlist_get_random_item(struct randomized_list_t *lst);
+int rlist_get_random_item(struct randomized_list_t *lst,gsl_rng *rng_ctx);
 int rlist_get_elements(struct randomized_list_t *lst);
 void rlist_remove_element(struct randomized_list_t *lst,int position);
-int rlist_pop_random_item(struct randomized_list_t *lst);
+int rlist_pop_random_item(struct randomized_list_t *lst,gsl_rng *rng_ctx);
 
+void seed_rng(gsl_rng *rng);
 
 #endif //__AUX_H__
