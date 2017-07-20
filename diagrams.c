@@ -430,16 +430,17 @@ void print_chars(char ch,int n)
 }
 
 /*
-	Nice printout of a diagram
+	Nice printout of a diagram, returns the number of printed lines.
 */
 
-void print_diagram(struct diagram_t *dgr,int flags)
+int print_diagram(struct diagram_t *dgr,int flags)
 {
 	int c,dashing=4;
 
 	char *pattern;
-	int pattern_len;
+	int pattern_len,plines;
 	
+	plines=0;
 	pattern_len=(dashing+4)*(get_nr_free_propagators(dgr));
 	pattern=malloc(sizeof(char)*pattern_len);
 
@@ -460,7 +461,10 @@ void print_diagram(struct diagram_t *dgr,int flags)
 			pattern[1+(dashing+4)*(1+thisline->startmidpoint)]='|';
 			pattern[1+(dashing+4)*(1+thisline->endmidpoint)]='|';
 
-			printf("\n%s\n",pattern);
+			if(!(flags&PRINT_DRYRUN))
+				printf("\n%s\n",pattern);
+
+			plines+=2;
 		}
 
 		printf("| %d|",0);
@@ -470,34 +474,60 @@ void print_diagram(struct diagram_t *dgr,int flags)
 			print_chars('-',dashing);
 		
 			if(c+1<10)
-				printf("| %d|",c+1);
+			{
+				if(!(flags&PRINT_DRYRUN))
+					printf("| %d|",c+1);
+			}
 			else
-				printf("|%d|",c+1);
+			{
+				if(!(flags&PRINT_DRYRUN))
+					printf("|%d|",c+1);
+			}
 		}
 
-		printf("\n\n");
+		if(!(flags&PRINT_DRYRUN))
+			printf("\n\n");
 
+		plines+=2;
+	}
+
+	if(flags&PRINT_INFO0)
+	{
+		if(!(flags&PRINT_DRYRUN))
+			printf("\n# worms: %d\n",get_nr_worms(dgr));
+		
+		plines+=2;
 	}
 
 	if(flags&PRINT_PROPAGATORS)
 	{
 		for(c=0;c<get_nr_free_propagators(dgr);c++)
 		{
-			if(c==0)
-				printf("|%d| %f\n",c,get_midpoint(dgr,c-1));
-			else
-				printf("|%d| %f ---> (lambda=%d, mu=%d)\n",c,get_midpoint(dgr,c-1),get_vertex(dgr,c-1)->phononline->lambda,get_vertex(dgr,c-1)->phononline->mu);
+			if(!(flags&PRINT_DRYRUN))
+			{
+				if(c==0)
+					printf("|%d| %f\n",c,get_midpoint(dgr,c-1));
+				else
+					printf("|%d| %f ---> (lambda=%d, mu=%d)\n",c,get_midpoint(dgr,c-1),get_vertex(dgr,c-1)->phononline->lambda,get_vertex(dgr,c-1)->phononline->mu);
 
-			printf(" |\n");
-			printf(" | G0(j=%d, m=%d)\n",get_free_propagator(dgr,c)->j,get_free_propagator(dgr,c)->m);
-			printf(" |\n");
+				printf(" |\n");
+				printf(" | G0(j=%d, m=%d)\n",get_free_propagator(dgr,c)->j,get_free_propagator(dgr,c)->m);
+				printf(" |\n");
+			}
+
+			plines+=4;
 		}
 
-		printf("|%d| %f\n",1+get_nr_midpoints(dgr),dgr->endtau);
+		if(!(flags&PRINT_DRYRUN))
+			printf("|%d| %f\n",1+get_nr_midpoints(dgr),dgr->endtau);
+
+		plines++;
 	}
 	
 	if(pattern)
 		free(pattern);
+
+	return plines;
 }
 
 bool check_triangle_condition(struct diagram_t *dgr,struct vertex_info_t *thisvertex)

@@ -59,6 +59,21 @@ void diagram_update_xrefs(struct diagram_t *dgr,int position)
 	}
 	
 	/*
+		Also the worms need to be modified
+	*/
+
+	for(c=0;c<get_nr_worms(dgr);c++)
+	{
+		struct worm_t *worm=get_worm(dgr,c);
+
+		if(worm->startmidpoint>=position)
+			worm->startmidpoint++;
+
+		if(worm->endmidpoint>=position)
+			worm->endmidpoint++;
+	}
+
+	/*
 		Finally we also need to update the pointers inside each vertex
 	*/
 
@@ -402,7 +417,7 @@ void diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 	/*
 		Before removing a midpoint we have to update all the references:
 		the index of every midpoint after the removed one will be decreased
-		by one, and so we have to update all the structures point to a midpoint.
+		by one, and so we have to update all the structures pointing to a midpoint.
 	*/
 
 	for(c=0;c<get_nr_phonons(dgr);c++)
@@ -414,6 +429,17 @@ void diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 
 		if(ph->endmidpoint>=startmidpoint)
 			ph->endmidpoint--;
+	}
+
+	for(c=0;c<get_nr_worms(dgr);c++)
+	{
+		struct worm_t *worm=get_worm(dgr,c);
+	
+		if(worm->startmidpoint>=startmidpoint)
+			worm->startmidpoint--;
+
+		if(worm->endmidpoint>=startmidpoint)
+			worm->endmidpoint--;
 	}
 
 	for(c=startmidpoint+1;c<get_nr_free_propagators(dgr);c++)
@@ -447,6 +473,17 @@ void diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 
 		if(ph->endmidpoint>=endmidpoint)
 			ph->endmidpoint--;
+	}
+
+	for(c=0;c<get_nr_worms(dgr);c++)
+	{
+		struct worm_t *worm=get_worm(dgr,c);
+	
+		if(worm->startmidpoint>=endmidpoint)
+			worm->startmidpoint--;
+
+		if(worm->endmidpoint>=endmidpoint)
+			worm->endmidpoint--;
 	}
 
 	for(c=endmidpoint+1;c<get_nr_free_propagators(dgr);c++)
@@ -483,61 +520,29 @@ void diagram_update_length(struct diagram_t *dgr,double newendtau)
 
 bool diagram_add_worm(struct diagram_t *dgr,int target1,int target2,int deltalambda)
 {	
-	int c;
+	int c,nr_worms;
 	struct worm_t *worm;
 
 	assert(target1<get_nr_midpoints(dgr));
 	assert(target2<get_nr_midpoints(dgr));
 	assert(target1<target2);
-	
-	/*
-		At first we try to add the worm, looking if the diagram is still physically correct
-	*/
 
-	for(c=target1;c<=target2;c++)
+	nr_worms=get_nr_worms(dgr);
+	for(c=0;c<nr_worms;c++)
 	{
-		struct vertex_info_t *thisvertex=get_vertex(dgr,c);
-		int j1,m1,j2,m2,j3,m3;
+		struct worm_t *local=get_worm(dgr,c);
 
-		j1=thisvertex->left->j;
-		m1=thisvertex->left->m;
-
-		j2=thisvertex->right->j;
-		m2=thisvertex->right->m;
-
-		j3=thisvertex->phononline->lambda;
-		m3=thisvertex->phononline->mu;
-
-		if(c!=target1)
-			j1+=deltalambda;
-
-		if(c!=target2)
-			j2+=deltalambda;
-
-		if(j1+j2<j3)
+		if((local->startmidpoint==target1)&&(local->endmidpoint==target2))
 			return false;
-
-		if(j2+j3<j1)
-			return false;
-
-		if(j3+j1<j2)
-			return false;
-		
-		if(abs(m1)>j1)
-			return false;
-
-		if(abs(m2)>j2)
-			return false;
-
-		if((m1==0)&&(m2==0)&&(m3==0))
-			if(!ISEVEN(j1+j2+j3))
-				return false;
 	}
 
-	/*
-		If we arrived here, it means that the diagram is physical and we
-		can actually go on and implement the change.
-	*/
+	for(c=target1;c<target2;c++)
+	{
+		struct vertex_info_t *thisvertex=get_vertex(dgr,c);
+
+		if((thisvertex->right->j+deltalambda)<0)
+			return false;
+	}
 
 	for(c=target1;c<target2;c++)
 	{
@@ -556,9 +561,13 @@ bool diagram_add_worm(struct diagram_t *dgr,int target1,int target2,int deltalam
 	worm->endmidpoint=target2;
 	worm->deltalambda=deltalambda;
 
+	assert(get_worm(dgr,get_nr_worms(dgr)-1)->startmidpoint==target1);
+	assert(get_worm(dgr,get_nr_worms(dgr)-1)->endmidpoint==target2);
+	assert(get_worm(dgr,get_nr_worms(dgr)-1)->deltalambda==deltalambda);
+
 	get_vertex(dgr,target1)->refs++;
 	get_vertex(dgr,target2)->refs++;
-
+	
 	return true;
 }
 
@@ -566,7 +575,7 @@ bool diagram_remove_worm(struct diagram_t *dgr,int index)
 {
 	int c,target1,target2,deltalambda;
 	struct worm_t *worm;
-	
+
 	assert(index<get_nr_worms(dgr));
 	
 	worm=vlist_get_element(dgr->worms,index);
@@ -575,8 +584,20 @@ bool diagram_remove_worm(struct diagram_t *dgr,int index)
 	target2=worm->endmidpoint;
 	deltalambda=worm->deltalambda;
 
-	if((get_vertex(dgr,target1)->refs!=0)||(get_vertex(dgr,target2)->refs!=0))
-		return false;
+	assert(get_vertex(dgr,target1)->refs>0);
+	assert(get_vertex(dgr,target2)->refs>0);
+
+	for(c=target1;c<target2;c++)
+	{
+		struct vertex_info_t *thisvertex=get_vertex(dgr,c);
+
+		if((thisvertex->right->j-deltalambda)<0)
+		{
+			printf("Removal failed!");
+			
+			return false;
+		}
+	}
 
 	vlist_remove_element(dgr->worms,index);
 
@@ -586,6 +607,9 @@ bool diagram_remove_worm(struct diagram_t *dgr,int index)
 
 		thisvertex->right->j-=deltalambda;
 	}
+
+	get_vertex(dgr,target1)->refs--;
+	get_vertex(dgr,target2)->refs--;
 
 	return true;
 }

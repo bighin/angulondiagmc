@@ -143,8 +143,10 @@ double diagram_weight(struct diagram_t *dgr);
 
 #define PRINT_TOPOLOGY		(0x1)
 #define PRINT_PROPAGATORS	(0x2)
+#define PRINT_DRYRUN		(0x4)
+#define PRINT_INFO0		(0x8)
 
-void print_diagram(struct diagram_t *dgr,int flags);
+int print_diagram(struct diagram_t *dgr,int flags);
 
 bool check_triangle_condition(struct diagram_t *dgr,struct vertex_info_t *thisvertex);
 

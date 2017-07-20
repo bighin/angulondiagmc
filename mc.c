@@ -15,6 +15,29 @@
 #include "inih/ini.h"
 #include "libprogressbar/progressbar.h"
 
+#include <curses.h>
+#include <term.h>
+#include <time.h>
+
+static char term_buffer[2048];
+
+void init_terminal_data(void)
+{
+	char *termtype=getenv("TERM");
+	int success;
+
+	if (termtype==NULL)
+		fprintf(stderr,"Please specify a terminal type with 'setenv TERM <yourtype>'.\n");
+
+	success=tgetent(term_buffer,termtype);
+	
+	if(success<0)
+		fprintf(stderr, "Could not access the termcap data base.\n");
+
+	if(success==0)
+		fprintf(stderr, "Terminal type `%s' is not defined.\n",termtype);
+}
+
 struct configuration_t
 {
 	/* "general" section */
@@ -22,6 +45,7 @@ struct configuration_t
 	char *prefix;
 	bool seedrng;
 	bool progressbar;
+	bool animate;
 
 	/* "parameters" section */
 
@@ -111,22 +135,24 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	double omegas[3]={cfg->omega0,cfg->omega1,cfg->omega2};
 
 	/*
-		Do we want to limit the simulation only for first order diagrams?
+		Do we want to limit the simulation only to first order diagrams?
 	*/
 
-#if 0
-	if(get_nr_phonons(dgr)>=1)
-		return UPDATE_UNPHYSICAL;
-#endif
+	//if(get_nr_phonons(dgr)>=1)
+	//	return UPDATE_UNPHYSICAL;
 
 	oldweight=diagram_weight(dgr);
 
 	/*
 		The new lambda and mu are chosen using a uniform distribution
 	*/
-	
+
 	lambda=gsl_rng_uniform_int(dgr->rng_ctx,3);
 	mu=gsl_rng_uniform_int(dgr->rng_ctx,2*lambda+1)-lambda;
+
+#warning REMOVEME!
+	
+	mu=0;
 
 	/*
 		The start time tau1 is sampled uniformly, while tau2 is sampled from
@@ -151,16 +177,12 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	v1=get_vertex(dgr,thisline->startmidpoint);
 	v2=get_vertex(dgr,thisline->endmidpoint);
 
-	if((recouple_ms(dgr)==false)||(check_triangle_condition(dgr,v1)==false)||(check_triangle_condition(dgr,v2)==false))
+	if((check_triangle_condition(dgr,v1)==false)||(check_triangle_condition(dgr,v2)==false))
 	{
 		int lastline;
-		bool result;
 			
 		lastline=get_nr_phonons(dgr)-1;
 		diagram_remove_phonon_line(dgr,lastline);
-
-		result=recouple_ms(dgr);
-		assert(result==true);
 
 		return UPDATE_UNPHYSICAL;
 	}
@@ -175,20 +197,14 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	if(is_accepted==false)
 	{
 		int lastline;
-		bool result;
 
 		lastline=get_nr_phonons(dgr)-1;
 		diagram_remove_phonon_line(dgr,lastline);
-		
-		result=recouple_ms(dgr);
-		assert(result==true);
 
 		assert(fabs(diagram_weight(dgr)-oldweight)<1e-7*oldweight);
 
 		return UPDATE_REJECTED;
 	}
-
-	assert(check_couplings_ms(dgr)==true);
 
 	return UPDATE_ACCEPTED;
 }
@@ -218,24 +234,14 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	lambda=arc->lambda;
 	mu=arc->mu;
 
+	/*
+		We cannot remove a midpoint if there are worms attached to it
+	*/
+
 	if((get_vertex(dgr,arc->startmidpoint)->refs!=0)||(get_vertex(dgr,arc->endmidpoint)->refs!=0))
-		return false;
+		return UPDATE_UNPHYSICAL;
 
 	diagram_remove_phonon_line(dgr,target);
-
-	if(recouple_ms(dgr)==false)
-	{
-		bool result;
-
-		diagram_add_phonon_line(dgr,tau1,tau2,k,lambda,mu);
-
-		result=recouple_ms(dgr);		
-
-		assert(result==true);
-		assert(fabs(diagram_weight(dgr)-oldweight)<1e-7*oldweight);
-	
-		return UPDATE_REJECTED;
-	}
 
 	acceptance_ratio=diagram_weight(dgr)/oldweight;
 	acceptance_ratio/=3.0f*(2*lambda+1)*dgr->endtau;
@@ -246,13 +252,8 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	if(is_accepted==false)
 	{
-		bool result;
-
 		diagram_add_phonon_line(dgr,tau1,tau2,k,lambda,mu);
 
-		result=recouple_ms(dgr);
-	
-		assert(result==true);
 		assert(fabs(diagram_weight(dgr)-oldweight)<1e-7*oldweight);
 	
 		return UPDATE_REJECTED;
@@ -288,20 +289,20 @@ int update_add_worm(struct diagram_t *dgr,struct configuration_t *cfg)
 	oldweight=diagram_weight(dgr);
 
 	/*
-		deltalambda is chosen with uniform probability
-		between -min(lambda1,lambda2) and min(lambda1,lambda2)
+		We choose deltalambda with uniform probability between
+		-min(lambda1,lambda2) and min(lambda1,lambda2), excluding 0.
 	*/
 
 	minlambda=MIN(lambda1,lambda2);
-	deltalambda=gsl_rng_uniform_int(dgr->rng_ctx,2*minlambda+1)-minlambda;
-			
-	if(diagram_add_worm(dgr,MIN(target1,target2),MAX(target1,target2),deltalambda)==false)
-	{
-		assert(check_couplings_ms(dgr)==true);
+	
+	if(minlambda==0)
 		return UPDATE_UNPHYSICAL;
-	}
-
-	assert(check_couplings_ms(dgr)==true);
+	
+	deltalambda=gsl_rng_uniform_int(dgr->rng_ctx,2*minlambda)-minlambda;
+	deltalambda=(deltalambda<0)?(deltalambda):(deltalambda+1);
+	
+	if(diagram_add_worm(dgr,MIN(target1,target2),MAX(target1,target2),deltalambda)==false)
+		return UPDATE_UNPHYSICAL;
 
 	acceptance_ratio=diagram_weight(dgr)/oldweight;
 	is_accepted=(gsl_rng_uniform(dgr->rng_ctx)<acceptance_ratio)?(true):(false);
@@ -309,18 +310,10 @@ int update_add_worm(struct diagram_t *dgr,struct configuration_t *cfg)
 	if(is_accepted==false)
 	{
 		bool result;
-		
+
 		result=diagram_remove_worm(dgr,get_nr_worms(dgr)-1);
 
-		if(result==false)
-		{
-			print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
-
-			assert(false);
-		}
-
-		assert(check_couplings_ms(dgr)==true);
-
+		assert(result==true);
 		assert(fabs(diagram_weight(dgr)-oldweight)<1e-7*oldweight);
 	
 		return UPDATE_REJECTED;
@@ -351,11 +344,8 @@ int update_remove_worm(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	if(diagram_remove_worm(dgr,target)==false)
 	{
-		assert(check_couplings_ms(dgr)==true);
 		return UPDATE_UNPHYSICAL;
 	}
-
-	assert(check_couplings_ms(dgr)==true);
 
 	acceptance_ratio=diagram_weight(dgr)/oldweight;
 	is_accepted=(gsl_rng_uniform(dgr->rng_ctx)<acceptance_ratio)?(true):(false);
@@ -367,7 +357,6 @@ int update_remove_worm(struct diagram_t *dgr,struct configuration_t *cfg)
 		result=diagram_add_worm(dgr,v1,v2,deltalambda);
 
 		assert(result==true);
-		assert(check_couplings_ms(dgr)==true);
 		assert(fabs(diagram_weight(dgr)-oldweight)<1e-7*oldweight);
 
 		return UPDATE_REJECTED;
@@ -386,6 +375,7 @@ void load_config_defaults(struct configuration_t *config)
 	config->prefix=strdup("default");
 	config->seedrng=false;
 	config->progressbar=true;
+	config->animate=false;
 
 	config->j=1;
 	config->m=0;
@@ -430,6 +420,15 @@ static int configuration_handler(void *user,const char *section,const char *name
 			pconfig->progressbar=true;
 		else if(!strcmp(value,"false"))
 			pconfig->progressbar=false;
+		else
+			return 0;
+	}
+	else if(MATCH("general","animate"))
+	{
+		if(!strcmp(value,"true"))
+			pconfig->animate=true;
+		else if(!strcmp(value,"false"))
+			pconfig->animate=false;
 		else
 			return 0;
 	}
@@ -541,12 +540,13 @@ int do_diagmc(char *configfile)
 	updates[3]=update_add_worm;
 	updates[4]=update_remove_worm;
 	//updates[5]=update_change_lambda;
+	//updates[6]=update_change_worm;
 
 	for(c=0;c<DIAGRAM_NR_UPDATES;c++)
 		proposed[c]=accepted[c]=rejected[c]=0;
 	
 	avgorder[0]=avgorder[1]=0;
-	
+
 	/*
 		We load some sensible defaults in case they are not in the .ini file
 	*/
@@ -556,6 +556,12 @@ int do_diagmc(char *configfile)
         if(ini_parse(configfile,configuration_handler,&config)<0)
 	{
 		fprintf(stderr,"Couldn't read or parse '%s'\n",configfile);
+		exit(0);
+	}
+
+	if((config.animate==true)&&(config.progressbar==true))
+	{
+		fprintf(stderr,"The options 'animate' and 'progressbar' cannot be set at the same time!\n");
 		exit(0);
 	}
 
@@ -594,32 +600,29 @@ int do_diagmc(char *configfile)
 	else
 		progress=NULL;
 
+        init_terminal_data();
+
 	for(c=0;c<config.iterations;c++)
 	{
 		int update_type,status;
 
-		if(check_couplings_ms(dgr)!=true)
-		{
-			printf("Coupling error!\n");
-			printf("<<%s>>\n",recouple_ms(dgr)?"true":"false");
-			printf("<<%s>>\n",check_couplings_ms(dgr)?"true":"false");
-		
-			assert(false);
-		}
-
 		update_type=gsl_rng_uniform_int(dgr->rng_ctx,DIAGRAM_NR_UPDATES);
 		status=updates[update_type](dgr,&config);
 
-		//print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
-
-		if(check_couplings_ms(dgr)!=true)
+		if((config.animate)&&(status==UPDATE_ACCEPTED)&&((update_type==1)||(update_type==2)))
 		{
-			printf("Coupling error!\n");
-			printf("<<%s>>\n",recouple_ms(dgr)?"true":"false");
-			printf("<<%s>>\n",check_couplings_ms(dgr)?"true":"false");
-			printf("After update type: %d, with status: %d\n",update_type,status);
+			if((c%16)==0)
+			{
+				int d,plines;
 
-			assert(false);
+				plines=print_diagram(dgr,PRINT_TOPOLOGY|PRINT_INFO0|PRINT_DRYRUN);
+		
+				for(d=plines;d<tgetnum("li");d++)
+						printf("\n");
+
+				print_diagram(dgr,PRINT_TOPOLOGY|PRINT_INFO0);
+				//nanosleep((const struct timespec[]){{0, 200000000L}}, NULL);
+			}
 		}
 
 		switch(status)
