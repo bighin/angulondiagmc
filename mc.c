@@ -218,6 +218,9 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	lambda=arc->lambda;
 	mu=arc->mu;
 
+	if((get_vertex(dgr,arc->startmidpoint)->refs!=0)||(get_vertex(dgr,arc->endmidpoint)->refs!=0))
+		return false;
+
 	diagram_remove_phonon_line(dgr,target);
 
 	if(recouple_ms(dgr)==false)
@@ -307,9 +310,15 @@ int update_add_worm(struct diagram_t *dgr,struct configuration_t *cfg)
 	{
 		bool result;
 		
-		result=diagram_remove_worm(dgr,get_nr_worms(dgr));
+		result=diagram_remove_worm(dgr,get_nr_worms(dgr)-1);
 
-		assert(result==true);
+		if(result==false)
+		{
+			print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
+
+			assert(false);
+		}
+
 		assert(check_couplings_ms(dgr)==true);
 
 		assert(fabs(diagram_weight(dgr)-oldweight)<1e-7*oldweight);
@@ -340,7 +349,12 @@ int update_remove_worm(struct diagram_t *dgr,struct configuration_t *cfg)
 	v2=worm->endmidpoint;
 	deltalambda=worm->deltalambda;
 
-	diagram_remove_worm(dgr,target);
+	if(diagram_remove_worm(dgr,target)==false)
+	{
+		assert(check_couplings_ms(dgr)==true);
+		return UPDATE_UNPHYSICAL;
+	}
+
 	assert(check_couplings_ms(dgr)==true);
 
 	acceptance_ratio=diagram_weight(dgr)/oldweight;

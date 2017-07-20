@@ -120,6 +120,7 @@ void diagram_add_start_midpoint(struct diagram_t *dgr,int c,double tau,struct ar
 	thisvertex->left=leftline;
 	thisvertex->right=rightline;
 	thisvertex->phononline=phononline;
+	thisvertex->refs=0;
 
 	if(leftvertex)
 		leftvertex->right=leftline;
@@ -183,6 +184,7 @@ void diagram_add_end_midpoint(struct diagram_t *dgr,int c,double tau,struct arc_
 	thisvertex->left=leftline;
 	thisvertex->right=rightline;
 	thisvertex->phononline=phononline;
+	thisvertex->refs=0;
 
 	if(leftvertex)
 		leftvertex->right=leftline;
@@ -554,6 +556,9 @@ bool diagram_add_worm(struct diagram_t *dgr,int target1,int target2,int deltalam
 	worm->endmidpoint=target2;
 	worm->deltalambda=deltalambda;
 
+	get_vertex(dgr,target1)->refs++;
+	get_vertex(dgr,target2)->refs++;
+
 	return true;
 }
 
@@ -569,6 +574,9 @@ bool diagram_remove_worm(struct diagram_t *dgr,int index)
 	target1=worm->startmidpoint;
 	target2=worm->endmidpoint;
 	deltalambda=worm->deltalambda;
+
+	if((get_vertex(dgr,target1)->refs!=0)||(get_vertex(dgr,target2)->refs!=0))
+		return false;
 
 	vlist_remove_element(dgr->worms,index);
 

@@ -50,6 +50,8 @@ struct vertex_info_t
 {
 	struct g0_t *left,*right;
 	struct arc_t *phononline;
+	
+	int refs;
 };
 
 int vertex_get_j1(struct vertex_info_t *vif);
