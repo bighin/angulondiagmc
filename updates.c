@@ -562,6 +562,8 @@ bool diagram_remove_worm(struct diagram_t *dgr,int index)
 	int c,target1,target2,deltalambda;
 	struct worm_t *worm;
 	
+	assert(index<get_nr_worms(dgr));
+	
 	worm=vlist_get_element(dgr->worms,index);
 
 	target1=worm->startmidpoint;
@@ -577,7 +579,107 @@ bool diagram_remove_worm(struct diagram_t *dgr,int index)
 		thisvertex->right->j-=deltalambda;
 	}
 
-#warning Forse dovrei controllare se il diagramma ha senso fisico qui!
+	return true;
+}
+
+void save_free_propagators(struct diagram_t *dgr,struct free_propagators_ctx_t *fpc)
+{
+	int c;
+	
+	assert(fpc);
+	
+	fpc->nr_free_propagators=get_nr_free_propagators(dgr);
+
+	fpc->js=malloc(sizeof(int)*fpc->nr_free_propagators);
+	fpc->ms=malloc(sizeof(int)*fpc->nr_free_propagators);
+
+	for(c=0;c<fpc->nr_free_propagators;c++)
+	{
+		fpc->js[c]=get_free_propagator(dgr,c)->j;
+		fpc->ms[c]=get_free_propagator(dgr,c)->m;	
+	}
+}
+
+void restore_free_propagators(struct diagram_t *dgr,struct free_propagators_ctx_t *fpc)
+{
+	int c;
+	
+	assert(get_nr_free_propagators(dgr)==fpc->nr_free_propagators);
+
+	assert(fpc);
+	assert(fpc->js);
+	assert(fpc->ms);
+
+	for(c=0;c<fpc->nr_free_propagators;c++)
+	{
+		get_free_propagator(dgr,c)->j=fpc->js[c];
+		get_free_propagator(dgr,c)->m=fpc->ms[c];
+	}
+
+	if(fpc)
+	{
+		if(fpc->js)
+			free(fpc->js);
+
+		if(fpc->ms)
+			free(fpc->ms);
+	}
+}
+
+bool recouple_ms(struct diagram_t *dgr)
+{
+	struct vertex_info_t *thisvertex;
+	struct free_propagators_ctx_t fpc;
+	int c,nr_midpoints;
+
+	if((nr_midpoints=get_nr_midpoints(dgr))<2)
+	{
+		assert(nr_midpoints==0);
+		
+		return true;
+	}
+	
+	save_free_propagators(dgr,&fpc);
+
+	for(c=0;c<nr_midpoints-1;c++)
+	{
+		thisvertex=get_vertex(dgr,c);
+
+		thisvertex->right->m=-thisvertex->left->m-thisvertex->phononline->mu;
+	}
+
+	thisvertex=get_vertex(dgr,nr_midpoints-1);
+	
+	if(0!=thisvertex->right->m+thisvertex->left->m+thisvertex->phononline->mu)
+	{
+		restore_free_propagators(dgr,&fpc);
+		return false;
+	}
+
+	assert(check_couplings_ms(dgr)==true);
+
+	return true;
+}
+
+bool check_couplings_ms(struct diagram_t *dgr)
+{
+	struct vertex_info_t *thisvertex;
+	int c,nr_midpoints;
+
+	if((nr_midpoints=get_nr_midpoints(dgr))<2)
+	{
+		assert(nr_midpoints==0);
+		
+		return true;
+	}
+
+	for(c=0;c<nr_midpoints;c++)
+	{
+		thisvertex=get_vertex(dgr,c);
+
+		if(0!=thisvertex->right->m+thisvertex->left->m+thisvertex->phononline->mu)
+			return false;
+	}
 
 	return true;
 }

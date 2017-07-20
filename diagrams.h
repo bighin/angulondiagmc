@@ -121,6 +121,7 @@ struct arc_t *get_phonon_line(struct diagram_t *dgr,int c);
 double get_midpoint(struct diagram_t *dgr,int c);
 struct g0_t *get_free_propagator(struct diagram_t *dgr,int c);
 struct vertex_info_t *get_vertex(struct diagram_t *dgr,int c);
+struct worm_t *get_worm(struct diagram_t *dgr,int c);
 
 int get_nr_phonons(struct diagram_t *dgr);
 int get_nr_midpoints(struct diagram_t *dgr);
@@ -137,7 +138,11 @@ struct arc_t *get_phonon_line_after_propagator(struct diagram_t *dgr,int c);
 void diagram_check_consistency_of_times(struct diagram_t *dgr,double tau,int c);
 void diagram_check_consistency(struct diagram_t *dgr);
 double diagram_weight(struct diagram_t *dgr);
-void print_diagram(struct diagram_t *dgr);
+
+#define PRINT_TOPOLOGY		(0x1)
+#define PRINT_PROPAGATORS	(0x2)
+
+void print_diagram(struct diagram_t *dgr,int flags);
 
 bool check_triangle_condition(struct diagram_t *dgr,struct vertex_info_t *thisvertex);
 

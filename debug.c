@@ -231,7 +231,7 @@ void stresstest(void)
 			}
 
 			diagram_check_consistency(dgr);
-			print_diagram(dgr);
+			print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
 		}
 
 		for(z=0;z<parz;z++)
@@ -251,7 +251,7 @@ void stresstest(void)
 	while(get_nr_vertices(dgr)>0)
 	{
 		if(get_nr_vertices(dgr)<=19)
-			print_diagram(dgr);
+			print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
 
 		printf("<- (%d)>\n",get_nr_phonons(dgr));
 		diagram_remove_phonon_line(dgr,gsl_rng_uniform_int(rctx,get_nr_phonons(dgr)));

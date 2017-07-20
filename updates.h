@@ -14,4 +14,17 @@ void diagram_update_length(struct diagram_t *dgr,double newendtau);
 bool diagram_add_worm(struct diagram_t *dgr,int target1,int target2,int deltalambda);
 bool diagram_remove_worm(struct diagram_t *dgr,int index);
 
+struct free_propagators_ctx_t
+{
+	int nr_free_propagators;
+	int *js;
+	int *ms;
+};
+
+void save_free_propagators(struct diagram_t *dgr,struct free_propagators_ctx_t *fpc);
+void restore_free_propagators(struct diagram_t *dgr,struct free_propagators_ctx_t *fpc);
+
+bool check_couplings_ms(struct diagram_t *dgr);
+bool recouple_ms(struct diagram_t *dgr);
+
 #endif //__UPDATES_H__

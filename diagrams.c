@@ -136,6 +136,11 @@ struct vertex_info_t *get_vertex(struct diagram_t *dgr,int c)
 	return vlist_get_element(dgr->vertices,c);
 }
 
+struct worm_t *get_worm(struct diagram_t *dgr,int c)
+{
+	return vlist_get_element(dgr->worms,c);
+}
+
 int get_nr_phonons(struct diagram_t *dgr)
 {
 	return vlist_get_nr_elements(dgr->phonons);
@@ -289,7 +294,7 @@ void diagram_check_consistency(struct diagram_t *dgr)
 		if(fabs(coupling)<=epsilon)
 		{
 			printf("Wrong coupling: (%d, %d) (%d, %d) (%d, %d)\n",j1,m1,j2,m2,j3,m3);
-			print_diagram(dgr);
+			print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
 		}
 
 		assert(fabs(coupling)>epsilon);
@@ -428,7 +433,7 @@ void print_chars(char ch,int n)
 	Nice printout of a diagram
 */
 
-void print_diagram(struct diagram_t *dgr)
+void print_diagram(struct diagram_t *dgr,int flags)
 {
 	int c,dashing=4;
 
@@ -443,46 +448,53 @@ void print_diagram(struct diagram_t *dgr)
 
 	pattern[pattern_len-1]='\0';
 
-	for(c=0;c<get_nr_phonons(dgr);c++)
+	if(flags&PRINT_TOPOLOGY)
 	{
-		struct arc_t *thisline=vlist_get_element(dgr->phonons,c);
+		for(c=0;c<get_nr_phonons(dgr);c++)
+		{
+			struct arc_t *thisline=vlist_get_element(dgr->phonons,c);
 		
-		print_chars(' ',2+(dashing+4)*(1+thisline->startmidpoint));
-		print_chars('_',-1+(dashing+4)*(thisline->endmidpoint-thisline->startmidpoint));
+			print_chars(' ',2+(dashing+4)*(1+thisline->startmidpoint));
+			print_chars('_',-1+(dashing+4)*(thisline->endmidpoint-thisline->startmidpoint));
 
-		pattern[1+(dashing+4)*(1+thisline->startmidpoint)]='|';
-		pattern[1+(dashing+4)*(1+thisline->endmidpoint)]='|';
+			pattern[1+(dashing+4)*(1+thisline->startmidpoint)]='|';
+			pattern[1+(dashing+4)*(1+thisline->endmidpoint)]='|';
 
-		printf("\n%s\n",pattern);
-	}
+			printf("\n%s\n",pattern);
+		}
 
-	printf("| %d|",0);
+		printf("| %d|",0);
 
-	for(c=0;c<get_nr_free_propagators(dgr);c++)
-	{
-		print_chars('-',dashing);
+		for(c=0;c<get_nr_free_propagators(dgr);c++)
+		{
+			print_chars('-',dashing);
 		
-		if(c+1<10)
-			printf("| %d|",c+1);
-		else
-			printf("|%d|",c+1);
+			if(c+1<10)
+				printf("| %d|",c+1);
+			else
+				printf("|%d|",c+1);
+		}
+
+		printf("\n\n");
+
 	}
 
-	printf("\n\n");
-
-	for(c=0;c<get_nr_free_propagators(dgr);c++)
+	if(flags&PRINT_PROPAGATORS)
 	{
-		if(c==0)
-			printf("|%d| %f\n",c,get_midpoint(dgr,c-1));
-		else
-			printf("|%d| %f ---> (lambda=%d, mu=%d)\n",c,get_midpoint(dgr,c-1),get_vertex(dgr,c-1)->phononline->lambda,get_vertex(dgr,c-1)->phononline->mu);
+		for(c=0;c<get_nr_free_propagators(dgr);c++)
+		{
+			if(c==0)
+				printf("|%d| %f\n",c,get_midpoint(dgr,c-1));
+			else
+				printf("|%d| %f ---> (lambda=%d, mu=%d)\n",c,get_midpoint(dgr,c-1),get_vertex(dgr,c-1)->phononline->lambda,get_vertex(dgr,c-1)->phononline->mu);
 
-		printf(" |\n");
-		printf(" | G0(j=%d, m=%d)\n",get_free_propagator(dgr,c)->j,get_free_propagator(dgr,c)->m);
-		printf(" |\n");
+			printf(" |\n");
+			printf(" | G0(j=%d, m=%d)\n",get_free_propagator(dgr,c)->j,get_free_propagator(dgr,c)->m);
+			printf(" |\n");
+		}
+
+		printf("|%d| %f\n",1+get_nr_midpoints(dgr),dgr->endtau);
 	}
-
-	printf("|%d| %f\n",1+get_nr_midpoints(dgr),dgr->endtau);
 	
 	if(pattern)
 		free(pattern);
@@ -545,7 +557,7 @@ bool check_triangle_condition(struct diagram_t *dgr,struct vertex_info_t *thisve
 			printf("\nWrong coupling: (%d, %d) (%d, %d) (%d, %d)\n",j1,m1,j2,m2,j3,m3);
 			printf("triangle_condition: %s, coupling: %f\n",result?"true":"false",coupling);
 			
-			print_diagram(dgr);
+			print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
 
 			assert(false);
 		}
@@ -555,7 +567,7 @@ bool check_triangle_condition(struct diagram_t *dgr,struct vertex_info_t *thisve
 			printf("\nWrong coupling: (%d, %d) (%d, %d) (%d, %d)\n",j1,m1,j2,m2,j3,m3);
 			printf("triangle_condition: %s, coupling: %f\n",result?"true":"false",coupling);
 
-			print_diagram(dgr);
+			print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
 
 			assert(false);
 		}
