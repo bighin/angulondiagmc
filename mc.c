@@ -54,6 +54,7 @@ struct configuration_t
 	double endtau;
 	double chempot;
 	double maxtau;
+	int maxorder;
 
 	/* "potential" section */
 	
@@ -90,7 +91,7 @@ int update_length(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	lasttau=get_midpoint(dgr,nr_midpoints-1);
 	lastg0=get_free_propagator(dgr,nr_free_propagators-1);
-	
+
 	/*
 		We calculate newendtau between lasttau and maxtau
 		using an exponential distribution with rate rate.
@@ -138,8 +139,8 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 		Do we want to limit the simulation only to first order diagrams?
 	*/
 
-	//if(get_nr_phonons(dgr)>=1)
-	//	return UPDATE_UNPHYSICAL;
+	if(get_nr_phonons(dgr)>=cfg->maxorder)
+		return UPDATE_UNPHYSICAL;
 
 	oldweight=diagram_weight(dgr);
 
@@ -149,10 +150,6 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	lambda=gsl_rng_uniform_int(dgr->rng_ctx,3);
 	mu=gsl_rng_uniform_int(dgr->rng_ctx,2*lambda+1)-lambda;
-
-#warning REMOVEME!
-	
-	mu=0;
 
 	/*
 		The start time tau1 is sampled uniformly, while tau2 is sampled from
@@ -177,12 +174,14 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	v1=get_vertex(dgr,thisline->startmidpoint);
 	v2=get_vertex(dgr,thisline->endmidpoint);
 
-	if((check_triangle_condition(dgr,v1)==false)||(check_triangle_condition(dgr,v2)==false))
+	if((recouple_ms(dgr)==false)||(check_triangle_condition(dgr,v1)==false)||(check_triangle_condition(dgr,v2)==false))
 	{
 		int lastline;
-			
+
 		lastline=get_nr_phonons(dgr)-1;
+
 		diagram_remove_phonon_line(dgr,lastline);
+		recouple_ms_and_assert(dgr);
 
 		return UPDATE_UNPHYSICAL;
 	}
@@ -200,6 +199,7 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 
 		lastline=get_nr_phonons(dgr)-1;
 		diagram_remove_phonon_line(dgr,lastline);
+		recouple_ms_and_assert(dgr);
 
 		assert(fabs(diagram_weight(dgr)-oldweight)<1e-7*oldweight);
 
@@ -243,6 +243,16 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	diagram_remove_phonon_line(dgr,target);
 
+	if(recouple_ms(dgr)==false)
+	{
+		diagram_add_phonon_line(dgr,tau1,tau2,k,lambda,mu);
+		recouple_ms_and_assert(dgr);
+
+		assert(fabs(diagram_weight(dgr)-oldweight)<1e-7*oldweight);
+	
+		return UPDATE_REJECTED;
+	}
+
 	acceptance_ratio=diagram_weight(dgr)/oldweight;
 	acceptance_ratio/=3.0f*(2*lambda+1)*dgr->endtau;
 	acceptance_ratio*=nr_phonons;
@@ -253,6 +263,7 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	if(is_accepted==false)
 	{
 		diagram_add_phonon_line(dgr,tau1,tau2,k,lambda,mu);
+		recouple_ms_and_assert(dgr);
 
 		assert(fabs(diagram_weight(dgr)-oldweight)<1e-7*oldweight);
 	
@@ -304,6 +315,20 @@ int update_add_worm(struct diagram_t *dgr,struct configuration_t *cfg)
 	if(diagram_add_worm(dgr,MIN(target1,target2),MAX(target1,target2),deltalambda)==false)
 		return UPDATE_UNPHYSICAL;
 
+	if(recouple_ms(dgr)==false)
+	{
+		bool result;
+
+		result=diagram_remove_worm(dgr,get_nr_worms(dgr)-1);
+		assert(result==true);
+
+		recouple_ms_and_assert(dgr);
+
+		assert(fabs(diagram_weight(dgr)-oldweight)<1e-7*oldweight);
+	
+		return UPDATE_REJECTED;
+	}
+
 	acceptance_ratio=diagram_weight(dgr)/oldweight;
 	is_accepted=(gsl_rng_uniform(dgr->rng_ctx)<acceptance_ratio)?(true):(false);
 
@@ -312,6 +337,7 @@ int update_add_worm(struct diagram_t *dgr,struct configuration_t *cfg)
 		bool result;
 
 		result=diagram_remove_worm(dgr,get_nr_worms(dgr)-1);
+		recouple_ms_and_assert(dgr);
 
 		assert(result==true);
 		assert(fabs(diagram_weight(dgr)-oldweight)<1e-7*oldweight);
@@ -347,6 +373,19 @@ int update_remove_worm(struct diagram_t *dgr,struct configuration_t *cfg)
 		return UPDATE_UNPHYSICAL;
 	}
 
+	if(recouple_ms(dgr)==false)
+	{
+		bool result;
+		
+		result=diagram_add_worm(dgr,v1,v2,deltalambda);
+		recouple_ms_and_assert(dgr);
+
+		assert(result==true);
+		assert(fabs(diagram_weight(dgr)-oldweight)<1e-7*oldweight);
+
+		return UPDATE_REJECTED;
+	}
+
 	acceptance_ratio=diagram_weight(dgr)/oldweight;
 	is_accepted=(gsl_rng_uniform(dgr->rng_ctx)<acceptance_ratio)?(true):(false);
 
@@ -355,6 +394,7 @@ int update_remove_worm(struct diagram_t *dgr,struct configuration_t *cfg)
 		bool result;
 		
 		result=diagram_add_worm(dgr,v1,v2,deltalambda);
+		recouple_ms_and_assert(dgr);
 
 		assert(result==true);
 		assert(fabs(diagram_weight(dgr)-oldweight)<1e-7*oldweight);
@@ -367,7 +407,63 @@ int update_remove_worm(struct diagram_t *dgr,struct configuration_t *cfg)
 
 int update_change_lambda(struct diagram_t *dgr,struct configuration_t *cfg)
 {
-	return UPDATE_UNPHYSICAL;
+	int nr_phonons,oldlambda,oldmu,newlambda,newmu;
+	struct arc_t *thisline;
+	struct vertex_info_t *v1,*v2;
+	double acceptance_ratio,oldweight,oldarcweight;
+	bool is_accepted;
+	
+	nr_phonons=get_nr_phonons(dgr);
+	
+	if(nr_phonons<=0)
+		return UPDATE_UNPHYSICAL;
+	
+	thisline=get_phonon_line(dgr,gsl_rng_uniform_int(dgr->rng_ctx,nr_phonons));
+
+	oldweight=diagram_weight(dgr);
+	oldarcweight=calculate_arc_weight(dgr,thisline);
+
+	oldlambda=thisline->lambda;
+	oldmu=thisline->mu;
+
+	newlambda=gsl_rng_uniform_int(dgr->rng_ctx,3);
+	newmu=gsl_rng_uniform_int(dgr->rng_ctx,2*newlambda+1)-newlambda;
+
+	thisline->lambda=newlambda;
+	thisline->mu=newmu;
+
+	v1=get_vertex(dgr,thisline->startmidpoint);
+	v2=get_vertex(dgr,thisline->endmidpoint);
+
+	if((recouple_ms(dgr)==false)||(check_triangle_condition(dgr,v1)==false)||(check_triangle_condition(dgr,v2)==false))
+	{
+		thisline->lambda=oldlambda;
+		thisline->mu=oldmu;
+
+		recouple_ms_and_assert(dgr);
+
+		return UPDATE_UNPHYSICAL;
+	}
+
+	dgr->weight*=calculate_arc_weight(dgr,thisline)/oldarcweight;
+
+	acceptance_ratio=diagram_weight(dgr)/oldweight;
+
+	is_accepted=(gsl_rng_uniform(dgr->rng_ctx)<acceptance_ratio)?(true):(false);
+
+	if(is_accepted==false)
+	{
+		thisline->lambda=oldlambda;
+		thisline->mu=oldmu;
+
+		recouple_ms_and_assert(dgr);
+
+		assert(fabs(diagram_weight(dgr)-oldweight)<1e-7*oldweight);
+
+		return UPDATE_REJECTED;
+	}
+
+	return UPDATE_ACCEPTED;
 }
 
 void load_config_defaults(struct configuration_t *config)
@@ -382,6 +478,7 @@ void load_config_defaults(struct configuration_t *config)
 	config->endtau=1.0f;
 	config->chempot=0.95f;
 	config->maxtau=100.0f;
+	config->maxorder=1024;
 	
 	config->c0=1.5;
 	config->c1=0.75;
@@ -451,6 +548,10 @@ static int configuration_handler(void *user,const char *section,const char *name
 	else if(MATCH("parameters","maxtau"))
 	{
 		pconfig->maxtau=atof(value);
+	}
+	else if(MATCH("parameters","maxorder"))
+	{
+		pconfig->maxorder=atoi(value);
 	}
 	else if(MATCH("potential","c0"))
 	{
@@ -526,9 +627,10 @@ int do_diagmc(char *configfile)
 	char fname[1024];
 	progressbar *progress;
 
-#define DIAGRAM_NR_UPDATES	(5)
+#define DIAGRAM_NR_UPDATES	(6)
 
 	int (*updates[DIAGRAM_NR_UPDATES])(struct diagram_t *,struct configuration_t *);
+	char *update_names[DIAGRAM_NR_UPDATES];
 
 	int proposed[DIAGRAM_NR_UPDATES],accepted[DIAGRAM_NR_UPDATES],rejected[DIAGRAM_NR_UPDATES];
 	int total_proposed,total_accepted,total_rejected;
@@ -539,8 +641,16 @@ int do_diagmc(char *configfile)
 	updates[2]=update_remove_phonon_line;
 	updates[3]=update_add_worm;
 	updates[4]=update_remove_worm;
-	//updates[5]=update_change_lambda;
+	updates[5]=update_change_lambda;
 	//updates[6]=update_change_worm;
+
+	update_names[0]="UpdateLength";
+	update_names[1]="AddPhononLine";
+	update_names[2]="RemovePhononLine";
+	update_names[3]="AddWorm";
+	update_names[4]="RemoveWorm";
+	update_names[5]="ChangeLambda";
+	//update_names[6]="ChangeWorm";
 
 	for(c=0;c<DIAGRAM_NR_UPDATES;c++)
 		proposed[c]=accepted[c]=rejected[c]=0;
@@ -588,6 +698,8 @@ int do_diagmc(char *configfile)
 	dcfg.c1=config.c1;
 	dcfg.c2=config.c2;
 	dcfg.omega0=config.omega0;
+	dcfg.omega1=config.omega1;
+	dcfg.omega2=config.omega2;
 
 	dgr=init_diagram(&dcfg);
 	ht=init_histogram(config.bins,config.width);
@@ -596,7 +708,7 @@ int do_diagmc(char *configfile)
 		seed_rng(dgr->rng_ctx);
 
 	if(config.progressbar)
-		progress=progressbar_new("Progress",config.iterations/65536);
+		progress=progressbar_new("Progress",config.iterations/16384);
 	else
 		progress=NULL;
 
@@ -621,7 +733,7 @@ int do_diagmc(char *configfile)
 						printf("\n");
 
 				print_diagram(dgr,PRINT_TOPOLOGY|PRINT_INFO0);
-				//nanosleep((const struct timespec[]){{0, 200000000L}}, NULL);
+				nanosleep((const struct timespec[]){{0, 500000000L/100}}, NULL);
 			}
 		}
 
@@ -646,9 +758,39 @@ int do_diagmc(char *configfile)
 			assert(false);
 		}
 
+#if 0
+		{
+			double en,tau,freeweight;
+			struct g0_t *g0=get_free_propagator(dgr,0);
+
+			en=g0->j*(g0->j+1.0f)-dgr->chempot;
+			tau=dgr->endtau-dgr->mintau;
+			freeweight=exp(-en*tau);
+
+			if(diagram_weight(dgr)>freeweight)
+			{
+				printf("MALE! (localweight: %f, freeweight: %f)\n",diagram_weight(dgr),freeweight);
+			
+				debug_weight(dgr);
+				
+				double diagram_weight_debug(struct diagram_t *dgr);
+				
+				diagram_weight_debug(dgr);
+				
+				print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS|PRINT_INFO0);
+			
+				exit(0);
+			}
+
+			//histogram_add_sample(ht,freeweight,dgr->endtau);
+		}
+#endif
+		
+		assert(diagram_weight(dgr)==diagram_weight_non_incremental(dgr));
+
 		histogram_add_sample(ht,diagram_weight(dgr),dgr->endtau);
 
-		if((config.progressbar)&&((c%65536)==0))
+		if((config.progressbar)&&((c%16384)==0))
 			progressbar_inc(progress);
 
 		avgorder[0]+=get_nr_phonons(dgr);
@@ -656,6 +798,9 @@ int do_diagmc(char *configfile)
 
 		// FIXME Optimization: this weight can be used later in oldweight, no need to recalculate
 	}
+
+	print_diagram(dgr,PRINT_TOPOLOGY|PRINT_INFO0|PRINT_PROPAGATORS);
+	debug_weight(dgr);
 
 	if(config.progressbar)
 		progressbar_finish(progress);
@@ -684,7 +829,7 @@ int do_diagmc(char *configfile)
 
 	for(c=0;c<DIAGRAM_NR_UPDATES;c++)
 	{
-		fprintf(out,"# Update #%d: ",c);
+		fprintf(out,"# Update #%d (%s): ",c,update_names[c]);
 		show_update_statistics(out,proposed[c],accepted[c],rejected[c]);
 	
 		total_proposed+=proposed[c];

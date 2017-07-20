@@ -69,7 +69,7 @@ void debug_vertices_ext(struct diagram_t *dgr)
 	}
 }
 
-void debug_weight(struct diagram_t *dgr)
+void debug_weight_old(struct diagram_t *dgr)
 {
 	int c;
 	
@@ -150,6 +150,107 @@ void debug_weight(struct diagram_t *dgr)
 	}
 
 	printf("> Total: <%f>\n",diagram_weight(dgr));
+}
+
+void debug_weight(struct diagram_t *dgr)
+{
+	int c;
+	double ret=1.0f;
+	
+	/*
+		We calculate the weight associated to each free rotor line...
+	*/
+	
+	for(c=0;c<get_nr_free_propagators(dgr);c++)
+	{
+		struct g0_t *g0=get_free_propagator(dgr,c);
+		double en,tau;
+		int j;
+		
+		j=g0->j;
+		en=j*(j+1)-dgr->chempot;
+		tau=g0->endtau-g0->starttau;
+
+		ret*=exp(-en*tau);
+		
+		printf("Adding exp(%f)\n",-en*tau);
+	}
+
+	/*
+		...then we add the phonon arcs...
+	*/
+
+	for(c=0;c<get_nr_phonons(dgr);c++)
+	{
+		struct arc_t *arc;
+		double timediff;
+
+		double c0,c1,c2,omega0,omega1,omega2;
+		
+		c0=dgr->c0;
+		c1=dgr->c1;
+		c2=dgr->c2;
+		omega0=dgr->omega0;
+		omega1=dgr->omega1;
+		omega2=dgr->omega2;
+
+		arc=get_phonon_line(dgr,c);
+		timediff=arc->endtau-arc->starttau;
+
+		assert(timediff>=0);
+
+		switch(arc->lambda)
+		{
+			case 0:
+			ret*=c0*exp(-timediff*omega0);
+			printf("Adding %f * exp(%f) [%f %f]\n",c0,-timediff*omega0,timediff,omega0);
+			break;
+
+			case 1:
+			ret*=c1*exp(-timediff*omega1);
+			printf("Adding %f * exp(%f) [%f %f]\n",c1,-timediff*omega1,timediff,omega1);
+			break;
+
+			case 2:
+			ret*=c2*exp(-timediff*omega2);
+			printf("Adding %f * exp(%f) [%f %f]\n",c2,-timediff*omega2,timediff,omega2);
+			break;
+			
+			//default:
+			//assert(false);
+		}
+	}
+
+	/*
+		...and finally we consider the vertices.
+	*/
+
+	for(c=0;c<get_nr_vertices(dgr);c++)
+	{
+		int j1,m1,j2,m2,j3,m3;
+		double coupling;
+
+		struct vertex_info_t *thisvertex=get_vertex(dgr,c);
+
+		j1=thisvertex->left->j;
+		m1=thisvertex->left->m;
+
+		j2=thisvertex->right->j;
+		m2=thisvertex->right->m;
+
+		j3=thisvertex->phononline->lambda;
+		m3=thisvertex->phononline->mu;
+
+		coupling=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,2*m1,2*m2,2*m3)*
+			 gsl_sf_coupling_3j(2*j1,2*j2,2*j3,0,0,0)*
+		         sqrtf((2.0f*j1+1)*(2.0f*j2+1)*(2.0f*j3+1)/(4.0f*M_PI));
+	
+		ret*=coupling;
+
+		printf("Adding %f\n",coupling);
+	}
+
+	printf("Final result: %f\n",ret);
 }
 
 void stresstest(void)

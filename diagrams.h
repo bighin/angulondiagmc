@@ -104,6 +104,12 @@ struct diagram_t
 	struct vlist_t *worms;
 
 	/*
+		The diagram weight is update incrementally
+	*/
+
+	double weight;
+
+	/*
 		Parameters defining the interaction potential
 	*/
 
@@ -140,6 +146,7 @@ struct arc_t *get_phonon_line_after_propagator(struct diagram_t *dgr,int c);
 void diagram_check_consistency_of_times(struct diagram_t *dgr,double tau,int c);
 void diagram_check_consistency(struct diagram_t *dgr);
 double diagram_weight(struct diagram_t *dgr);
+double diagram_weight_non_incremental(struct diagram_t *dgr);
 
 #define PRINT_TOPOLOGY		(0x1)
 #define PRINT_PROPAGATORS	(0x2)

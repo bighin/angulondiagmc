@@ -82,6 +82,13 @@ struct diagram_t *init_diagram(struct diagram_cfg_t *cfg)
 	g0->endtau=cfg->endtau;
 
 	/*
+		We set the initial value for the diagram weight, it will
+		be updated incrementally from now on.
+	*/
+
+	ret->weight=diagram_weight_non_incremental(ret);
+
+	/*
 		And finally we initialize the RNG associated with this diagram
 	*/
 
@@ -325,9 +332,14 @@ void diagram_check_consistency(struct diagram_t *dgr)
 	}
 }
 
-#warning FIXME Lo update dovrebbe essere incrementale!
-
 double diagram_weight(struct diagram_t *dgr)
+{
+	//return dgr->weight;
+
+	return diagram_weight_non_incremental(dgr);
+}
+
+double diagram_weight_non_incremental(struct diagram_t *dgr)
 {
 	int c;
 	double ret=1.0f;
@@ -336,14 +348,14 @@ double diagram_weight(struct diagram_t *dgr)
 		We calculate the weight associated to each free rotor line...
 	*/
 	
-#warning FIXME Probabilmente mancano dei fattori (-1)^\mu che pero non dovrebbero contare
-	
 	for(c=0;c<get_nr_free_propagators(dgr);c++)
 	{
 		struct g0_t *g0=get_free_propagator(dgr,c);
 		double en,tau;
+		int j;
 		
-		en=g0->j*(g0->j+1.0f)-dgr->chempot;
+		j=g0->j;
+		en=j*(j+1)-dgr->chempot;
 		tau=g0->endtau-g0->starttau;
 
 		ret*=exp(-en*tau);
@@ -386,8 +398,8 @@ double diagram_weight(struct diagram_t *dgr)
 			ret*=c2*exp(-timediff*omega2);
 			break;
 			
-			//default:
-			//assert(false);
+			default:
+			assert(false);
 		}
 	}
 
@@ -494,7 +506,7 @@ int print_diagram(struct diagram_t *dgr,int flags)
 	if(flags&PRINT_INFO0)
 	{
 		if(!(flags&PRINT_DRYRUN))
-			printf("\n# worms: %d\n",get_nr_worms(dgr));
+			printf("\n(diagram order: %d, # worms: %d, local weight: %f, length: %f)\n",get_nr_phonons(dgr),get_nr_worms(dgr),diagram_weight(dgr),dgr->endtau);
 		
 		plines+=2;
 	}
@@ -558,53 +570,6 @@ bool check_triangle_condition(struct diagram_t *dgr,struct vertex_info_t *thisve
 
 	if(!ISEVEN(j1+j2+j3))
 		result=false;
-
-#if 0
-
-#ifndef NDEBUG
-
-	{
-		int j1,m1,j2,m2,j3,m3;
-		double coupling,epsilon;
-
-		j1=thisvertex->left->j;
-		m1=thisvertex->left->m;
-
-		j2=thisvertex->right->j;
-		m2=thisvertex->right->m;
-
-		j3=thisvertex->phononline->lambda;
-		m3=thisvertex->phononline->mu;
-
-		epsilon=1e-10;
-
-		coupling=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,2*m1,2*m2,2*m3)*
-			 gsl_sf_coupling_3j(2*j1,2*j2,2*j3,0,0,0)*
-		         sqrtf((2.0f*j1+1)*(2.0f*j2+1)*(2.0f*j3+1)/(4.0f*M_PI));
-
-		if((fabs(coupling)>epsilon)&&(result==false))
-		{
-			printf("\nWrong coupling: (%d, %d) (%d, %d) (%d, %d)\n",j1,m1,j2,m2,j3,m3);
-			printf("triangle_condition: %s, coupling: %f\n",result?"true":"false",coupling);
-			
-			print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
-
-			assert(false);
-		}
-
-		if((fabs(coupling)<=epsilon)&&(result==true))
-		{
-			printf("\nWrong coupling: (%d, %d) (%d, %d) (%d, %d)\n",j1,m1,j2,m2,j3,m3);
-			printf("triangle_condition: %s, coupling: %f\n",result?"true":"false",coupling);
-
-			print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
-
-			assert(false);
-		}
-	}
-
-#endif
-#endif
 
 	return result;
 }

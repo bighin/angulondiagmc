@@ -10,17 +10,6 @@
 #include "debug.h"
 #include "updates.h"
 
-#warning README
-
-/*
-	Le funzioni che aggiungono un worm tengono conto se la modifica ha senso fisico o no,
-	e per questo ritornano un bool.
-
-	Le funzioni che aggiungono una linea fononica invece non tengono conto di questo.
-
-	Qual è la soluzione migliore?
-*/
-
 /*
 	This function updates all the cross-referencing inside a diagram,
 	when a new midpoint and vertex are added at a certain position.
@@ -216,6 +205,76 @@ void diagram_add_end_midpoint(struct diagram_t *dgr,int c,double tau,struct arc_
 	leftline->m=rightline->m;
 }
 
+double calculate_arc_weight(struct diagram_t *dgr,struct arc_t *arc)
+{
+	int j1,m1,j2,m2,j3,m3;
+	struct vertex_info_t *thisvertex;
+	double timediff;
+	double c0,c1,c2,omega0,omega1,omega2;
+	double ret=1.0f;
+	
+	thisvertex=get_vertex(dgr,arc->startmidpoint);
+
+	j1=thisvertex->left->j;
+	m1=thisvertex->left->m;
+
+	j2=thisvertex->right->j;
+	m2=thisvertex->right->m;
+
+	j3=thisvertex->phononline->lambda;
+	m3=thisvertex->phononline->mu;
+
+	ret*=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,2*m1,2*m2,2*m3)*
+             gsl_sf_coupling_3j(2*j1,2*j2,2*j3,0,0,0)*
+	     sqrtf((2.0f*j1+1)*(2.0f*j2+1)*(2.0f*j3+1)/(4.0f*M_PI));
+
+	thisvertex=get_vertex(dgr,arc->endmidpoint);
+
+	j1=thisvertex->left->j;
+	m1=thisvertex->left->m;
+
+	j2=thisvertex->right->j;
+	m2=thisvertex->right->m;
+
+	j3=thisvertex->phononline->lambda;
+	m3=thisvertex->phononline->mu;
+
+	ret*=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,2*m1,2*m2,2*m3)*
+             gsl_sf_coupling_3j(2*j1,2*j2,2*j3,0,0,0)*
+	     sqrtf((2.0f*j1+1)*(2.0f*j2+1)*(2.0f*j3+1)/(4.0f*M_PI));
+
+	timediff=arc->endtau-arc->starttau;
+
+	c0=dgr->c0;
+	c1=dgr->c1;
+	c2=dgr->c2;
+	omega0=dgr->omega0;
+	omega1=dgr->omega1;
+	omega2=dgr->omega2;
+
+	assert(timediff>=0);
+
+	switch(arc->lambda)
+	{
+		case 0:
+		ret*=c0*exp(-timediff*omega0);
+		break;
+
+		case 1:
+		ret*=c1*exp(-timediff*omega1);
+		break;
+
+		case 2:
+		ret*=c2*exp(-timediff*omega2);
+		break;
+		
+		default:
+		assert(false);
+	}
+	
+	return ret;
+}
+
 void diagram_add_phonon_line(struct diagram_t *dgr,double tau1,double tau2,double k,int lambda,int mu)
 {
 	struct arc_t *arc;
@@ -281,6 +340,8 @@ void diagram_add_phonon_line(struct diagram_t *dgr,double tau1,double tau2,doubl
 	diagram_add_end_midpoint(dgr,hi,tau2,arc);
 	diagram_update_xrefs(dgr,hi);
 	arc->endmidpoint=hi;
+
+	dgr->weight*=calculate_arc_weight(dgr,arc);
 
 	assert(hi>lo);
 }
@@ -399,6 +460,8 @@ void diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 
 	arc=vlist_get_element(dgr->phonons,position);
 
+	dgr->weight/=calculate_arc_weight(dgr,arc);
+
 	startmidpoint=arc->startmidpoint;
 	endmidpoint=arc->endmidpoint;
 
@@ -507,15 +570,32 @@ void diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 	diagram_remove_end_midpoint(dgr,endmidpoint);
 }
 
+double calculate_free_propagator_weight(struct diagram_t *dgr,struct g0_t *g0)
+{
+	double en,tau;
+	int j;
+	
+	j=g0->j;
+	en=j*(j+1)-dgr->chempot;
+	tau=g0->endtau-g0->starttau;
+
+	return exp(-en*tau);
+}
+
 void diagram_update_length(struct diagram_t *dgr,double newendtau)
 {	
 	int nr_midpoints=get_nr_midpoints(dgr);
+	int nr_free_propagators=get_nr_free_propagators(dgr);
 
 	assert(dgr->endtau==get_midpoint(dgr,nr_midpoints));
 	assert(newendtau>get_midpoint(dgr,nr_midpoints-1));
 
+	dgr->weight/=calculate_free_propagator_weight(dgr,get_free_propagator(dgr,nr_free_propagators-1));
+
 	dgr->endtau=newendtau;
-	get_free_propagator(dgr,get_nr_free_propagators(dgr)-1)->endtau=newendtau;
+	get_free_propagator(dgr,nr_free_propagators-1)->endtau=newendtau;
+
+	dgr->weight*=calculate_free_propagator_weight(dgr,get_free_propagator(dgr,nr_free_propagators-1));
 }
 
 bool diagram_add_worm(struct diagram_t *dgr,int target1,int target2,int deltalambda)
@@ -548,7 +628,11 @@ bool diagram_add_worm(struct diagram_t *dgr,int target1,int target2,int deltalam
 	{
 		struct vertex_info_t *thisvertex=get_vertex(dgr,c);
 
+		dgr->weight/=calculate_free_propagator_weight(dgr,thisvertex->right);
+
 		thisvertex->right->j+=deltalambda;
+
+		dgr->weight*=calculate_free_propagator_weight(dgr,thisvertex->right);
 	}
 
 	/*
@@ -605,7 +689,11 @@ bool diagram_remove_worm(struct diagram_t *dgr,int index)
 	{
 		struct vertex_info_t *thisvertex=get_vertex(dgr,c);
 
+		dgr->weight/=calculate_free_propagator_weight(dgr,thisvertex->right);
+
 		thisvertex->right->j-=deltalambda;
+
+		dgr->weight*=calculate_free_propagator_weight(dgr,thisvertex->right);
 	}
 
 	get_vertex(dgr,target1)->refs--;
@@ -691,6 +779,13 @@ bool recouple_ms(struct diagram_t *dgr)
 	assert(check_couplings_ms(dgr)==true);
 
 	return true;
+}
+
+void recouple_ms_and_assert(struct diagram_t *dgr)
+{
+	bool result=recouple_ms(dgr);
+
+	assert(result==true);
 }
 
 bool check_couplings_ms(struct diagram_t *dgr)
