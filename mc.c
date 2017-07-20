@@ -598,6 +598,55 @@ static int configuration_handler(void *user,const char *section,const char *name
 	return 1;
 }
 
+int rng_nonuniform_int(gsl_rng *ctx,int n,int *previous)
+{
+	int c;
+	double total,r;
+	double *freqs;
+
+	for(c=0;c<n;c++)
+		if(previous[c]<=0)
+			return gsl_rng_uniform_int(ctx,n);
+
+	assert(n>0);
+	freqs=malloc(sizeof(double)*n);
+	assert(freqs);
+
+	for(c=0;c<n;c++)
+		freqs[c]=pow(previous[c],-1.0f);
+
+	total=0.0f;
+	for(c=0;c<n;c++)
+		total+=freqs[c];
+
+	for(c=0;c<n;c++)
+		freqs[c]/=total;
+
+	for(c=1;c<n;c++)
+		freqs[c]+=freqs[c-1];
+
+	{
+		int ptotal=0;
+
+		for(c=0;c<n;c++)
+			ptotal+=previous[c];
+
+		for(c=0;c<n;c++)
+			printf("%f ",((double)(previous[c]))/ptotal);
+	}
+	
+	printf("\n");
+
+	r=gsl_rng_uniform(ctx);
+	
+	for(c=0;c<n;c++)
+		if(freqs[c]>=r)
+			return c;
+
+	assert(false);
+	return n-1;
+}
+
 void show_update_statistics(FILE *out,int proposed,int accepted,int rejected)
 {
 	double accepted_pct,rejected_pct;
@@ -718,7 +767,8 @@ int do_diagmc(char *configfile)
 	{
 		int update_type,status;
 
-		update_type=gsl_rng_uniform_int(dgr->rng_ctx,DIAGRAM_NR_UPDATES);
+		update_type=rng_nonuniform_int(dgr->rng_ctx,DIAGRAM_NR_UPDATES,proposed);
+		//update_type=gsl_rng_uniform_int(dgr->rng_ctx,DIAGRAM_NR_UPDATES);
 		status=updates[update_type](dgr,&config);
 
 		if((config.animate)&&(status==UPDATE_ACCEPTED)&&((update_type==1)||(update_type==2)))
@@ -799,8 +849,8 @@ int do_diagmc(char *configfile)
 		// FIXME Optimization: this weight can be used later in oldweight, no need to recalculate
 	}
 
-	print_diagram(dgr,PRINT_TOPOLOGY|PRINT_INFO0|PRINT_PROPAGATORS);
-	debug_weight(dgr);
+	//print_diagram(dgr,PRINT_TOPOLOGY|PRINT_INFO0|PRINT_PROPAGATORS);
+	//debug_weight(dgr);
 
 	if(config.progressbar)
 		progressbar_finish(progress);
@@ -814,7 +864,7 @@ int do_diagmc(char *configfile)
 	fprintf(out,"# Chemical potential: %f\n",config.chempot);
 	fprintf(out,"# Initial diagram length: %f\n",config.endtau);
 	fprintf(out,"# Max diagram length: %f\n",config.maxtau);
-	fprintf(out,"# Potential parameters: (c0, c1, c2, omega0) = (%f, %f, %f, %f)\n",config.c0,config.c1,config.c2,config.omega0);
+	fprintf(out,"# Potential parameters: (c0, c1, c2, omega0, omega1, omega2) = (%f, %f, %f, %f, %f, %f)\n",config.c0,config.c1,config.c2,config.omega0,config.omega1,config.omega2);
 	fprintf(out,"#\n");
 	fprintf(out,"# Sampled quantity: Green's function (G)\n");
 	fprintf(out,"# Iterations: %d\n",config.iterations);
