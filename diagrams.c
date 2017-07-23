@@ -320,7 +320,7 @@ void diagram_check_consistency(struct diagram_t *dgr)
 	}
 
 	/*
-		...and phonon lines
+		...and phonon lines...
 	*/
 
 	for(c=0;c<get_nr_phonons(dgr);c++)
@@ -330,12 +330,17 @@ void diagram_check_consistency(struct diagram_t *dgr)
 		diagram_check_consistency_of_times(dgr,thisline->starttau,thisline->startmidpoint);
 		diagram_check_consistency_of_times(dgr,thisline->endtau,thisline->endmidpoint);
 	}
+	
+	/*
+		...and worms!
+	*/
+
+#warning WRITEME
 }
 
 double diagram_weight(struct diagram_t *dgr)
 {
 	//return dgr->weight;
-
 	return diagram_weight_non_incremental(dgr);
 }
 
@@ -406,6 +411,8 @@ double diagram_weight_non_incremental(struct diagram_t *dgr)
 	/*
 		...and finally we consider the vertices.
 	*/
+
+#warning Forse qui mancano dei (-1) alla mu o similare...
 
 	for(c=0;c<get_nr_vertices(dgr);c++)
 	{

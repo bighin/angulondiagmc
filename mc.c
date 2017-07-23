@@ -767,8 +767,10 @@ int do_diagmc(char *configfile)
 	{
 		int update_type,status;
 
-		update_type=rng_nonuniform_int(dgr->rng_ctx,DIAGRAM_NR_UPDATES,proposed);
-		//update_type=gsl_rng_uniform_int(dgr->rng_ctx,DIAGRAM_NR_UPDATES);
+#warning CHECKME
+
+		//update_type=rng_nonuniform_int(dgr->rng_ctx,DIAGRAM_NR_UPDATES,proposed);
+		update_type=gsl_rng_uniform_int(dgr->rng_ctx,DIAGRAM_NR_UPDATES);
 		status=updates[update_type](dgr,&config);
 
 		if((config.animate)&&(status==UPDATE_ACCEPTED)&&((update_type==1)||(update_type==2)))
@@ -835,8 +837,11 @@ int do_diagmc(char *configfile)
 			//histogram_add_sample(ht,freeweight,dgr->endtau);
 		}
 #endif
-		
-		assert(diagram_weight(dgr)==diagram_weight_non_incremental(dgr));
+
+#warning	Per la parte incrementale mancano tutte le m, e vanno tolte dai vertici attuali! LUUUUUUUUUNGO!
+
+		//assert((diagram_weight(dgr)-diagram_weight_non_incremental(dgr))<10e-7*diagram_weight(dgr));
+		diagram_check_consistency(dgr);
 
 		histogram_add_sample(ht,diagram_weight(dgr),dgr->endtau);
 

@@ -768,6 +768,17 @@ bool recouple_ms(struct diagram_t *dgr)
 		thisvertex->right->m=-thisvertex->left->m-thisvertex->phononline->mu;
 	}
 
+	for(c=0;c<nr_midpoints-1;c++)
+	{
+		thisvertex=get_vertex(dgr,c);
+
+		if(abs(thisvertex->right->m)>thisvertex->right->j)
+		{
+			restore_free_propagators(dgr,&fpc);
+			return false;
+		}
+	}
+
 	thisvertex=get_vertex(dgr,nr_midpoints-1);
 	
 	if(0!=thisvertex->right->m+thisvertex->left->m+thisvertex->phononline->mu)

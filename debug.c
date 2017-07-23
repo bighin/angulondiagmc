@@ -8,6 +8,7 @@
 #include "diagrams.h"
 #include "updates.h"
 #include "debug.h"
+#include "aux.h"
 
 void debug_propagators(struct diagram_t *dgr)
 {
@@ -216,8 +217,8 @@ void debug_weight(struct diagram_t *dgr)
 			printf("Adding %f * exp(%f) [%f %f]\n",c2,-timediff*omega2,timediff,omega2);
 			break;
 			
-			//default:
-			//assert(false);
+			default:
+			assert(false);
 		}
 	}
 
@@ -269,6 +270,8 @@ void stresstest(void)
 		return;
 	}
 
+	//seed_rng(rctx);
+
 	cfg.endtau=1.0f;
 	cfg.j=2;
 	cfg.m=1;
@@ -276,9 +279,13 @@ void stresstest(void)
 
 	dgr=init_diagram(&cfg);
 
-	parx=64;
-	pary=128;
-	parz=46;
+	//parx=64;
+	//pary=128;
+	//parz=46;
+
+	parx=8;
+	pary=16;
+	parz=6;
 
 	assert(parz<pary);
 
@@ -293,7 +300,7 @@ void stresstest(void)
 			hi=gsl_rng_uniform(rctx);
 			k=gsl_rng_uniform(rctx);
 
-			lambda=gsl_rng_uniform_int(rctx,8);
+			lambda=gsl_rng_uniform_int(rctx,3);
 			mu=gsl_rng_uniform_int(rctx,lambda+1);
 
 			if(gsl_rng_uniform(rctx)<0.5f)
@@ -323,25 +330,46 @@ void stresstest(void)
 			
 				v1=get_vertex(dgr,thisline->startmidpoint);
 				v2=get_vertex(dgr,thisline->startmidpoint);
-			
-				if((check_triangle_condition(dgr,v1)==false)||(check_triangle_condition(dgr,v2)==false))
+
+				if((recouple_ms(dgr)==false)||(check_triangle_condition(dgr,v1)==false)||(check_triangle_condition(dgr,v2)==false))
 				{
 					int lastline=get_nr_phonons(dgr)-1;
 					diagram_remove_phonon_line(dgr,lastline);
+					recouple_ms_and_assert(dgr);
 				}
 			}
 
 			diagram_check_consistency(dgr);
-			print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
+			//print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
 		}
 
 		for(z=0;z<parz;z++)
 		{
 			if(get_nr_phonons(dgr)>0)
 			{
-				int target=gsl_rng_uniform_int(rctx,get_nr_phonons(dgr));
+				int target;
+
+				struct arc_t *line;
+				double tau1,tau2,k;
+				int lambda,mu;
 				
+				target=gsl_rng_uniform_int(rctx,get_nr_phonons(dgr));
+
+				line=get_phonon_line(dgr,target);
+				tau1=line->starttau;
+				tau2=line->endtau;
+				k=line->k;
+				lambda=line->lambda;
+				mu=line->mu;
+
 				diagram_remove_phonon_line(dgr,target);
+				
+				if(recouple_ms(dgr)==false)
+				{
+					diagram_add_phonon_line(dgr,tau1,tau2,k,lambda,mu);
+					recouple_ms_and_assert(dgr);
+				}
+
 				diagram_check_consistency(dgr);
 			
 				printf("<- (%d)>\n",get_nr_phonons(dgr));
@@ -349,13 +377,41 @@ void stresstest(void)
 		}
 	}
 
+	assert(check_couplings_ms(dgr)==true);
+	diagram_check_consistency(dgr);
+
 	while(get_nr_vertices(dgr)>0)
 	{
+		int target;
+
+		struct arc_t *line;
+		double tau1,tau2,k;
+		int lambda,mu;
+
 		if(get_nr_vertices(dgr)<=19)
 			print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
 
-		printf("<- (%d)>\n",get_nr_phonons(dgr));
-		diagram_remove_phonon_line(dgr,gsl_rng_uniform_int(rctx,get_nr_phonons(dgr)));
-	
+		//printf("<- (%d)>\n",get_nr_phonons(dgr));
+
+		target=gsl_rng_uniform_int(rctx,get_nr_phonons(dgr));
+
+		line=get_phonon_line(dgr,target);
+		tau1=line->starttau;
+		tau2=line->endtau;
+		k=line->k;
+		lambda=line->lambda;
+		mu=line->mu;
+
+		diagram_remove_phonon_line(dgr,target);
+		
+		if(recouple_ms(dgr)==false)
+		{
+			printf("Removal of line (%d/%d) failed!\n",target,get_nr_phonons(dgr));
+
+			print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
+
+			diagram_add_phonon_line(dgr,tau1,tau2,k,lambda,mu);
+			recouple_ms_and_assert(dgr);
+		}
 	}
 }
