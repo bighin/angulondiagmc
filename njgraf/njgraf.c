@@ -6109,6 +6109,8 @@ double do_njgraf(int m,int n,int j1[MANGM],int j2[MTRIAD][3],int j3[MTRIAD][3],i
 	real recup;
 	logical fail;
 
+#warning No need to do this every time!
+
         factt_();
 
         ird = 5;
@@ -6123,9 +6125,6 @@ double do_njgraf(int m,int n,int j1[MANGM],int j2[MTRIAD][3],int j3[MTRIAD][3],i
         fail = FALSE_;
 
 	ibug3=0;
-
-	//assert(MANGM==)
-	//assert(MTRIAD==)
 
 	couple_1.m=m;
 	couple_1.n=n+1;
