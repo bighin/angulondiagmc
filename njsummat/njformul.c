@@ -202,10 +202,8 @@ int h_build_deltas (NODE *this, NODE *tree, DELTAS *pd)
 void build_deltas (NODE *bra, NODE *ket, DELTAS *pd)
 /* Builds a list of delta functions for bra en ket, returns in *pd */
 {
-        int tmp;
-
         if (bra->left != NULL) {
-          tmp = h_build_deltas (bra, ket, pd);
+          h_build_deltas (bra, ket, pd);
           build_deltas (bra->left, ket, pd);
           build_deltas (bra->right, ket, pd);
         }
@@ -255,7 +253,6 @@ void read_njsym (int *pnrjs, NODE **pbra, NODE **pket, DELTAS *pd)
 {
         int nrcoups, dummy, i, rootval;
         TRIADS tr1, tr2;
-        char s[20];
 
         printf ("Give nrjs, nrcoups, dummy : ");
         scanf ("%d %d %d", pnrjs, &nrcoups, &dummy);
@@ -304,7 +301,6 @@ NODE *read_tree (char *pch)
    returns the first character not belonging to expression in *pch;
    if an error occurs : returns NULL */
 {
-	int i;
 	NODE *current;
 
 	current = (NODE *) malloc (sizeof(NODE));
@@ -344,7 +340,6 @@ void read_expr (int *pnrjs, NODE **pbra, NODE **pket, DELTAS *pd)
 {
         int stop;
 	char ch, s[80];
-	NODE *expr;
 
         if (AUTONUM == ON) {
           printf ("Number of j's given ? ");
@@ -407,7 +402,7 @@ void file_write_formula (FILE *ofile, FORMULA *f)
 /* Writes the formula to a given file, which has to be opened already */
 {
         int i, j;
-
+	
         fprintf (ofile, "FORMULA : \n");
         fprintf (ofile, "nrjs = %d, nrks = %d, nrsixjs = %d\n",
                 f->nrjs, f->nrks, f->nrsixjs);
@@ -439,8 +434,6 @@ void file_write_formula (FILE *ofile, FORMULA *f)
 void write_formula (FORMULA *f)
 /* Writes the formula f to a standard output device */
 {
-        int i, j;
-
         if (f == NULL) printf ("No proper formula generated\n");
         else file_write_formula (stdout, f);
 }
@@ -499,8 +492,6 @@ int check_leafs (NODE *this, NODE *tree)
 /* Checks wether the leafset of this is one of the leafsets of tree;
    if so, clears leafset of expr */
 {
-        int i;
-
 	if (equal_sets (this->leafs, tree->leafs)) {
 	  clear_set (tree->leafs);
 	  if (tree->index != this->index) tree->index = this->index;
@@ -634,6 +625,8 @@ void unflop_left (NODE *tree, FORMULA *f)
         tree->left->index = d;
 }
 
+int try_allflopseq (int flen, NODE *bra, NODE *ket, FORMULA *f);
+
 int try_flop_left (int flen, NODE *frombra, NODE *ket, FORMULA *f)
 /* Tries a flop left on frombra and checks if it can be the first flop
    in a sequence of length flen creating a new node of ket. */
@@ -723,8 +716,7 @@ FORMULA *h_generate_formula (int nrjs, NODE *bra, NODE *ket)
 /* Transforms expression bra into ket, building formula f;
    returns NULL if transformation is not successful. */
 {
-        int flen, possible, finito, n;
-        char s[10];
+        int flen, possible, n;
         NODE *cpbra;
         FORMULA *f;
 

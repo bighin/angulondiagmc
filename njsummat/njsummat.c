@@ -45,7 +45,7 @@ void comp_fac ()
 double comp_6j (SIXJ jv)
 /* Compute a 6-j coefficient with given parameters. */
 {
-        int j1, j2, j3, l1, l2, l3, i;
+        int j1, j2, j3, l1, l2, l3;
 	int kfirst, klast, k, sign, kf2, kf3, kl1, kl2, kl3, kl4, kn;
 	double res, sum, term, factor;
 
@@ -113,6 +113,8 @@ void copy_jvals (FORMULA *orig, FORMULA *copy)
 	  copy->js[i] = orig->js[i];
 }
 
+void copy_set (SET a, SET b);
+
 NODE *find_and_delete_node (int j, NODE *tree)
 {
        NODE *current;
@@ -132,6 +134,8 @@ NODE *find_and_delete_node (int j, NODE *tree)
        else
 	 return find_and_delete_node (j, tree->right);
 }
+
+void rebuild_leafs (NODE *tree);
 
 void split (DELTAS delta, int *pnrtrees, NODE *bras[], NODE *kets[])
 /* Splits a pair of bra and ket trees (given in 0th component)
@@ -155,7 +159,7 @@ void split (DELTAS delta, int *pnrtrees, NODE *bras[], NODE *kets[])
  *        CHECKING TRIANGLE CONDITIONS
  */
 
-int tr1 (s1, s2, s3)
+int tr1 (int s1, int s2, int s3)
 {
       if (-s1 + s2 + s3 < 0) return 0;
       if (s1 - s2 + s3 < 0) return 0;

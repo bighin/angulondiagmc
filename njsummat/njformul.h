@@ -1,3 +1,6 @@
+#ifndef __NJFORMUL_H__
+#define __NJFORMUL_H__
+
 /*
  *	njformul.h
  *	----------
@@ -66,3 +69,5 @@ FORMULA *generate_formula (int nrjs, NODE *bra, NODE *ket);
    returns list of delta functions for j coefficients in *pd,
    returns NULL if transformation is not successful.
    Possible searchlevels : SHALLOW, DEEP, VERYDEEP. */
+
+#endif //__NJFORMUL_H__

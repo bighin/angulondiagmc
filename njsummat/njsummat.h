@@ -1,4 +1,5 @@
-/* ------------------------- cut here ------------------------------------ */
+#ifndef __NJSUMMAT_H__
+#define __NJSUMMAT_H__
 
 /*
  *       njsummat.h
@@ -40,3 +41,4 @@ void order (FORMULA *f);
 double evaluate_formula (FORMULA *f);
 /* Evaluates a given formula *f with built structures and actual j-values */
 
+#endif // __NJSUMMAT_H__

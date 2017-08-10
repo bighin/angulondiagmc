@@ -12,10 +12,12 @@
 #include "debug.h"
 #include "aux.h"
 #include "mc.h"
-#include "njgraf/njgraf.h"
+#include "graphs.h"
 
 int main(int argc,char *argv[])
 {
+	init_njsummat();
+
 	//stresstest();
 	//return 0;
 	
