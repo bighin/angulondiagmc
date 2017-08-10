@@ -12,6 +12,7 @@
 #include "debug.h"
 #include "aux.h"
 #include "mc.h"
+#include "njgraf/njgraf.h"
 
 int main(int argc,char *argv[])
 {

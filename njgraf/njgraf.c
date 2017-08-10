@@ -6104,14 +6104,15 @@ int second_(real *data)
 #define j2_ref(a_1,a_2) couple_1.j2[(a_2)*12 + a_1 - 13]
 #define j3_ref(a_1,a_2) couple_1.j3[(a_2)*12 + a_1 - 13]
 
+void init_njgraf(void)
+{
+        factt_();
+}
+
 double do_njgraf(int m,int n,int j1[MANGM],int j2[MTRIAD][3],int j3[MTRIAD][3],int isfree[MANGM])
 {
 	real recup;
 	logical fail;
-
-#warning No need to do this every time!
-
-        factt_();
 
         ird = 5;
         ipd = 6;

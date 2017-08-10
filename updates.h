@@ -27,8 +27,4 @@ struct free_propagators_ctx_t
 void save_free_propagators(struct diagram_t *dgr,struct free_propagators_ctx_t *fpc);
 void restore_free_propagators(struct diagram_t *dgr,struct free_propagators_ctx_t *fpc);
 
-bool check_couplings_ms(struct diagram_t *dgr);
-bool recouple_ms(struct diagram_t *dgr);
-void recouple_ms_and_assert(struct diagram_t *dgr);
-
 #endif //__UPDATES_H__

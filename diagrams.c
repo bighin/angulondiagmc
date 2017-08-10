@@ -340,8 +340,8 @@ void diagram_check_consistency(struct diagram_t *dgr)
 
 double diagram_weight(struct diagram_t *dgr)
 {
-	//return dgr->weight;
-	return diagram_weight_non_incremental(dgr);
+	return dgr->weight;
+	//return diagram_weight_non_incremental(dgr);
 }
 
 double diagram_weight_non_incremental(struct diagram_t *dgr)
@@ -416,22 +416,16 @@ double diagram_weight_non_incremental(struct diagram_t *dgr)
 
 	for(c=0;c<get_nr_vertices(dgr);c++)
 	{
-		int j1,m1,j2,m2,j3,m3;
+		int j1,j2,j3;
 		double coupling;
 
 		struct vertex_info_t *thisvertex=get_vertex(dgr,c);
 
 		j1=thisvertex->left->j;
-		m1=thisvertex->left->m;
-
 		j2=thisvertex->right->j;
-		m2=thisvertex->right->m;
-
 		j3=thisvertex->phononline->lambda;
-		m3=thisvertex->phononline->mu;
 
-		coupling=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,2*m1,2*m2,2*m3)*
-			 gsl_sf_coupling_3j(2*j1,2*j2,2*j3,0,0,0)*
+		coupling=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,0,0,0)*
 		         sqrtf((2.0f*j1+1)*(2.0f*j2+1)*(2.0f*j3+1)/(4.0f*M_PI));
 	
 		ret*=coupling;

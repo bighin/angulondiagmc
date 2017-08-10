@@ -149,7 +149,7 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	*/
 
 	lambda=gsl_rng_uniform_int(dgr->rng_ctx,3);
-	mu=gsl_rng_uniform_int(dgr->rng_ctx,2*lambda+1)-lambda;
+	mu=0;
 
 	/*
 		The start time tau1 is sampled uniformly, while tau2 is sampled from
@@ -174,20 +174,24 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	v1=get_vertex(dgr,thisline->startmidpoint);
 	v2=get_vertex(dgr,thisline->endmidpoint);
 
-	if((recouple_ms(dgr)==false)||(check_triangle_condition(dgr,v1)==false)||(check_triangle_condition(dgr,v2)==false))
+	if((check_triangle_condition(dgr,v1)==false)||(check_triangle_condition(dgr,v2)==false))
 	{
-		int lastline;
-
-		lastline=get_nr_phonons(dgr)-1;
-
+		int lastline=get_nr_phonons(dgr)-1;
+		
 		diagram_remove_phonon_line(dgr,lastline);
-		recouple_ms_and_assert(dgr);
+
+		/*
+			The weight went to zero due to bad couplings, so we cannot trust
+			the incremental update...
+		*/
+
+		dgr->weight=oldweight;
 
 		return UPDATE_UNPHYSICAL;
 	}
 
 	acceptance_ratio=diagram_weight(dgr)/oldweight;
-	acceptance_ratio*=3.0f*(2*lambda+1)*dgr->endtau;
+	acceptance_ratio*=3.0f*dgr->endtau;
 	acceptance_ratio/=get_nr_phonons(dgr)+1;
 	acceptance_ratio/=doubly_truncated_exp_pdf(dgr->rng_ctx,omegas[lambda],tau1,dgr->endtau,tau2);
 
@@ -199,7 +203,6 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 
 		lastline=get_nr_phonons(dgr)-1;
 		diagram_remove_phonon_line(dgr,lastline);
-		recouple_ms_and_assert(dgr);
 
 		assert(fabs(diagram_weight(dgr)-oldweight)<1e-7*oldweight);
 
@@ -243,18 +246,8 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	diagram_remove_phonon_line(dgr,target);
 
-	if(recouple_ms(dgr)==false)
-	{
-		diagram_add_phonon_line(dgr,tau1,tau2,k,lambda,mu);
-		recouple_ms_and_assert(dgr);
-
-		assert(fabs(diagram_weight(dgr)-oldweight)<1e-7*oldweight);
-	
-		return UPDATE_REJECTED;
-	}
-
 	acceptance_ratio=diagram_weight(dgr)/oldweight;
-	acceptance_ratio/=3.0f*(2*lambda+1)*dgr->endtau;
+	acceptance_ratio/=3.0f*dgr->endtau;
 	acceptance_ratio*=nr_phonons;
 	acceptance_ratio*=doubly_truncated_exp_pdf(dgr->rng_ctx,omegas[lambda],tau1,dgr->endtau,tau2);
 
@@ -263,7 +256,6 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	if(is_accepted==false)
 	{
 		diagram_add_phonon_line(dgr,tau1,tau2,k,lambda,mu);
-		recouple_ms_and_assert(dgr);
 
 		assert(fabs(diagram_weight(dgr)-oldweight)<1e-7*oldweight);
 	
@@ -311,23 +303,25 @@ int update_add_worm(struct diagram_t *dgr,struct configuration_t *cfg)
 	
 	deltalambda=gsl_rng_uniform_int(dgr->rng_ctx,2*minlambda)-minlambda;
 	deltalambda=(deltalambda<0)?(deltalambda):(deltalambda+1);
-	
+
+#warning FIXME
+
+	/*
+		Va bene, però la parte statistica (di selezione) va migliorata,
+		e va matchata con update_remove_worm
+	*/
+
+	if((abs(deltalambda)%2)==1)
+		return UPDATE_UNPHYSICAL;
+
+	printf("Before worm!\n");
+	print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
+
 	if(diagram_add_worm(dgr,MIN(target1,target2),MAX(target1,target2),deltalambda)==false)
 		return UPDATE_UNPHYSICAL;
 
-	if(recouple_ms(dgr)==false)
-	{
-		bool result;
-
-		result=diagram_remove_worm(dgr,get_nr_worms(dgr)-1);
-		assert(result==true);
-
-		recouple_ms_and_assert(dgr);
-
-		assert(fabs(diagram_weight(dgr)-oldweight)<1e-7*oldweight);
-	
-		return UPDATE_REJECTED;
-	}
+	printf("After! (%d)\n",deltalambda);
+	print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
 
 	acceptance_ratio=diagram_weight(dgr)/oldweight;
 	is_accepted=(gsl_rng_uniform(dgr->rng_ctx)<acceptance_ratio)?(true):(false);
@@ -337,7 +331,6 @@ int update_add_worm(struct diagram_t *dgr,struct configuration_t *cfg)
 		bool result;
 
 		result=diagram_remove_worm(dgr,get_nr_worms(dgr)-1);
-		recouple_ms_and_assert(dgr);
 
 		assert(result==true);
 		assert(fabs(diagram_weight(dgr)-oldweight)<1e-7*oldweight);
@@ -373,19 +366,6 @@ int update_remove_worm(struct diagram_t *dgr,struct configuration_t *cfg)
 		return UPDATE_UNPHYSICAL;
 	}
 
-	if(recouple_ms(dgr)==false)
-	{
-		bool result;
-		
-		result=diagram_add_worm(dgr,v1,v2,deltalambda);
-		recouple_ms_and_assert(dgr);
-
-		assert(result==true);
-		assert(fabs(diagram_weight(dgr)-oldweight)<1e-7*oldweight);
-
-		return UPDATE_REJECTED;
-	}
-
 	acceptance_ratio=diagram_weight(dgr)/oldweight;
 	is_accepted=(gsl_rng_uniform(dgr->rng_ctx)<acceptance_ratio)?(true):(false);
 
@@ -394,7 +374,6 @@ int update_remove_worm(struct diagram_t *dgr,struct configuration_t *cfg)
 		bool result;
 		
 		result=diagram_add_worm(dgr,v1,v2,deltalambda);
-		recouple_ms_and_assert(dgr);
 
 		assert(result==true);
 		assert(fabs(diagram_weight(dgr)-oldweight)<1e-7*oldweight);
@@ -427,7 +406,7 @@ int update_change_lambda(struct diagram_t *dgr,struct configuration_t *cfg)
 	oldmu=thisline->mu;
 
 	newlambda=gsl_rng_uniform_int(dgr->rng_ctx,3);
-	newmu=gsl_rng_uniform_int(dgr->rng_ctx,2*newlambda+1)-newlambda;
+	newmu=0;
 
 	thisline->lambda=newlambda;
 	thisline->mu=newmu;
@@ -435,28 +414,23 @@ int update_change_lambda(struct diagram_t *dgr,struct configuration_t *cfg)
 	v1=get_vertex(dgr,thisline->startmidpoint);
 	v2=get_vertex(dgr,thisline->endmidpoint);
 
-	if((recouple_ms(dgr)==false)||(check_triangle_condition(dgr,v1)==false)||(check_triangle_condition(dgr,v2)==false))
+	if((check_triangle_condition(dgr,v1)==false)||(check_triangle_condition(dgr,v2)==false))
 	{
 		thisline->lambda=oldlambda;
 		thisline->mu=oldmu;
-
-		recouple_ms_and_assert(dgr);
-
+		
 		return UPDATE_UNPHYSICAL;
 	}
 
 	dgr->weight*=calculate_arc_weight(dgr,thisline)/oldarcweight;
 
 	acceptance_ratio=diagram_weight(dgr)/oldweight;
-
 	is_accepted=(gsl_rng_uniform(dgr->rng_ctx)<acceptance_ratio)?(true):(false);
 
 	if(is_accepted==false)
 	{
 		thisline->lambda=oldlambda;
 		thisline->mu=oldmu;
-
-		recouple_ms_and_assert(dgr);
 
 		assert(fabs(diagram_weight(dgr)-oldweight)<1e-7*oldweight);
 
@@ -598,55 +572,6 @@ static int configuration_handler(void *user,const char *section,const char *name
 	return 1;
 }
 
-int rng_nonuniform_int(gsl_rng *ctx,int n,int *previous)
-{
-	int c;
-	double total,r;
-	double *freqs;
-
-	for(c=0;c<n;c++)
-		if(previous[c]<=0)
-			return gsl_rng_uniform_int(ctx,n);
-
-	assert(n>0);
-	freqs=malloc(sizeof(double)*n);
-	assert(freqs);
-
-	for(c=0;c<n;c++)
-		freqs[c]=pow(previous[c],-1.0f);
-
-	total=0.0f;
-	for(c=0;c<n;c++)
-		total+=freqs[c];
-
-	for(c=0;c<n;c++)
-		freqs[c]/=total;
-
-	for(c=1;c<n;c++)
-		freqs[c]+=freqs[c-1];
-
-	{
-		int ptotal=0;
-
-		for(c=0;c<n;c++)
-			ptotal+=previous[c];
-
-		for(c=0;c<n;c++)
-			printf("%f ",((double)(previous[c]))/ptotal);
-	}
-	
-	printf("\n");
-
-	r=gsl_rng_uniform(ctx);
-	
-	for(c=0;c<n;c++)
-		if(freqs[c]>=r)
-			return c;
-
-	assert(false);
-	return n-1;
-}
-
 void show_update_statistics(FILE *out,int proposed,int accepted,int rejected)
 {
 	double accepted_pct,rejected_pct;
@@ -769,8 +694,10 @@ int do_diagmc(char *configfile)
 
 #warning CHECKME
 
-		//update_type=rng_nonuniform_int(dgr->rng_ctx,DIAGRAM_NR_UPDATES,proposed);
-		update_type=gsl_rng_uniform_int(dgr->rng_ctx,DIAGRAM_NR_UPDATES);
+#warning CHANGEME!!!
+
+		//update_type=gsl_rng_uniform_int(dgr->rng_ctx,DIAGRAM_NR_UPDATES);
+		update_type=gsl_rng_uniform_int(dgr->rng_ctx,5);
 		status=updates[update_type](dgr,&config);
 
 		if((config.animate)&&(status==UPDATE_ACCEPTED)&&((update_type==1)||(update_type==2)))
@@ -842,6 +769,7 @@ int do_diagmc(char *configfile)
 
 		//assert((diagram_weight(dgr)-diagram_weight_non_incremental(dgr))<10e-7*diagram_weight(dgr));
 		diagram_check_consistency(dgr);
+		//print_diagram(dgr,1+2+4);
 
 		histogram_add_sample(ht,diagram_weight(dgr),dgr->endtau);
 
