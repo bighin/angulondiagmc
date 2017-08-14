@@ -10,6 +10,7 @@
 #include "updates.h"
 #include "stat.h"
 #include "aux.h"
+#include "graphs.h"
 #include "debug.h"
 
 #include "inih/ini.h"
@@ -304,9 +305,9 @@ int update_add_worm(struct diagram_t *dgr,struct configuration_t *cfg)
 	deltalambda=gsl_rng_uniform_int(dgr->rng_ctx,2*minlambda)-minlambda;
 	deltalambda=(deltalambda<0)?(deltalambda):(deltalambda+1);
 
-#warning FIXME
-
 	/*
+		FIXME
+	
 		Va bene, però la parte statistica (di selezione) va migliorata,
 		e va matchata con update_remove_worm
 	*/
@@ -692,12 +693,10 @@ int do_diagmc(char *configfile)
 	{
 		int update_type,status;
 
-#warning CHECKME
-
-#warning CHANGEME!!!
+#warning CHANGEME
 
 		//update_type=gsl_rng_uniform_int(dgr->rng_ctx,DIAGRAM_NR_UPDATES);
-		update_type=gsl_rng_uniform_int(dgr->rng_ctx,5);
+		update_type=gsl_rng_uniform_int(dgr->rng_ctx,3);
 		status=updates[update_type](dgr,&config);
 
 		if((config.animate)&&(status==UPDATE_ACCEPTED)&&((update_type==1)||(update_type==2)))
@@ -712,7 +711,7 @@ int do_diagmc(char *configfile)
 						printf("\n");
 
 				print_diagram(dgr,PRINT_TOPOLOGY|PRINT_INFO0);
-				nanosleep((const struct timespec[]){{0, 500000000L/100}}, NULL);
+				nanosleep((const struct timespec[]){{0,500000000L/100}}, NULL);
 			}
 		}
 
@@ -723,19 +722,24 @@ int do_diagmc(char *configfile)
 			accepted[update_type]++;
 			break;
 
+			/*
+				FIXME
+
+				Here unphysical and rejected updates are treated in exactly the same
+				way. Is this OK?
+			*/
+
+			case UPDATE_UNPHYSICAL:
 			case UPDATE_REJECTED:
 			proposed[update_type]++;
 			rejected[update_type]++;
 			break;
 
-#warning CHECKME!
-
-			case UPDATE_UNPHYSICAL:
-			break;
-
 			case UPDATE_ERROR:
 			assert(false);
 		}
+
+		//FOLLOWING STUFF IS RELATED TO THE INSTABILITY
 
 #if 0
 		{
@@ -764,12 +768,8 @@ int do_diagmc(char *configfile)
 			//histogram_add_sample(ht,freeweight,dgr->endtau);
 		}
 #endif
-
-#warning	Per la parte incrementale mancano tutte le m, e vanno tolte dai vertici attuali! LUUUUUUUUUNGO!
-
-		//assert((diagram_weight(dgr)-diagram_weight_non_incremental(dgr))<10e-7*diagram_weight(dgr));
+		assert((diagram_weight(dgr)-diagram_weight_non_incremental(dgr))<10e-7*diagram_weight(dgr));
 		diagram_check_consistency(dgr);
-		//print_diagram(dgr,1+2+4);
 
 		histogram_add_sample(ht,diagram_weight(dgr),dgr->endtau);
 
@@ -779,7 +779,10 @@ int do_diagmc(char *configfile)
 		avgorder[0]+=get_nr_phonons(dgr);
 		avgorder[1]++;
 
-		// FIXME Optimization: this weight can be used later in oldweight, no need to recalculate
+		printf("QUL<%d>\n",get_nr_phonons(dgr));
+
+		if(get_nr_phonons(dgr)>0)
+			printf("XXX<mWeight>: %f %f\n",diagram_m_weight(dgr),diagram_m_weight_reference(dgr));
 	}
 
 	//print_diagram(dgr,PRINT_TOPOLOGY|PRINT_INFO0|PRINT_PROPAGATORS);

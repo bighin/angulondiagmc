@@ -211,22 +211,6 @@ void rlist_remove_element(struct randomized_list_t *lst,int position)
 	lst->nitems--;
 }
 
-#warning TESTME
-
-int rlist_pop_random_item(struct randomized_list_t *lst,gsl_rng *rng_ctx)
-{
-	int target,result;
-	
-	assert(lst->nitems>0);
-	
-	target=gsl_rng_uniform_int(rng_ctx,lst->nitems);
-	result=lst->items[target];
-
-	rlist_remove_element(lst,target);
-
-	return result;
-}
-
 void seed_rng(gsl_rng *rng)
 {
 	FILE *dev;

@@ -295,7 +295,7 @@ void diagram_check_consistency(struct diagram_t *dgr)
 		j3=thisvertex->phononline->lambda;
 		m3=thisvertex->phononline->mu;
 
-		coupling=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,2*m1,2*m2,2*m3);		
+		coupling=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,0,0,0);		
 		epsilon=1e-10;
 
 		if(fabs(coupling)<=epsilon)
@@ -332,16 +332,20 @@ void diagram_check_consistency(struct diagram_t *dgr)
 	}
 	
 	/*
-		...and worms!
+		...and worms! Still to write! FIXME
 	*/
 
-#warning WRITEME
+	/*
+		Finally, the weight calculate incrementally should match the non-incremental
+		reference version
+	*/
+
+	assert((diagram_weight(dgr)-diagram_weight_non_incremental(dgr))<10e-7*diagram_weight(dgr));
 }
 
 double diagram_weight(struct diagram_t *dgr)
 {
 	return dgr->weight;
-	//return diagram_weight_non_incremental(dgr);
 }
 
 double diagram_weight_non_incremental(struct diagram_t *dgr)
@@ -412,8 +416,6 @@ double diagram_weight_non_incremental(struct diagram_t *dgr)
 		...and finally we consider the vertices.
 	*/
 
-#warning Forse qui mancano dei (-1) alla mu o similare...
-
 	for(c=0;c<get_nr_vertices(dgr);c++)
 	{
 		int j1,j2,j3;
@@ -480,11 +482,13 @@ int print_diagram(struct diagram_t *dgr,int flags)
 			plines+=2;
 		}
 
-		printf("| %d|",0);
+		if(!(flags&PRINT_DRYRUN))
+			printf("| %d|",0);
 
 		for(c=0;c<get_nr_free_propagators(dgr);c++)
 		{
-			print_chars('-',dashing);
+			if(!(flags&PRINT_DRYRUN))
+				print_chars('-',dashing);
 		
 			if(c+1<10)
 			{

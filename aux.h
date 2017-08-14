@@ -40,7 +40,6 @@ void rlist_add_item(struct randomized_list_t *lst,int item);
 int rlist_get_random_item(struct randomized_list_t *lst,gsl_rng *rng_ctx);
 int rlist_get_elements(struct randomized_list_t *lst);
 void rlist_remove_element(struct randomized_list_t *lst,int position);
-int rlist_pop_random_item(struct randomized_list_t *lst,gsl_rng *rng_ctx);
 
 void seed_rng(gsl_rng *rng);
 
