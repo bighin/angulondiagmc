@@ -5,6 +5,9 @@
 #include <string.h>
 #include <assert.h>
 #include <gsl/gsl_rng.h>
+#include <curses.h>
+#include <term.h>
+#include <time.h>
 
 #include "diagrams.h"
 #include "updates.h"
@@ -15,10 +18,6 @@
 
 #include "inih/ini.h"
 #include "libprogressbar/progressbar.h"
-
-#include <curses.h>
-#include <term.h>
-#include <time.h>
 
 static char term_buffer[2048];
 
@@ -146,14 +145,14 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	oldweight=diagram_weight(dgr);
 
 	/*
-		The new lambda and mu are chosen using a uniform distribution
+		The new lambda is chosen using a uniform distribution
 	*/
 
 	lambda=gsl_rng_uniform_int(dgr->rng_ctx,3);
 	mu=0;
 
 	/*
-		The start time tau1 is sampled uniformly, while tau2 is sampled from
+		The start time tau1 is sampled uniformly, whereas tau2 is sampled from
 		a truncated exponential distribution.
 	*/
 	
@@ -633,7 +632,8 @@ int do_diagmc(char *configfile)
 	avgorder[0]=avgorder[1]=0;
 
 	/*
-		We load some sensible defaults in case they are not in the .ini file
+		We load some sensible defaults in case they are not in the .ini file, the we try
+		loading a .ini file.
 	*/
 
 	load_config_defaults(&config);
@@ -676,6 +676,11 @@ int do_diagmc(char *configfile)
 	dcfg.omega1=config.omega1;
 	dcfg.omega2=config.omega2;
 
+	/*
+		We initialize some basic data structures and various other stuff, as well as the
+		random number generator, in case a NON deterministic seed is requested.
+	*/
+
 	dgr=init_diagram(&dcfg);
 	ht=init_histogram(config.bins,config.width);
 
@@ -688,6 +693,10 @@ int do_diagmc(char *configfile)
 		progress=NULL;
 
         init_terminal_data();
+
+	/*
+		This is the main DiagMC loop
+	*/
 
 	for(c=0;c<config.iterations;c++)
 	{
@@ -791,6 +800,10 @@ int do_diagmc(char *configfile)
 	if(config.progressbar)
 		progressbar_finish(progress);
 
+	/*
+		Now we print the statistics we collected to the output file in a nice way.
+	*/
+
 	fprintf(out,"# Diagrammatic Monte Carlo for the angulon\n");
 	fprintf(out,"#\n");
 	fprintf(out,"# Configuration loaded from '%s'\n",configfile);
@@ -839,6 +852,10 @@ int do_diagmc(char *configfile)
 		else
 			fprintf(out,"%f\n",0.0f);
 	}
+
+	/*
+		That's all folks. Cleaning up.
+	*/
 
 	fini_histogram(ht);
 	fini_diagram(dgr);

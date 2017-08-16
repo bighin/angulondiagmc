@@ -623,6 +623,8 @@ bool diagram_add_worm(struct diagram_t *dgr,int target1,int target2,int deltalam
 		dgr->weight*=calculate_free_propagator_weight(dgr,thisvertex->right);
 	}
 
+#warning FIXME: the contribution to vertices needs to be calculated as well!
+
 	/*
 		At last we keep track of the worm by adding it on the global list
 	*/
@@ -665,7 +667,9 @@ bool diagram_remove_worm(struct diagram_t *dgr,int index)
 
 		if((thisvertex->right->j-deltalambda)<0)
 		{
-			printf("Removal failed!");
+			printf("Removal failed! Is it physical?");
+			
+			exit(0);
 			
 			return false;
 		}
@@ -683,6 +687,8 @@ bool diagram_remove_worm(struct diagram_t *dgr,int index)
 
 		dgr->weight*=calculate_free_propagator_weight(dgr,thisvertex->right);
 	}
+
+#warning FIXME: the contribution to vertices needs to be calculated as well!
 
 	get_vertex(dgr,target1)->refs--;
 	get_vertex(dgr,target2)->refs--;

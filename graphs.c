@@ -158,7 +158,7 @@ void formula_to_wolfram(FORMULA f)
 			verbose_printf(", ");
 	}
 
-	verbose_printf("},\n");
+	verbose_printf("}, ");
 
 	for(c=1;c<=f.nrks;c++)
 	{
@@ -373,7 +373,7 @@ void remove_triangle(struct graph_t *gt,int vertex)
 	/*
 		FIXME
 	
-		Additional phase due to node sign reversals... I still
+		Additional phase due to node sign reversalns... I still
 		need to check this carefully!
 	*/
 
