@@ -638,7 +638,7 @@ int do_diagmc(char *configfile)
 
 	load_config_defaults(&config);
 
-        if(ini_parse(configfile,configuration_handler,&config)<0)
+	if(ini_parse(configfile,configuration_handler,&config)<0)
 	{
 		fprintf(stderr,"Couldn't read or parse '%s'\n",configfile);
 		exit(0);
