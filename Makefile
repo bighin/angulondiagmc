@@ -23,5 +23,5 @@ $(TARGET): $(OBJECTS)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJECTS) -Wall $(LIBS) -o $@
 
 clean:
-	-rm -f *.o libprogressbar/*.o inih/*.o njsummat/*.o
+	-rm -f *.o libprogressbar/*.o inih/*.o njsummat/*.o murmurhash3/*.o
 	-rm -f $(TARGET)
