@@ -8,11 +8,28 @@
 #include "graphs.h"
 #include "tests.h"
 
-int test_graphical_machinery(void)
+double relative_distance(double w1,double w2)
+{
+	return fabs(fabs(w1)-fabs(w2))/fabs(w1);
+}
+
+int sign(double x)
+{
+	if(fabs(x)<10e-6)
+		return 0;
+
+	if(x>0.0f)
+		return 1;
+
+	return -1;
+}
+
+int test_one_diagram(int index,int j1,int j2,int j3,int j4)
 {
 	struct diagram_cfg_t dcfg;
 	struct diagram_t *dgr;
 	double w1,w2;
+	int mode;
 	
 	dcfg.j=2;
 	dcfg.m=0;
@@ -28,178 +45,228 @@ int test_graphical_machinery(void)
 	dcfg.omega1=16.0f;
 	dcfg.omega2=16.0f;
 
+	mode=PRINT_TOPOLOGY;//|PRINT_PROPAGATORS;
 	dgr=init_diagram(&dcfg);
 
-	//goto onlysquare;
+	switch(index)
+	{
+		/*
+			One loop: bubble
+		*/
 
-	/*
-		One loop: bubble
-	*/
+		case 0:
 
-	diagram_add_phonon_line(dgr,0.05,0.10,1.0,2,0);
+		diagram_add_phonon_line(dgr,0.05,0.10,1.0,j1,0);
 
-	print_diagram(dgr,PRINT_TOPOLOGY);
+		print_diagram(dgr,mode);
 	
-	w1=diagram_m_weight(dgr);
-	w2=diagram_m_weight_reference(dgr);
-	printf("<mWeight (using graphs, reference)>: %f %f\n",w1,w2);
-	assert((fabs(w1-w2)/w1)<10e-6);
+		w1=diagram_m_weight(dgr);
+		w2=diagram_m_weight_reference(dgr);
+		printf("<mWeight (using graphs, reference)>: %f %f\n",w1,w2);
+		assert(relative_distance(w1,w2)<10e-6);
+		assert(sign(w1)==sign(w2));
 
-	/*
-		Two loops: two subsequent bubbles
-	*/
+		break;
 
-	diagram_add_phonon_line(dgr,0.35,0.65,1.0,2,0);
+		/*
+			Two loops: two subsequent bubbles
+		*/
 
-	print_diagram(dgr,PRINT_TOPOLOGY);
+		case 1:
 
-	w1=diagram_m_weight(dgr);
-	w2=diagram_m_weight_reference(dgr);
-	printf("<mWeight (using graphs, reference)>: %f %f\n",w1,w2);
-	assert((fabs(w1-w2)/w1)<10e-6);
-	/*
-		Three loops.
-	*/
+		diagram_add_phonon_line(dgr,0.05,0.10,1.0,j1,0);
+		diagram_add_phonon_line(dgr,0.35,0.65,1.0,j2,0);
 
-	diagram_add_phonon_line(dgr,0.45,0.75,1.0,2,0);
+		print_diagram(dgr,mode);
 
-	print_diagram(dgr,PRINT_TOPOLOGY);
+		w1=diagram_m_weight(dgr);
+		w2=diagram_m_weight_reference(dgr);
+		printf("<mWeight (using graphs, reference)>: %f %f\n",w1,w2);
+		assert(relative_distance(w1,w2)<10e-6);
+		assert(sign(w1)==sign(w2));
 
-	w1=diagram_m_weight(dgr);
-	w2=diagram_m_weight_reference(dgr);
-	printf("<mWeight (using graphs, reference)>: %f %f\n",w1,w2);
-	assert((fabs(w1-w2)/w1)<10e-6);
+		break;
+		
+		/*
+			Three loops.
+		*/
 
-	/*
-		Two interleaved loops
-	*/
+		case 2:
 
-	while(get_nr_phonons(dgr)>0)
-		diagram_remove_phonon_line(dgr,0);
+		diagram_add_phonon_line(dgr,0.05,0.10,1.0,j1,0);
+		diagram_add_phonon_line(dgr,0.35,0.65,1.0,j2,0);
+		diagram_add_phonon_line(dgr,0.45,0.75,1.0,j3,0);
 
-	diagram_add_phonon_line(dgr,0.05,0.50,1.0,2,0);
-	diagram_add_phonon_line(dgr,0.45,0.55,1.0,2,0);
+		print_diagram(dgr,mode);
 
-	print_diagram(dgr,PRINT_TOPOLOGY);
+		w1=diagram_m_weight(dgr);
+		w2=diagram_m_weight_reference(dgr);
+		printf("<mWeight (using graphs, reference)>: %f %f\n",w1,w2);
+		assert(relative_distance(w1,w2)<10e-6);
+		assert(sign(w1)==sign(w2));
 
-	w1=diagram_m_weight(dgr);
-	w2=diagram_m_weight_reference(dgr);
-	printf("<mWeight (using graphs, reference)>: %f %f\n",w1,w2);
-	assert((fabs(w1-w2)/w1)<10e-6);
+		break;
 
-	/*
-		Three loops, sunset diagram, 10 momenta.
-	*/
+		/*
+			Two interleaved loops
+		*/
 
-	while(get_nr_phonons(dgr)>0)
-		diagram_remove_phonon_line(dgr,0);
+		case 3:
 
-	diagram_add_phonon_line(dgr,0.05,0.95,1.0,2,0);
-	diagram_add_phonon_line(dgr,0.25,0.75,1.0,2,0);
-	diagram_add_phonon_line(dgr,0.45,0.55,1.0,2,0);
+		diagram_add_phonon_line(dgr,0.05,0.50,1.0,j1,0);
+		diagram_add_phonon_line(dgr,0.45,0.55,1.0,j2,0);
 
-	print_diagram(dgr,PRINT_TOPOLOGY);
+		print_diagram(dgr,mode);
 
-	w1=diagram_m_weight(dgr);
-	w2=diagram_m_weight_reference(dgr);
-	printf("<mWeight (using graphs, reference)>: %f %f\n",w1,w2);
-	assert((fabs(w1-w2)/w1)<10e-6);
+		w1=diagram_m_weight(dgr);
+		w2=diagram_m_weight_reference(dgr);
+		printf("<mWeight (using graphs, reference)>: %f %f\n",w1,w2);
+		assert(relative_distance(w1,w2)<10e-6);
+		assert(sign(w1)==sign(w2));
+		
+		break;
 
-	/*
-		Three loops, 10 momenta.
-	*/
+		/*
+			Three loops, sunset diagram, 10 momenta.
+		*/
 
-	while(get_nr_phonons(dgr)>0)
-		diagram_remove_phonon_line(dgr,0);
+		case 4:
 
-	diagram_add_phonon_line(dgr,0.05,0.45,1.0,2,0);
-	diagram_add_phonon_line(dgr,0.35,0.75,1.0,2,0);
-	diagram_add_phonon_line(dgr,0.65,0.95,1.0,2,0);
+		diagram_add_phonon_line(dgr,0.05,0.95,1.0,j1,0);
+		diagram_add_phonon_line(dgr,0.25,0.75,1.0,j2,0);
+		diagram_add_phonon_line(dgr,0.45,0.55,1.0,j3,0);
 
-	print_diagram(dgr,PRINT_TOPOLOGY);
+		print_diagram(dgr,mode);
 
-	w1=diagram_m_weight(dgr);
-	w2=diagram_m_weight_reference(dgr);
-	printf("<mWeight (using graphs, reference)>: %f %f\n",w1,w2);
-	assert((fabs(w1-w2)/w1)<10e-6);
+		w1=diagram_m_weight(dgr);
+		w2=diagram_m_weight_reference(dgr);
+		printf("<mWeight (using graphs, reference)>: %f %f\n",w1,w2);
+		assert(relative_distance(w1,w2)<10e-6);
+		assert(sign(w1)==sign(w2));
+
+		break;
+
+		/*
+			Three loops, 10 momenta.
+		*/
+
+		case 5:
+
+		diagram_add_phonon_line(dgr,0.05,0.45,1.0,j1,0);
+		diagram_add_phonon_line(dgr,0.35,0.75,1.0,j2,0);
+		diagram_add_phonon_line(dgr,0.65,0.95,1.0,j3,0);
+
+		print_diagram(dgr,mode);
+
+		w1=diagram_m_weight(dgr);
+		w2=diagram_m_weight_reference(dgr);
+		printf("<mWeight (using graphs, reference)>: %f %f\n",w1,w2);
+		assert(relative_distance(w1,w2)<10e-6);
+		assert(sign(w1)==sign(w2));
+		
+		break;
 	
-	/*
-		Three loops, 10 momenta, contains a square.
-	*/
+		/*
+			Three loops, 10 momenta, contains a square.
+		*/
 
-	while(get_nr_phonons(dgr)>0)
-		diagram_remove_phonon_line(dgr,0);
+		case 6:
 
-	diagram_add_phonon_line(dgr,0.05,0.65,1.0,2,0);
-	diagram_add_phonon_line(dgr,0.25,0.85,1.0,2,0);
-	diagram_add_phonon_line(dgr,0.45,0.95,1.0,2,0);
+		diagram_add_phonon_line(dgr,0.05,0.65,1.0,j1,0);
+		diagram_add_phonon_line(dgr,0.25,0.85,1.0,j2,0);
+		diagram_add_phonon_line(dgr,0.45,0.95,1.0,j3,0);
 
-	print_diagram(dgr,PRINT_TOPOLOGY);
+		print_diagram(dgr,mode);
 
-	w1=diagram_m_weight(dgr);
-	w2=diagram_m_weight_reference(dgr);
-	printf("<mWeight (using graphs, reference)>: %f %f\n",w1,w2);
-	assert((fabs(w1-w2)/w1)<10e-6);
+		w1=diagram_m_weight(dgr);
+		w2=diagram_m_weight_reference(dgr);
+		printf("<mWeight (using graphs, reference)>: %f %f\n",w1,w2);
+		assert(relative_distance(w1,w2)<10e-6);
+		assert(sign(w1)==sign(w2));
 	
-	/*
-		Four loops, 13 momenta.
-	*/
+		break;
+	
+		/*
+			Four loops, 13 momenta.
+		*/
 
-	while(get_nr_phonons(dgr)>0)
-		diagram_remove_phonon_line(dgr,0);
+		case 7:
 
-	diagram_add_phonon_line(dgr,0.05,0.95,1.0,2,0);
-	diagram_add_phonon_line(dgr,0.15,0.85,1.0,2,0);
-	diagram_add_phonon_line(dgr,0.25,0.75,1.0,2,0);
-	diagram_add_phonon_line(dgr,0.45,0.55,1.0,2,0);
+		diagram_add_phonon_line(dgr,0.05,0.95,1.0,j1,0);
+		diagram_add_phonon_line(dgr,0.15,0.85,1.0,j2,0);
+		diagram_add_phonon_line(dgr,0.25,0.75,1.0,j3,0);
+		diagram_add_phonon_line(dgr,0.45,0.55,1.0,j4,0);
 
-	print_diagram(dgr,PRINT_TOPOLOGY);
+		print_diagram(dgr,mode);
 
-	w1=diagram_m_weight(dgr);
-	w2=diagram_m_weight_reference(dgr);
-	printf("<mWeight (using graphs, reference)>: %f %f\n",w1,w2);
-	assert((fabs(w1-w2)/w1)<10e-6);
+		w1=diagram_m_weight(dgr);
+		w2=diagram_m_weight_reference(dgr);
+		printf("<mWeight (using graphs, reference)>: %f %f\n",w1,w2);
+		assert(relative_distance(w1,w2)<10e-6);
+		assert(sign(w1)==sign(w2));
+		
+		break;
 
-	/*
-		Four loops, 13 momenta, contains a triangle.
-	*/
+		/*
+			Four loops, 13 momenta, contains a triangle.
+		*/
 
-	while(get_nr_phonons(dgr)>0)
-		diagram_remove_phonon_line(dgr,0);
+		case 8:
 
-	diagram_add_phonon_line(dgr,0.05,0.95,1.0,2,0);
-	diagram_add_phonon_line(dgr,0.15,0.85,1.0,2,0);
-	diagram_add_phonon_line(dgr,0.25,0.75,1.0,2,0);
-	diagram_add_phonon_line(dgr,0.025,0.55,1.0,2,0);
+		diagram_add_phonon_line(dgr,0.05,0.95,1.0,j1,0);
+		diagram_add_phonon_line(dgr,0.15,0.85,1.0,j2,0);
+		diagram_add_phonon_line(dgr,0.25,0.75,1.0,j3,0);
+		diagram_add_phonon_line(dgr,0.025,0.55,1.0,j4,0);
 
-	print_diagram(dgr,PRINT_TOPOLOGY);
+		print_diagram(dgr,mode);
 
-	w1=diagram_m_weight(dgr);
-	w2=diagram_m_weight_reference(dgr);
-	printf("<mWeight (using graphs, reference)>: %f %f\n",w1,w2);
-	assert((fabs(w1-w2)/w1)<10e-6);
+		w1=diagram_m_weight(dgr);
+		w2=diagram_m_weight_reference(dgr);
+		printf("<mWeight (using graphs, reference)>: %f %f\n",w1,w2);
+		assert(relative_distance(w1,w2)<10e-6);
+		assert(sign(w1)==sign(w2));
+		
+		break;
 
-	/*
-		Four loops, 13 momenta,  contains a square.
-	*/
+		/*
+			Four loops, 13 momenta,  contains a square.
+		*/
 
-	onlysquare:
+		case 9:
 
-	print_diagram(dgr,PRINT_TOPOLOGY);
+		print_diagram(dgr,mode);
 
-	diagram_add_phonon_line(dgr,0.05,0.95,1.0,2,0);
-	diagram_add_phonon_line(dgr,0.15,0.85,1.0,2,0);
-	diagram_add_phonon_line(dgr,0.25,0.975,1.0,2,0);
-	diagram_add_phonon_line(dgr,0.025,0.55,1.0,2,0);
+		diagram_add_phonon_line(dgr,0.05,0.95,1.0,j1,0);
+		diagram_add_phonon_line(dgr,0.15,0.85,1.0,j2,0);
+		diagram_add_phonon_line(dgr,0.25,0.975,1.0,j3,0);
+		diagram_add_phonon_line(dgr,0.025,0.55,1.0,j4,0);
 
-	diagram_m_weight(dgr);
+		diagram_m_weight(dgr);
 
-	print_diagram(dgr,PRINT_TOPOLOGY);
+		print_diagram(dgr,mode);
 
-	w1=diagram_m_weight(dgr);
-	w2=diagram_m_weight_reference(dgr);
-	printf("<mWeight (using graphs, reference)>: %f %f\n",w1,w2);
-	assert((fabs(w1-w2)/w1)<10e-6);
+		w1=diagram_m_weight(dgr);
+		w2=diagram_m_weight_reference(dgr);
+		printf("<mWeight (using graphs, reference)>: %f %f\n",w1,w2);
+		assert(relative_distance(w1,w2)<10e-6);
+		assert(sign(w1)==sign(w2));
+		
+		break;
+	}
+
+	return 0;
+}
+
+int test_graphical_machinery(void)
+{
+	for(int c=0;c<=9;c++)
+		test_one_diagram(c,1,2,1,2);
+
+	for(int c=0;c<=9;c++)
+		test_one_diagram(c,2,2,2,2);
+
+	for(int c=0;c<=9;c++)
+		test_one_diagram(c,1,1,1,1);
 
 	return 0;
 }

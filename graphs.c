@@ -14,6 +14,11 @@
 #include "njsummat/njsummat.h"
 #include "murmurhash3/murmurhash3.h"
 
+/*
+	FIXME: it would be nice to have everywhere a check, to see if we are hitting the maximum
+	number of lines, arcs or deltas.
+*/
+
 void reset_formula(FORMULA *f)
 {
 	int c,d;
@@ -200,7 +205,7 @@ void emit_jhat(struct graph_t *gt,int a,int power)
 		verbose_printf("JHAT: (2*%c%d + 1)^(%d)\n",J_OR_K(a),abs(a),power/2);
 	else
 		verbose_printf("JHAT: (2*%c%d + 1)^(%d/2)\n",J_OR_K(a),abs(a),power);
-	
+
 	if(a>0)
 		gt->f.jsqrts[a]+=power;
 	else
@@ -346,6 +351,10 @@ void remove_bubble(struct graph_t *gt,int vertex)
 	before=arcstart;
 	after=arcend+1;
 
+	emit_phase(gt,gt->lines[before],1);
+	emit_phase(gt,gt->lines[before+1],1);
+	emit_phase(gt,gt->arcs[index][2],1);
+
 	emit_delta(gt,gt->lines[before],gt->lines[after]);
 	emit_jhat(gt,gt->lines[before],-2);
 
@@ -373,15 +382,13 @@ void remove_triangle(struct graph_t *gt,int vertex)
 	/*
 		FIXME
 	
-		Additional phase due to node sign reversalns... I still
-		need to check this carefully!
+		Three additional phases due to node sign reversals... I still
+		need to check these carefully!
 	*/
 
-	{
-		emit_phase(gt,firstinside,1);
-		emit_phase(gt,secondinside,1);
-		emit_phase(gt,freeline,1);
-	}
+	emit_phase(gt,firstinside,1);
+	emit_phase(gt,secondinside,1);
+	emit_phase(gt,freeline,1);
 
 	emit_6j(gt,before,after,freeline,
 	        secondinside,firstinside,closedline);
@@ -418,9 +425,25 @@ void remove_square(struct graph_t *gt,int vertex)
 	emit_6j(gt,freeline2,after,newmomentum,
 	        closedline,secondinside,thirdinside);
 
+#if 0
+
 	emit_phase(gt,newmomentum,1);
 	emit_phase(gt,closedline,1);
 	emit_phase(gt,secondinside,-1);
+
+#else
+
+	emit_phase(gt,newmomentum,1);
+
+	emit_phase(gt,closedline,1);
+	emit_phase(gt,firstinside,1);
+	emit_phase(gt,secondinside,1);
+	emit_phase(gt,thirdinside,1);
+
+	emit_phase(gt,freeline1,1);
+	emit_phase(gt,freeline2,1);
+
+#endif
 
 	emit_jhat(gt,newmomentum,2);
 
@@ -429,29 +452,6 @@ void remove_square(struct graph_t *gt,int vertex)
 	gt->lines[arcstart+2]=newmomentum;
 
 	remove_arc(gt,index);
-	
-#if 0
-	{
-		int c;
-		static int cnt=1;
-
-		if(cnt==2)
-		{
-			gt->f.nrjs=gt->maxj;
-
-			for(c=1;c<=gt->f.nrjs;c++)
-				gt->f.js[c]=2*gt->js[c];
-	
-			printf("XXX");
-			debug_formula(gt->f);
-			exit(0);
-		}
-		else
-		{
-			cnt++;
-		}
-	}
-#endif
 }
 
 void exchange_lines(struct graph_t *gt,int v1,int v2)
@@ -925,8 +925,7 @@ double diagram_m_weight(struct diagram_t *dgr)
 
 	if(use_hashtable==true)
 		hashtable_insert(&gt,value,hashindex);
-	
-	printf("DEBUG VALUE: %f\n",value);
+
 	formula_to_wolfram(gt.f);
 	
 	return value;
@@ -1032,7 +1031,7 @@ double diagram_m_weight_reference(struct diagram_t *dgr)
 			Finally the Kronecker delta between the first and last free propagator momenta,
 			since they must be the same...
 		*/
-		
+
 		{
 			struct g0_t *first,*last;
 			

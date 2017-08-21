@@ -5,8 +5,6 @@
 #include <string.h>
 #include <assert.h>
 #include <gsl/gsl_rng.h>
-#include <curses.h>
-#include <term.h>
 #include <time.h>
 
 #include "diagrams.h"
@@ -18,6 +16,14 @@
 
 #include "inih/ini.h"
 #include "libprogressbar/progressbar.h"
+
+/*
+	The following needs to be included after graphs.h, becuase it defines a lines macro
+	which conflicts with a field in struct graph_t
+*/
+
+#include <curses.h>
+#include <term.h>
 
 static char term_buffer[2048];
 
@@ -780,7 +786,7 @@ int do_diagmc(char *configfile)
 		assert((diagram_weight(dgr)-diagram_weight_non_incremental(dgr))<10e-7*diagram_weight(dgr));
 		diagram_check_consistency(dgr);
 
-		histogram_add_sample(ht,diagram_weight(dgr),dgr->endtau);
+		histogram_add_sample(ht,diagram_weight(dgr)*diagram_m_weight(dgr),dgr->endtau);
 
 		if((config.progressbar)&&((c%16384)==0))
 			progressbar_inc(progress);
@@ -788,10 +794,12 @@ int do_diagmc(char *configfile)
 		avgorder[0]+=get_nr_phonons(dgr);
 		avgorder[1]++;
 
+#ifdef DEBUG9
 		printf("QUL<%d>\n",get_nr_phonons(dgr));
 
 		if(get_nr_phonons(dgr)>0)
 			printf("XXX<mWeight>: %f %f\n",diagram_m_weight(dgr),diagram_m_weight_reference(dgr));
+#endif
 	}
 
 	//print_diagram(dgr,PRINT_TOPOLOGY|PRINT_INFO0|PRINT_PROPAGATORS);

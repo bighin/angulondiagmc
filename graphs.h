@@ -21,10 +21,9 @@ struct graph_t
 	
 	int nr_vertices,nr_lines,nr_arcs;
 
-#define MAX_LINES	(1024)
-#define MAX_ARCS	(512)
+#define MAX_LINES		(1024)
+#define MAX_ARCS		(512)
 #define MAX_DELTAS	(512)
-
 
 	/*
 		lines[i] contains the label number of the momentum
@@ -41,7 +40,7 @@ struct graph_t
 		label circulating inside the vertex.
 	*/
 
-	int lines[MAX_LINES];	
+	int lines[MAX_LINES];
 	int arcs[MAX_ARCS][3];
 
 	/*
