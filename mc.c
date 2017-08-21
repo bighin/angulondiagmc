@@ -726,7 +726,7 @@ int do_diagmc(char *configfile)
 						printf("\n");
 
 				print_diagram(dgr,PRINT_TOPOLOGY|PRINT_INFO0);
-				nanosleep((const struct timespec[]){{0,500000000L/100}}, NULL);
+				//nanosleep((const struct timespec[]){{0,500000000L/100}}, NULL);
 			}
 		}
 

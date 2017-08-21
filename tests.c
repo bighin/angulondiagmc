@@ -259,13 +259,15 @@ int test_one_diagram(int index,int j1,int j2,int j3,int j4)
 
 int test_graphical_machinery(void)
 {
-	for(int c=0;c<=9;c++)
+	int c;
+
+	for(c=0;c<=9;c++)
 		test_one_diagram(c,1,2,1,2);
 
-	for(int c=0;c<=9;c++)
+	for(c=0;c<=9;c++)
 		test_one_diagram(c,2,2,2,2);
 
-	for(int c=0;c<=9;c++)
+	for(c=0;c<=9;c++)
 		test_one_diagram(c,1,1,1,1);
 
 	return 0;
