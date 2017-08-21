@@ -5,7 +5,7 @@
 #include <string.h>
 #include <assert.h>
 #include <gsl/gsl_rng.h>
-#include <time.h>
+#include <unistd.h>
 
 #include "diagrams.h"
 #include "updates.h"
@@ -726,7 +726,7 @@ int do_diagmc(char *configfile)
 						printf("\n");
 
 				print_diagram(dgr,PRINT_TOPOLOGY|PRINT_INFO0);
-				//nanosleep((const struct timespec[]){{0,500000000L/100}}, NULL);
+				usleep(5000);
 			}
 		}
 

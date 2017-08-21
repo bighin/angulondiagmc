@@ -213,14 +213,19 @@ void rlist_remove_element(struct randomized_list_t *lst,int position)
 
 void seed_rng(gsl_rng *rng)
 {
+	char *devname="/dev/random";
 	FILE *dev;
         unsigned long seed;
 
-	if(!(dev=fopen("/dev/random","r")))
+	if((dev=fopen(devname,"r"))!=NULL)
 	{
 		fread(&seed,sizeof(unsigned long),1,dev);
 		fclose(dev);
-	}
 
-	gsl_rng_set(rng,seed);
+		gsl_rng_set(rng,seed);
+	}
+	else
+	{
+		printf("Warning: couldn't read from %s to seed the RNG.\n",devname);
+	}
 }
