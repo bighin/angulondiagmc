@@ -177,7 +177,7 @@ void formula_to_wolfram(FORMULA f)
 }
 
 void emit_6j(struct graph_t *gt,int a,int b,int c,int d,int e,int f)
-{	
+{
 	verbose_printf("SIXJ(");
 	verbose_printf("%c%d,",J_OR_K(a),abs(a));
 	verbose_printf("%c%d,",J_OR_K(b),abs(b));
@@ -260,7 +260,7 @@ void show_graph(struct graph_t *gt)
 	for(c=0;c<gt->nr_vertices;c++)
 	{
 		int index=find_arc_with_vertex(gt,c);
-		
+
 		verbose_printf("|\n|\n| %c%d\n|\n|______ %c%d\n",J_OR_K(gt->lines[c]),abs(gt->lines[c]),J_OR_K(gt->arcs[index][2]),abs(gt->arcs[index][2]));
 	}
 

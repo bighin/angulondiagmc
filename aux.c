@@ -24,7 +24,12 @@ struct vlist_t *init_vlist(size_t elementsize,int maxsz)
 	ret->nalloced=maxsz;
 
 	if(!(ret->mem=malloc(elementsize*ret->nalloced)))
+	{
+		if(ret)
+			free(ret);
+
 		return NULL;
+	}
 	
 	return ret;
 }
