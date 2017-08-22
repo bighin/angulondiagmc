@@ -113,7 +113,6 @@ void hashtable_insert(struct graph_t *gt,double value,int hashindex);
 double diagram_m_weight(struct diagram_t *dgr);
 double diagram_m_weight_reference(struct diagram_t *dgr);
 
-void test_graph(void);
 void init_njsummat(void);
 
 #endif //__GRAPHS_H__

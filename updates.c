@@ -572,8 +572,16 @@ double calculate_free_propagator_weight(struct diagram_t *dgr,struct g0_t *g0)
 
 void diagram_update_length(struct diagram_t *dgr,double newendtau)
 {	
-	int nr_midpoints=get_nr_midpoints(dgr);
 	int nr_free_propagators=get_nr_free_propagators(dgr);
+
+	/*
+		The following variable is used only in assert() statements,
+		so we need it only if the NDEBUG macro is *not* defined.
+	*/
+
+#ifndef NDEBUG
+	int nr_midpoints=get_nr_midpoints(dgr);
+#endif
 
 	assert(dgr->endtau==get_midpoint(dgr,nr_midpoints));
 	assert(newendtau>get_midpoint(dgr,nr_midpoints-1));

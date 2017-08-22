@@ -29,7 +29,7 @@ int sign(double x)
 	The same function as double diagram_m_weight(struct diagram_t *dgr)
 	implemented in graphs.c, with the hashtable logic removed.
 
-	However, the debugswap flag is enabled in evaluate_graph(), such that
+	However, the debugswap flag is enabled when calling evaluate_graph(), such that
 	a line exchange is performed, to verify the equivalency of a diagram
 	after such operation is performed.
 */
@@ -201,6 +201,8 @@ int test_one_diagram(int index,int j1,int j2,int j3,int j4,int flags)
 	}
 
 	print_diagram(dgr,mode);
+
+	w1=w2=w3=0.0f; // To silence GCC (wrong) warnings...
 
 	if(flags&TEST_GRAPHS)		w1=diagram_m_weight(dgr);
 	if(flags&TEST_REFERENCE_ALGO)	w2=diagram_m_weight_reference(dgr);

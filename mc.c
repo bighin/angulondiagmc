@@ -18,7 +18,7 @@
 #include "libprogressbar/progressbar.h"
 
 /*
-	The following needs to be included after graphs.h, becuase it defines a lines macro
+	The following needs to be included after graphs.h, becuase it defines a 'lines' macro
 	which conflicts with a field in struct graph_t
 */
 
@@ -823,12 +823,6 @@ int do_diagmc(char *configfile)
 	fprintf(out,"# Max diagram length: %f\n",config.maxtau);
 	fprintf(out,"# Potential parameters: (c0, c1, c2, omega0, omega1, omega2) = (%f, %f, %f, %f, %f, %f)\n",config.c0,config.c1,config.c2,config.omega0,config.omega1,config.omega2);
 	fprintf(out,"#\n");
-	fprintf(out,"# Sampled quantity: Green's function (G)\n");
-	fprintf(out,"# Iterations: %d\n",config.iterations);
-	fprintf(out,"# Nr of bins: %d\n",config.bins);
-	fprintf(out,"# Bin width: %f\n",config.width);
-	fprintf(out,"# (last bin is overflow)\n");
-	fprintf(out,"#\n");
 
 	total_proposed=total_accepted=total_rejected=0;
 
@@ -846,7 +840,13 @@ int do_diagmc(char *configfile)
 
 	fprintf(out,"# Total: ");
 	show_update_statistics(out,total_proposed,total_accepted,total_rejected);
-	fprintf(out,"# Average order: %f\n",((double)(avgorder[0]))/((double)(avgorder[1])));
+	fprintf(out,"#\n# Average order: %f\n",((double)(avgorder[0]))/((double)(avgorder[1])));
+	fprintf(out,"#\n");
+	fprintf(out,"# Sampled quantity: Green's function (G)\n");
+	fprintf(out,"# Iterations: %d\n",config.iterations);
+	fprintf(out,"# Nr of bins: %d\n",config.bins);
+	fprintf(out,"# Bin width: %f\n",config.width);
+	fprintf(out,"# (last bin is overflow)\n");
 	fprintf(out,"#\n");
 
 	fprintf(out,"# <Bin center> <Average> <Stddev>\n");

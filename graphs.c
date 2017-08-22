@@ -379,13 +379,6 @@ void remove_triangle(struct graph_t *gt,int vertex)
 	freeline=gt->arcs[find_arc_with_vertex(gt,vertex+1)][2];
 	closedline=gt->arcs[index][2];
 
-	/*
-		FIXME
-	
-		Three additional phases due to node sign reversals... I still
-		need to check these carefully!
-	*/
-
 	emit_phase(gt,firstinside,1);
 	emit_phase(gt,secondinside,1);
 	emit_phase(gt,freeline,1);
@@ -425,25 +418,14 @@ void remove_square(struct graph_t *gt,int vertex)
 	emit_6j(gt,freeline2,after,newmomentum,
 	        closedline,secondinside,thirdinside);
 
-#if 0
 
 	emit_phase(gt,newmomentum,1);
-	emit_phase(gt,closedline,1);
-	emit_phase(gt,secondinside,-1);
-
-#else
-
-	emit_phase(gt,newmomentum,1);
-
 	emit_phase(gt,closedline,1);
 	emit_phase(gt,firstinside,1);
 	emit_phase(gt,secondinside,1);
 	emit_phase(gt,thirdinside,1);
-
 	emit_phase(gt,freeline1,1);
 	emit_phase(gt,freeline2,1);
-
-#endif
 
 	emit_jhat(gt,newmomentum,2);
 
@@ -776,82 +758,11 @@ double evaluate_graph(struct graph_t *gt,bool debugswap)
 	for(c=1;c<=gt->f.nrjs;c++)
 		gt->f.js[c]=2*gt->js[c];
 
-#warning CHECKME
-
-#if 0
-	/*
-		Moreover there's an additional (-1)^j factor for each j on a free propagator. This comes
-		from the angulon's diagrammatic rules, on my notebook there's a demonstration.
-	*/
-
-#warning WRITEME! 7 should be replaced by actual number of free propagator momenta!
-
-	for(c=1;c<=7;c++)
-		gt->f.jsigns[c]++;
-#endif
-
 	verbose_printf("Starting (final) formula debug\n");
 	debug_formula(gt->f);
 	verbose_printf("Ending (final) formula debug\n\n");
 
 	return evaluate_formula(&gt->f);
-}
-
-void test_graph(void)
-{
-	struct graph_t gt;
-	
-	gt.nr_vertices=8;
-	gt.nr_lines=9;
-	gt.nr_arcs=4;
-
-	gt.nr_deltas=0;
-
-	gt.lines[0]=1;
-	gt.lines[1]=2;
-	gt.lines[2]=3;
-	gt.lines[3]=4;
-	gt.lines[4]=5;
-	gt.lines[5]=6;
-	gt.lines[6]=7;
-	gt.lines[7]=8;
-	gt.lines[8]=1;
-
-	gt.js[0]=1;
-	gt.js[1]=1;
-	gt.js[2]=1;
-	gt.js[3]=1;
-	gt.js[4]=1;
-	gt.js[5]=1;
-	gt.js[6]=1;
-	gt.js[7]=1;
-	gt.js[8]=1;
-	gt.js[9]=1;
-	gt.js[10]=1;
-	gt.js[11]=1;
-	gt.js[12]=1;
-
-	gt.arcs[0][0]=0;
-	gt.arcs[0][1]=3;
-	gt.arcs[0][2]=9;
-
-	gt.arcs[1][0]=1;
-	gt.arcs[1][1]=4;
-	gt.arcs[1][2]=10;
-
-	gt.arcs[2][0]=2;
-	gt.arcs[2][1]=5;
-	gt.arcs[2][2]=11;
-
-	gt.arcs[3][0]=6;
-	gt.arcs[3][1]=7;
-	gt.arcs[3][2]=12;
-
-	gt.maxj=12;
-	gt.maxk=0;
-
-	show_graph(&gt);
-	printf("%f\n",evaluate_graph(&gt,false));
 }
 
 void diagram_to_graph(struct diagram_t *dgr,struct graph_t *gt)
