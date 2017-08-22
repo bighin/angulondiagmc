@@ -12,7 +12,6 @@
 
 #include "njsummat/njformul.h"
 #include "njsummat/njsummat.h"
-#include "murmurhash3/murmurhash3.h"
 
 /*
 	FIXME: it would be nice to have everywhere a check, to see if we are hitting the maximum
@@ -792,56 +791,10 @@ void diagram_to_graph(struct diagram_t *dgr,struct graph_t *gt)
 	}
 }
 
-/*
-	The following code implements a very simple hashtable, to avoid
-	calculating the value of the same graph over and over...
-*/
-
-struct hashentry_t hashtable[HASHTABLE_ENTRIES];
-
-void hashtable_init(void)
-{
-	int c;
-	
-	for(c=0;c<HASHTABLE_ENTRIES;c++)
-		hashtable[c].valid=HASHTABLE_INVALID_ENTRY;
-	
-	verbose_printf("Initalized graph hashtable, with %d entries, %d KB\n",HASHTABLE_ENTRIES,HASHTABLE_ENTRIES*sizeof(struct graph_t)/1024);
-}
-
-bool hashtable_probe(struct graph_t *gt,double *value,int *hashindex)
-{
-	*hashindex=murmur3_hash((void *)(gt),sizeof(struct graph_t))%HASHTABLE_ENTRIES;
-	*hashindex=0;
-
-	if(hashtable[*hashindex].valid==HASHTABLE_VALID_ENTRY)
-	{
-		if(memcmp(gt,&hashtable[*hashindex].gt,sizeof(struct graph_t))==0)
-		{
-			*value=hashtable[*hashindex].value;
-			return true;
-		}
-	}
-
-	return false;
-}
-
-void hashtable_insert(struct graph_t *gt,double value,int hashindex)
-{
-	memcpy(&hashtable[hashindex].gt,gt,sizeof(struct graph_t));
-	hashtable[hashindex].valid=HASHTABLE_VALID_ENTRY;
-	hashtable[hashindex].value=value;
-}
-
 double diagram_m_weight(struct diagram_t *dgr)
 {
 	struct graph_t gt;
-
-#warning Abilitare la hashtable e testare la velocita con e senza...
-
-	bool use_hashtable=false;
 	double value;
-	int hashindex;
 
 	/*
 		FIXME: is the memset() call needed? Would gt be undefined otherwise?
@@ -851,17 +804,7 @@ double diagram_m_weight(struct diagram_t *dgr)
 
 	diagram_to_graph(dgr,&gt);
 
-	if((use_hashtable==true)&&(hashtable_probe(&gt,&value,&hashindex)==true))
-	{
-		assert(value==evaluate_graph(&gt,false));
-	
-		return value;
-	}
-
 	value=evaluate_graph(&gt,false);
-
-	if(use_hashtable==true)
-		hashtable_insert(&gt,value,hashindex);
 
 	formula_to_wolfram(gt.f);
 	

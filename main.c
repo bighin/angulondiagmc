@@ -27,7 +27,6 @@ void usage(char *argv0)
 int main(int argc,char *argv[])
 {
 	init_njsummat();
-	hashtable_init();
 
 	if(argc!=2)
 		usage(argv[0]);
