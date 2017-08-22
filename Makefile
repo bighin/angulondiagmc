@@ -3,7 +3,7 @@ LIBS =
 CC = gcc-mp-6
 #CC = clang-mp-3.8
 #CFLAGS = -DNDEBUG -O2 -Wall -fopenmp -std=c11 -I/opt/local/include/
-CFLAGS = -Wall -O2 -I/opt/local/include/
+CFLAGS = -Wall -O0 -g -I/opt/local/include/
 LDFLAGS = -lncurses -lgsl -L/opt/local/lib/
 
 .PHONY: clean all default

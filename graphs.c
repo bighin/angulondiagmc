@@ -459,9 +459,11 @@ void exchange_lines(struct graph_t *gt,int v1,int v2)
 	int a1,a2,before,middle,after,line1,line2,newmomentum;
 	
 	assert(v2==(v1+1));
-	
+
 	a1=find_arc_with_vertex(gt,v1);
 	a2=find_arc_with_vertex(gt,v2);
+
+	assert(a1!=a2);
 
 	if(gt->arcs[a1][0]==v1)
 		gt->arcs[a1][0]=v2;
@@ -494,7 +496,9 @@ void exchange_lines(struct graph_t *gt,int v1,int v2)
 
 	emit_6j(gt,after,line2,newmomentum,
 	        before,line1,middle);
-	
+
+	emit_summation(gt,newmomentum);
+
 	gt->lines[v1+1]=newmomentum;
 }
 
@@ -544,6 +548,8 @@ void k_to_j(struct graph_t *gt,int kindex,int jindex)
 	}
 
 	gt->f.nrks--;
+
+	assert(gt->f.nrks>=0);
 }
 
 void k_to_k(struct graph_t *gt,int kindex1,int kindex2)
@@ -599,9 +605,11 @@ void k_to_k(struct graph_t *gt,int kindex1,int kindex2)
 	}
 
 	gt->f.nrks--;
+
+	assert(gt->f.nrks>=0);
 }
 
-double evaluate_graph(struct graph_t *gt)
+double evaluate_graph(struct graph_t *gt,bool debugswap)
 {
 	int c;
 	
@@ -611,6 +619,24 @@ double evaluate_graph(struct graph_t *gt)
 	*/
 
 	reset_formula(&gt->f);
+	
+	/*
+		If the debugswap flag is enabled a swap is performed between the first two
+		lines. The operation should have no effect, and thus can be used for debug purposes.
+	*/
+	
+	if(debugswap==true)
+	{
+		if(gt->nr_vertices>=2)
+		{
+			if(find_arc_with_vertex(gt,0)!=find_arc_with_vertex(gt,1))
+			{
+					exchange_lines(gt,0,1);
+			
+					verbose_printf("evaluate_graph(): performed line exchange (debugswap flag is enabled).\n");
+			}
+		}
+	}
 
 	verbose_printf("Starting (initial) formula debug\n");
 	debug_formula(gt->f);
@@ -825,7 +851,7 @@ void test_graph(void)
 	gt.maxk=0;
 
 	show_graph(&gt);
-	printf("%f\n",evaluate_graph(&gt));
+	printf("%f\n",evaluate_graph(&gt,false));
 }
 
 void diagram_to_graph(struct diagram_t *dgr,struct graph_t *gt)
@@ -916,12 +942,12 @@ double diagram_m_weight(struct diagram_t *dgr)
 
 	if((use_hashtable==true)&&(hashtable_probe(&gt,&value,&hashindex)==true))
 	{
-		assert(value==evaluate_graph(&gt));
+		assert(value==evaluate_graph(&gt,false));
 	
 		return value;
 	}
 
-	value=evaluate_graph(&gt);
+	value=evaluate_graph(&gt,false);
 
 	if(use_hashtable==true)
 		hashtable_insert(&gt,value,hashindex);

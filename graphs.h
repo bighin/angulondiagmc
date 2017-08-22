@@ -6,6 +6,7 @@
 #include "diagrams.h"
 
 void reset_formula(FORMULA *f);
+void formula_to_wolfram(FORMULA f);
 
 struct graph_t
 {
@@ -89,7 +90,7 @@ void exchange_lines(struct graph_t *gt,int v1,int v2);
 void k_to_j(struct graph_t *gt,int kindex,int jindex);
 void k_to_k(struct graph_t *gt,int kindex1,int kindex2);
 
-double evaluate_graph(struct graph_t *gt);
+double evaluate_graph(struct graph_t *gt,bool debugswap);
 void diagram_to_graph(struct diagram_t *dgr,struct graph_t *gt);
 
 struct hashentry_t
