@@ -570,6 +570,25 @@ double calculate_free_propagator_weight(struct diagram_t *dgr,struct g0_t *g0)
 	return exp(-en*tau);
 }
 
+double calculate_vertex_weight(struct diagram_t *dgr,int index)
+{
+	int j1,j2,j3;
+	double coupling;
+
+	struct vertex_info_t *thisvertex=get_vertex(dgr,index);
+
+	j1=thisvertex->left->j;
+	j2=thisvertex->right->j;
+	j3=thisvertex->phononline->lambda;
+
+	coupling=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,0,0,0)*
+	         sqrtf((2.0f*j1+1)*(2.0f*j2+1)*(2.0f*j3+1)/(4.0f*M_PI));
+
+	printf("VERTEX: %d %d %d\n",j1,j2,j3);
+
+	return coupling;
+}
+
 void diagram_update_length(struct diagram_t *dgr,double newendtau)
 {	
 	int nr_free_propagators=get_nr_free_propagators(dgr);
@@ -620,6 +639,13 @@ bool diagram_add_worm(struct diagram_t *dgr,int target1,int target2,int deltalam
 			return false;
 	}
 
+	for(c=target1;c<=target2;c++)
+	{
+		printf("ADDING_WORM [-] ==> %f\n",calculate_vertex_weight(dgr,c));
+	
+		dgr->weight/=calculate_vertex_weight(dgr,c);
+	}
+
 	for(c=target1;c<target2;c++)
 	{
 		struct vertex_info_t *thisvertex=get_vertex(dgr,c);
@@ -631,7 +657,12 @@ bool diagram_add_worm(struct diagram_t *dgr,int target1,int target2,int deltalam
 		dgr->weight*=calculate_free_propagator_weight(dgr,thisvertex->right);
 	}
 
-#warning FIXME: the contribution to vertices needs to be calculated as well!
+	for(c=target1;c<=target2;c++)
+	{
+		printf("ADDING_WORM [+] ==> %f\n",calculate_vertex_weight(dgr,c));
+
+		dgr->weight*=calculate_vertex_weight(dgr,c);
+	}
 
 	/*
 		At last we keep track of the worm by adding it on the global list
@@ -685,6 +716,13 @@ bool diagram_remove_worm(struct diagram_t *dgr,int index)
 
 	vlist_remove_element(dgr->worms,index);
 
+	for(c=target1;c<=target2;c++)
+	{
+		printf("REMOVING_WORM [-] ==> %f\n",calculate_vertex_weight(dgr,c));
+
+		dgr->weight/=calculate_vertex_weight(dgr,c);
+	}
+
 	for(c=target1;c<target2;c++)
 	{
 		struct vertex_info_t *thisvertex=get_vertex(dgr,c);
@@ -696,7 +734,12 @@ bool diagram_remove_worm(struct diagram_t *dgr,int index)
 		dgr->weight*=calculate_free_propagator_weight(dgr,thisvertex->right);
 	}
 
-#warning FIXME: the contribution to vertices needs to be calculated as well!
+	for(c=target1;c<=target2;c++)
+	{
+		printf("REMOVING_WORM [+] ==> %f\n",calculate_vertex_weight(dgr,c));
+
+		dgr->weight*=calculate_vertex_weight(dgr,c);
+	}
 
 	get_vertex(dgr,target1)->refs--;
 	get_vertex(dgr,target2)->refs--;

@@ -320,13 +320,13 @@ int update_add_worm(struct diagram_t *dgr,struct configuration_t *cfg)
 	if((abs(deltalambda)%2)==1)
 		return UPDATE_UNPHYSICAL;
 
-	printf("Before worm!\n");
+	printf("Before worm! (%f)\n",dgr->weight);
 	print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
 
 	if(diagram_add_worm(dgr,MIN(target1,target2),MAX(target1,target2),deltalambda)==false)
 		return UPDATE_UNPHYSICAL;
 
-	printf("After! (%d)\n",deltalambda);
+	printf("After! (%d) (%f)\n",deltalambda,dgr->weight);
 	print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
 
 	acceptance_ratio=diagram_weight(dgr)/oldweight;
@@ -334,11 +334,19 @@ int update_add_worm(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	if(is_accepted==false)
 	{
-		bool result;
+		bool result,zeroweight=false;
+
+		if(dgr->weight<10e-8)
+			zeroweight=true;
 
 		result=diagram_remove_worm(dgr,get_nr_worms(dgr)-1);
-
 		assert(result==true);
+
+		if(zeroweight==true)
+			dgr->weight=oldweight;
+
+		//printf("<<<%f %f %f>>>",diagram_weight(dgr),diagram_weight_non_incremental(dgr),oldweight);
+		
 		assert(fabs(diagram_weight(dgr)-oldweight)<1e-7*oldweight);
 	
 		return UPDATE_REJECTED;
@@ -711,7 +719,7 @@ int do_diagmc(char *configfile)
 #warning CHANGEME
 
 		//update_type=gsl_rng_uniform_int(dgr->rng_ctx,DIAGRAM_NR_UPDATES);
-		update_type=gsl_rng_uniform_int(dgr->rng_ctx,3);
+		update_type=gsl_rng_uniform_int(dgr->rng_ctx,5);
 		status=updates[update_type](dgr,&config);
 
 		if((config.animate)&&(status==UPDATE_ACCEPTED)&&((update_type==1)||(update_type==2)))
@@ -864,6 +872,9 @@ int do_diagmc(char *configfile)
 	/*
 		That's all folks. Cleaning up.
 	*/
+
+	if(out)
+		fclose(out);
 
 	fini_histogram(ht);
 	fini_diagram(dgr);

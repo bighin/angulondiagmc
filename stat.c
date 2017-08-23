@@ -23,8 +23,7 @@ struct samples_t *samples_init(void)
 	
 	if(!(ret->data))
 	{
-		if(ret)
-			free(ret);
+		free(ret);
 		
 		return NULL;
 	}

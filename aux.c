@@ -45,29 +45,31 @@ void fini_vlist(struct vlist_t *lst)
 	}
 }
 
+#define CAST_TO_CPTR(ptr)	((char *)(ptr))
+
 void *vlist_get_element(struct vlist_t *lst,int n)
 {
 	assert(lst);
 	assert(n>=0);
 	assert(n<lst->nelements);
-	
-	return lst->mem+lst->elementsize*n;
+
+	return CAST_TO_CPTR(lst->mem)+lst->elementsize*n;
 }
 
 void vlist_remove_element(struct vlist_t *lst,int position)
 {
 	void *base,*target;
 
-	base=lst->mem+lst->elementsize*position;
-	target=lst->mem+lst->elementsize*(position+1);
+	base=CAST_TO_CPTR(lst->mem)+lst->elementsize*position;
+	target=CAST_TO_CPTR(lst->mem)+lst->elementsize*(position+1);
 
 	assert(position>=0);
 
 	assert(base>=lst->mem);
-	assert(base<lst->mem+lst->elementsize*lst->nalloced);
+	assert(CAST_TO_CPTR(base)<CAST_TO_CPTR(lst->mem)+lst->elementsize*lst->nalloced);
 
 	assert(target>lst->mem);
-	assert(target+lst->elementsize<=lst->mem+lst->elementsize*lst->nalloced);
+	assert(CAST_TO_CPTR(target)+lst->elementsize<=CAST_TO_CPTR(lst->mem)+lst->elementsize*lst->nalloced);
 
 	memmove(base,target,lst->elementsize*(lst->nelements-position));
 	lst->nelements--;
@@ -80,17 +82,17 @@ void *vlist_add_element(struct vlist_t *lst,void *element,int position)
 	assert(lst);
 	assert(lst->nelements<lst->nalloced);
 
-	base=lst->mem+lst->elementsize*position;
-	target=lst->mem+lst->elementsize*(position+1);
+	base=CAST_TO_CPTR(lst->mem)+lst->elementsize*position;
+	target=CAST_TO_CPTR(lst->mem)+lst->elementsize*(position+1);
 
 	assert(position>=0);
 	assert(position<=lst->nelements);
 
 	assert(base>=lst->mem);
-	assert(base<lst->mem+lst->elementsize*lst->nalloced);
+	assert(CAST_TO_CPTR(base)<CAST_TO_CPTR(lst->mem)+lst->elementsize*lst->nalloced);
 
 	assert(target>=lst->mem);
-	assert(target+lst->elementsize<=lst->mem+lst->elementsize*lst->nalloced);
+	assert(CAST_TO_CPTR(target)+lst->elementsize<=CAST_TO_CPTR(lst->mem)+lst->elementsize*lst->nalloced);
 	
 	memmove(target,base,lst->elementsize*(lst->nelements-position));	
 	memcpy(base,element,lst->elementsize);
@@ -125,7 +127,7 @@ void *vlist_append(struct vlist_t *lst,void *element)
 	assert(lst);
 	assert(lst->nelements<lst->nalloced);
 
-	end=lst->mem+(lst->elementsize*lst->nelements);
+	end=CAST_TO_CPTR(lst->mem)+(lst->elementsize*lst->nelements);
 
 	memcpy(end,element,lst->elementsize);
 	lst->nelements++;
