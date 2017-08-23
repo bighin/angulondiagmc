@@ -532,7 +532,7 @@ int print_diagram(struct diagram_t *dgr,int flags)
 	return plines;
 }
 
-bool check_triangle_condition(struct diagram_t *dgr,struct vertex_info_t *thisvertex)
+bool check_triangle_condition_and_parity(struct diagram_t *dgr,struct vertex_info_t *thisvertex)
 {
 	int j1,j2,j3;
 	bool result;

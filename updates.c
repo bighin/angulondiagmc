@@ -547,8 +547,6 @@ double calculate_vertex_weight(struct diagram_t *dgr,int index)
 	coupling=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,0,0,0)*
 	         sqrtf((2.0f*j1+1)*(2.0f*j2+1)*(2.0f*j3+1)/(4.0f*M_PI));
 
-	printf("VERTEX: %d %d %d\n",j1,j2,j3);
-
 	return coupling;
 }
 
@@ -576,66 +574,182 @@ void diagram_update_length(struct diagram_t *dgr,double newendtau)
 	dgr->weight*=calculate_free_propagator_weight(dgr,get_free_propagator(dgr,nr_free_propagators-1));
 }
 
-bool recouple(struct diagram_t *dgr,int lo,int hi)
+void save_free_propagators(struct diagram_t *dgr,struct free_propagators_ctx_t *fpc)
 {
-	struct randomized_list_t *lst;
-	int j1,m1,j2,m2,j3,m3;
+	int c;
+	
+	assert(fpc);
+	
+	fpc->nr_free_propagators=get_nr_free_propagators(dgr);
 
-	if(lo==hi+1)
-		return true;
+	fpc->js=malloc(sizeof(int)*fpc->nr_free_propagators);
+	fpc->ms=malloc(sizeof(int)*fpc->nr_free_propagators);
 
-	j1=get_free_propagator(dgr,lo-1)->j;
-	m1=get_free_propagator(dgr,lo-1)->m;
-
-	j2=get_phonon_line_after_propagator(dgr,lo-1)->lambda;
-	m2=get_phonon_line_after_propagator(dgr,lo-1)->mu;
-
-	m3=-m1-m2;
-
-	lst=init_rlist();
-
-	for(j3=0;j3<=j1+j2;j3++)
+	for(c=0;c<fpc->nr_free_propagators;c++)
 	{
-		/*
-			m3 cannot exceed j3
-		*/
-
-		if(abs(m3)>j3)
-			continue;
-
-		/*
-			If all ms are zero, then the sum of all js must be even.
-		*/
-
-		if((m1==m2)&&(m2==m3)&&(m3==0))
-			if(((j1+j2+j3)%2)==1)
-				continue;
-
-		/*
-			Check if the angular momenta satisfy the triangular inequality
-		*/
-
-		if(abs(j1-j2)>j3)
-			continue;
-
-		if(abs(j2-j3)>j1)
-			continue;
-
-		if(abs(j3-j1)>j2)
-			continue;
-
-		rlist_add_item(lst,j3);
+		fpc->js[c]=get_free_propagator(dgr,c)->j;
+		fpc->ms[c]=get_free_propagator(dgr,c)->m;	
 	}
-
-	while(rlist_get_elements(lst)>0)
-	{
-		//get_free_propagator(dgr,lo)->j=rlist_pop_random_item(lst);
-		//get_free_propagator(dgr,lo)->m=m3;
-
-		if(recouple(dgr,lo+1,hi)==true)
-			return true;
-	}
-
-	return false;
 }
 
+void unload_free_propagators_ctx(struct free_propagators_ctx_t *fpc)
+{
+	if(fpc)
+	{
+		if(fpc->js)
+			free(fpc->js);
+
+		if(fpc->ms)
+			free(fpc->ms);
+	}
+}
+
+void restore_free_propagators(struct diagram_t *dgr,struct free_propagators_ctx_t *fpc)
+{
+	int c;
+	
+	assert(get_nr_free_propagators(dgr)==fpc->nr_free_propagators);
+
+	assert(fpc);
+	assert(fpc->js);
+	assert(fpc->ms);
+
+	for(c=0;c<fpc->nr_free_propagators;c++)
+	{
+		get_free_propagator(dgr,c)->j=fpc->js[c];
+		get_free_propagator(dgr,c)->m=fpc->ms[c];
+	}
+
+	unload_free_propagators_ctx(fpc);
+}
+
+/*
+	Given a diagram and a starting and ending vertex (lo and hi),
+	this function recouples momenta on free propagators between lo and hi included.
+
+	Great care must be taken in extracting *fairly* one possible coupling
+	among all of them.
+*/
+
+bool recouple(struct diagram_t *dgr,int lo,int hi)
+{
+	int c,d,length;
+	int *deltalist;
+	
+	assert(hi>=lo);
+	
+	length=hi-lo+1;
+	deltalist=malloc(sizeof(int)*length);
+
+#define MAX_TRIES	(1024)
+
+	for(d=0;d<=MAX_TRIES;d++)
+	{
+		int total=0;
+		
+		/*
+			At each vertex one can define a delta value, defined as the difference
+			in angular momenta between the left propagator and the right propagator.
+
+			Clearly, instead of choosing one configuration between all angular
+			momentum values, one can equivalently choose a delta configuration.
+
+			Which values can delta take at each vertex? Given lambda, the phonon
+			propagator's angular momentum, the triangular condition at each vertex
+			dictates that the following delta values are allowed:
+		
+			lambda = 0 --> delta = 0
+			lambda = 1 --> delta = -1, 0, 1
+			lambda = 2 --> delta = -2, -1, 0, 1, 2
+		
+			However, it turns out that a more restrictive condition holds and that
+			some of this integer values are not allowed: at every vertex,
+			according to the diagrammatic rules, one has a 3j symbol with all m's
+			set to zero. This vertex imposes that the sums of angular momenta at a
+			vertex should be an even integer.
+		
+			Some of the delta values above would change the parity, resuling in an
+			odd total sum of angular momenta at a vertex.
+
+			The correct list is:
+
+			lambda = 0 --> delta = 0
+			lambda = 1 --> delta = -1, 1
+			lambda = 2 --> delta = -2, 0, 2
+		
+			and we select one random value among these deltas, for each vertex.
+		*/
+
+		for(c=lo;c<=hi;c++)
+		{
+			struct vertex_info_t *vtx;
+			int lambda;
+			
+			vtx=get_vertex(dgr,c);
+			lambda=vtx->phononline->lambda;
+
+			deltalist[c]=2*gsl_rng_uniform_int(dgr->rng_ctx,lambda)-lambda;
+		}
+
+		for(c=lo;c<=hi;c++)
+			total+=deltalist[c];
+		
+		if(total==0)
+			break;
+	}
+
+	/*
+		We have tried to get a deltalist summing to 0 for MAX_TRIES times.
+	
+		If we didn't managed to do so, it is time to throw an error...
+	*/
+
+	if(d==MAX_TRIES)
+	{
+		printf("Failed to find an acceptable recoupling after %d tries, shamefully exiting. Please debug this.\n",MAX_TRIES);
+		exit(0);
+	}
+
+	/*
+		We have a working deltalist, let's use it to rewrite the free propagators, while
+		also updating the diagram weight on the fly!
+	*/
+
+	for(c=lo;c<=hi;c++)
+	{
+		dgr->weight/=calculate_vertex_weight(dgr,c);
+	
+		if(c!=hi)
+			dgr->weight/=calculate_free_propagator_weight(dgr,get_right_neighbour(dgr,c));
+	}
+
+
+	for(c=lo;c<hi;c++)
+	{
+		struct vertex_info_t *vtx=get_vertex(dgr,c);
+
+		vtx->right->j=vtx->phononline->lambda+deltalist[c-lo];
+	}
+
+	for(c=lo;c<=hi;c++)
+	{
+		dgr->weight*=calculate_vertex_weight(dgr,c);
+	
+		if(c!=hi)
+			dgr->weight*=calculate_free_propagator_weight(dgr,get_right_neighbour(dgr,c));
+	}
+
+	/*
+		As a final check, we verify the consistency of the last coupling.
+	*/
+	
+	{
+		struct vertex_info_t *vtx=get_vertex(dgr,hi);
+		assert(vtx->right->j==vtx->phononline->lambda+deltalist[hi-lo]);
+	}
+
+	if(deltalist)
+		free(deltalist);
+	
+	return true;
+}

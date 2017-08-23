@@ -331,7 +331,7 @@ void stresstest(void)
 				v1=get_vertex(dgr,thisline->startmidpoint);
 				v2=get_vertex(dgr,thisline->startmidpoint);
 
-				if((check_triangle_condition(dgr,v1)==false)||(check_triangle_condition(dgr,v2)==false))
+				if((check_triangle_condition_and_parity(dgr,v1)==false)||(check_triangle_condition_and_parity(dgr,v2)==false))
 				{
 					int lastline=get_nr_phonons(dgr)-1;
 					diagram_remove_phonon_line(dgr,lastline);

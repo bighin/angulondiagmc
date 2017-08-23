@@ -7,6 +7,7 @@
 #define MAX(a,b)	(((a)>(b))?(a):(b))
 
 #define ISEVEN(x)	(((x)%2)==0)
+#define ISODD(x)	(((x)%2)==1)
 
 struct vlist_t
 {

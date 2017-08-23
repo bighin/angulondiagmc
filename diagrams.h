@@ -151,6 +151,6 @@ double diagram_weight_non_incremental(struct diagram_t *dgr);
 
 int print_diagram(struct diagram_t *dgr,int flags);
 
-bool check_triangle_condition(struct diagram_t *dgr,struct vertex_info_t *thisvertex);
+bool check_triangle_condition_and_parity(struct diagram_t *dgr,struct vertex_info_t *thisvertex);
 
 #endif //__DIAGRAMS_H__

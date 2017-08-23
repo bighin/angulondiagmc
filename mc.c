@@ -18,7 +18,7 @@
 #include "libprogressbar/progressbar.h"
 
 /*
-	The following needs to be included after graphs.h, becuase it defines a 'lines' macro
+	The following headers need to be included after graphs.h, becuase it defines a 'lines' macro
 	which conflicts with a field in struct graph_t
 */
 
@@ -171,7 +171,7 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	*/
 
 	diagram_add_phonon_line(dgr,tau1,tau2,k,lambda,mu);
-	
+
 	/*
 		...and then we check if the new line makes sense physically!
 	*/
@@ -180,7 +180,7 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	v1=get_vertex(dgr,thisline->startmidpoint);
 	v2=get_vertex(dgr,thisline->endmidpoint);
 
-	if((check_triangle_condition(dgr,v1)==false)||(check_triangle_condition(dgr,v2)==false))
+	if((check_triangle_condition_and_parity(dgr,v1)==false)||(check_triangle_condition_and_parity(dgr,v2)==false))
 	{
 		int lastline=get_nr_phonons(dgr)-1;
 		
@@ -196,7 +196,7 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 		return UPDATE_UNPHYSICAL;
 	}
 
-	acceptance_ratio=diagram_weight(dgr)/oldweight;
+	acceptance_ratio=diagram_weight(dgr)/oldweight;	
 	acceptance_ratio*=3.0f*dgr->endtau;
 	acceptance_ratio/=get_nr_phonons(dgr)+1;
 	acceptance_ratio/=doubly_truncated_exp_pdf(dgr->rng_ctx,omegas[lambda],tau1,dgr->endtau,tau2);
@@ -294,7 +294,7 @@ int update_change_lambda(struct diagram_t *dgr,struct configuration_t *cfg)
 	v1=get_vertex(dgr,thisline->startmidpoint);
 	v2=get_vertex(dgr,thisline->endmidpoint);
 
-	if((check_triangle_condition(dgr,v1)==false)||(check_triangle_condition(dgr,v2)==false))
+	if((check_triangle_condition_and_parity(dgr,v1)==false)||(check_triangle_condition_and_parity(dgr,v2)==false))
 	{
 		thisline->lambda=oldlambda;
 		thisline->mu=oldmu;
@@ -579,7 +579,7 @@ int do_diagmc(char *configfile)
 #warning CHANGEME
 
 		//update_type=gsl_rng_uniform_int(dgr->rng_ctx,DIAGRAM_NR_UPDATES);
-		update_type=gsl_rng_uniform_int(dgr->rng_ctx,5);
+		update_type=gsl_rng_uniform_int(dgr->rng_ctx,3);
 		status=updates[update_type](dgr,&config);
 
 		if((config.animate)&&(status==UPDATE_ACCEPTED)&&((update_type==1)||(update_type==2)))

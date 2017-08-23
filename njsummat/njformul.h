@@ -9,9 +9,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define MAXJ            35
-#define MAXK            10
-#define MAXSIXJ         20
+#define MAXJ            128
+#define MAXK            128
+#define MAXSIXJ         128
 #define MAXFLEN         5
 #define MAXS            4
 

@@ -806,6 +806,13 @@ double diagram_m_weight(struct diagram_t *dgr)
 
 	value=evaluate_graph(&gt,false);
 
+	if((gt.f.nrjs>MAXJ)||(gt.f.nrks>MAXK)||(gt.f.nrsixjs>MAXSIXJ))
+	{
+		printf("The current diagram translates to a formula exceeding the limits of NJSUMMAT.");
+		printf("Please tune the limits in njformul.h\n");
+		exit(0);
+	}
+
 	formula_to_wolfram(gt.f);
 	
 	return value;
