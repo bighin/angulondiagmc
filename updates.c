@@ -574,22 +574,21 @@ void diagram_update_length(struct diagram_t *dgr,double newendtau)
 	dgr->weight*=calculate_free_propagator_weight(dgr,get_free_propagator(dgr,nr_free_propagators-1));
 }
 
-void save_free_propagators(struct diagram_t *dgr,struct free_propagators_ctx_t *fpc)
+void save_free_propagators(struct diagram_t *dgr,struct free_propagators_ctx_t *fpc,int lo,int hi)
 {
 	int c;
 	
 	assert(fpc);
-	
-	fpc->nr_free_propagators=get_nr_free_propagators(dgr);
+	assert(hi>=lo);
+
+	fpc->nr_free_propagators=hi-lo+1;
+	fpc->lo=lo;
+	fpc->hi=hi;
 
 	fpc->js=malloc(sizeof(int)*fpc->nr_free_propagators);
-	fpc->ms=malloc(sizeof(int)*fpc->nr_free_propagators);
 
-	for(c=0;c<fpc->nr_free_propagators;c++)
-	{
-		fpc->js[c]=get_free_propagator(dgr,c)->j;
-		fpc->ms[c]=get_free_propagator(dgr,c)->m;	
-	}
+	for(c=lo;c<hi;c++)
+		fpc->js[c-lo]=get_right_neighbour(dgr,c)->j;
 }
 
 void unload_free_propagators_ctx(struct free_propagators_ctx_t *fpc)
@@ -598,26 +597,33 @@ void unload_free_propagators_ctx(struct free_propagators_ctx_t *fpc)
 	{
 		if(fpc->js)
 			free(fpc->js);
-
-		if(fpc->ms)
-			free(fpc->ms);
 	}
 }
 
 void restore_free_propagators(struct diagram_t *dgr,struct free_propagators_ctx_t *fpc)
 {
 	int c;
-	
-	assert(get_nr_free_propagators(dgr)==fpc->nr_free_propagators);
 
 	assert(fpc);
 	assert(fpc->js);
-	assert(fpc->ms);
 
-	for(c=0;c<fpc->nr_free_propagators;c++)
+	for(c=fpc->lo;c<=fpc->hi;c++)
 	{
-		get_free_propagator(dgr,c)->j=fpc->js[c];
-		get_free_propagator(dgr,c)->m=fpc->ms[c];
+		dgr->weight/=calculate_vertex_weight(dgr,c);
+	
+		if(c!=fpc->hi)
+			dgr->weight/=calculate_free_propagator_weight(dgr,get_right_neighbour(dgr,c));
+	}
+
+	for(c=fpc->lo;c<fpc->hi;c++)
+		get_right_neighbour(dgr,c)->j=fpc->js[c-fpc->lo];
+
+	for(c=fpc->lo;c<=fpc->hi;c++)
+	{
+		dgr->weight*=calculate_vertex_weight(dgr,c);
+	
+		if(c!=fpc->hi)
+			dgr->weight*=calculate_free_propagator_weight(dgr,get_right_neighbour(dgr,c));
 	}
 
 	unload_free_propagators_ctx(fpc);
@@ -688,11 +694,11 @@ bool recouple(struct diagram_t *dgr,int lo,int hi)
 			vtx=get_vertex(dgr,c);
 			lambda=vtx->phononline->lambda;
 
-			deltalist[c]=2*gsl_rng_uniform_int(dgr->rng_ctx,lambda)-lambda;
+			deltalist[c-lo]=2*gsl_rng_uniform_int(dgr->rng_ctx,1+lambda)-lambda;
 		}
 
 		for(c=lo;c<=hi;c++)
-			total+=deltalist[c];
+			total+=deltalist[c-lo];
 		
 		if(total==0)
 			break;
@@ -703,6 +709,8 @@ bool recouple(struct diagram_t *dgr,int lo,int hi)
 	
 		If we didn't managed to do so, it is time to throw an error...
 	*/
+
+	printf("DEBUG: it took %d tries!\n",d);
 
 	if(d==MAX_TRIES)
 	{
@@ -723,12 +731,11 @@ bool recouple(struct diagram_t *dgr,int lo,int hi)
 			dgr->weight/=calculate_free_propagator_weight(dgr,get_right_neighbour(dgr,c));
 	}
 
-
 	for(c=lo;c<hi;c++)
 	{
 		struct vertex_info_t *vtx=get_vertex(dgr,c);
 
-		vtx->right->j=vtx->phononline->lambda+deltalist[c-lo];
+		vtx->right->j=vtx->left->j+deltalist[c-lo];
 	}
 
 	for(c=lo;c<=hi;c++)
@@ -742,10 +749,10 @@ bool recouple(struct diagram_t *dgr,int lo,int hi)
 	/*
 		As a final check, we verify the consistency of the last coupling.
 	*/
-	
+
 	{
 		struct vertex_info_t *vtx=get_vertex(dgr,hi);
-		assert(vtx->right->j==vtx->phononline->lambda+deltalist[hi-lo]);
+		assert(vtx->right->j==vtx->left->j+deltalist[hi-lo]);
 	}
 
 	if(deltalist)

@@ -138,6 +138,7 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	struct arc_t *thisline;
 	struct vertex_info_t *v1,*v2;
+	struct free_propagators_ctx_t fpc;
 
 	double omegas[3]={cfg->omega0,cfg->omega1,cfg->omega2};
 
@@ -196,6 +197,15 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 		return UPDATE_UNPHYSICAL;
 	}
 
+	printf("BEFORE DOING RECOUPLE!\n");
+	print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
+
+	save_free_propagators(dgr,&fpc,thisline->startmidpoint,thisline->endmidpoint);
+	recouple(dgr,thisline->startmidpoint,thisline->endmidpoint);
+
+	printf("AFTER DOING RECOUPLE!\n");
+	print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
+
 	acceptance_ratio=diagram_weight(dgr)/oldweight;	
 	acceptance_ratio*=3.0f*dgr->endtau;
 	acceptance_ratio/=get_nr_phonons(dgr)+1;
@@ -207,6 +217,16 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	{
 		int lastline;
 
+		/*
+			Restoring the free propagators effectively
+			undoes the recouple() call.
+		*/
+
+		restore_free_propagators(dgr,&fpc);
+
+		printf("AFTER RESTORING G0S!\n");
+		print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
+
 		lastline=get_nr_phonons(dgr)-1;
 		diagram_remove_phonon_line(dgr,lastline);
 
@@ -215,14 +235,17 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 		return UPDATE_REJECTED;
 	}
 
+	unload_free_propagators_ctx(&fpc);
+
 	return UPDATE_ACCEPTED;
 }
 
 int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 {
 	struct arc_t *arc;
+	struct free_propagators_ctx_t fpc;
 
-	int target,lambda,mu,nr_phonons;
+	int target,lambda,mu,nr_phonons,startmidpoint,endmidpoint;
 	double acceptance_ratio,k,tau1,tau2,oldweight;
 	bool is_accepted;
 
@@ -242,8 +265,24 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	k=arc->k;
 	lambda=arc->lambda;
 	mu=arc->mu;
+	startmidpoint=arc->startmidpoint;
+	endmidpoint=arc->endmidpoint;
 
+	/*
+		Note the order of the following two function calls and
+		of the subsequent recouple() call!
+	*/
+
+	save_free_propagators(dgr,&fpc,startmidpoint,endmidpoint);
 	diagram_remove_phonon_line(dgr,target);
+
+	/*
+		This is a bit tricky: if we just removed a bubble,
+		then there are no free propagators to recouple.
+	*/
+
+	if((startmidpoint+1)!=endmidpoint)
+		recouple(dgr,startmidpoint,endmidpoint-2);
 
 	acceptance_ratio=diagram_weight(dgr)/oldweight;
 	acceptance_ratio/=3.0f*dgr->endtau;
@@ -255,11 +294,14 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	if(is_accepted==false)
 	{
 		diagram_add_phonon_line(dgr,tau1,tau2,k,lambda,mu);
+		restore_free_propagators(dgr,&fpc);
 
 		assert(fabs(diagram_weight(dgr)-oldweight)<1e-7*oldweight);
 	
 		return UPDATE_REJECTED;
 	}
+
+	unload_free_propagators_ctx(&fpc);
 
 	return UPDATE_ACCEPTED;
 }
@@ -581,6 +623,8 @@ int do_diagmc(char *configfile)
 		//update_type=gsl_rng_uniform_int(dgr->rng_ctx,DIAGRAM_NR_UPDATES);
 		update_type=gsl_rng_uniform_int(dgr->rng_ctx,3);
 		status=updates[update_type](dgr,&config);
+
+		printf("Doing update #%d\n",update_type);
 
 		if((config.animate)&&(status==UPDATE_ACCEPTED)&&((update_type==1)||(update_type==2)))
 		{
