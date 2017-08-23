@@ -46,21 +46,6 @@ void diagram_update_xrefs(struct diagram_t *dgr,int position)
 		g0->startmidpoint++;
 		g0->endmidpoint++;
 	}
-	
-	/*
-		Also the worms need to be modified
-	*/
-
-	for(c=0;c<get_nr_worms(dgr);c++)
-	{
-		struct worm_t *worm=get_worm(dgr,c);
-
-		if(worm->startmidpoint>=position)
-			worm->startmidpoint++;
-
-		if(worm->endmidpoint>=position)
-			worm->endmidpoint++;
-	}
 
 	/*
 		Finally we also need to update the pointers inside each vertex
@@ -482,17 +467,6 @@ void diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 			ph->endmidpoint--;
 	}
 
-	for(c=0;c<get_nr_worms(dgr);c++)
-	{
-		struct worm_t *worm=get_worm(dgr,c);
-	
-		if(worm->startmidpoint>=startmidpoint)
-			worm->startmidpoint--;
-
-		if(worm->endmidpoint>=startmidpoint)
-			worm->endmidpoint--;
-	}
-
 	for(c=startmidpoint+1;c<get_nr_free_propagators(dgr);c++)
 	{
 		struct g0_t *g0=get_free_propagator(dgr,c);
@@ -524,17 +498,6 @@ void diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 
 		if(ph->endmidpoint>=endmidpoint)
 			ph->endmidpoint--;
-	}
-
-	for(c=0;c<get_nr_worms(dgr);c++)
-	{
-		struct worm_t *worm=get_worm(dgr,c);
-	
-		if(worm->startmidpoint>=endmidpoint)
-			worm->startmidpoint--;
-
-		if(worm->endmidpoint>=endmidpoint)
-			worm->endmidpoint--;
 	}
 
 	for(c=endmidpoint+1;c<get_nr_free_propagators(dgr);c++)
@@ -613,136 +576,66 @@ void diagram_update_length(struct diagram_t *dgr,double newendtau)
 	dgr->weight*=calculate_free_propagator_weight(dgr,get_free_propagator(dgr,nr_free_propagators-1));
 }
 
-bool diagram_add_worm(struct diagram_t *dgr,int target1,int target2,int deltalambda)
-{	
-	int c,nr_worms;
-	struct worm_t *worm;
-
-	assert(target1<get_nr_midpoints(dgr));
-	assert(target2<get_nr_midpoints(dgr));
-	assert(target1<target2);
-
-	nr_worms=get_nr_worms(dgr);
-	for(c=0;c<nr_worms;c++)
-	{
-		struct worm_t *local=get_worm(dgr,c);
-
-		if((local->startmidpoint==target1)&&(local->endmidpoint==target2))
-			return false;
-	}
-
-	for(c=target1;c<target2;c++)
-	{
-		struct vertex_info_t *thisvertex=get_vertex(dgr,c);
-
-		if((thisvertex->right->j+deltalambda)<0)
-			return false;
-	}
-
-	for(c=target1;c<=target2;c++)
-	{
-		printf("ADDING_WORM [-] ==> %f\n",calculate_vertex_weight(dgr,c));
-	
-		dgr->weight/=calculate_vertex_weight(dgr,c);
-	}
-
-	for(c=target1;c<target2;c++)
-	{
-		struct vertex_info_t *thisvertex=get_vertex(dgr,c);
-
-		dgr->weight/=calculate_free_propagator_weight(dgr,thisvertex->right);
-
-		thisvertex->right->j+=deltalambda;
-
-		dgr->weight*=calculate_free_propagator_weight(dgr,thisvertex->right);
-	}
-
-	for(c=target1;c<=target2;c++)
-	{
-		printf("ADDING_WORM [+] ==> %f\n",calculate_vertex_weight(dgr,c));
-
-		dgr->weight*=calculate_vertex_weight(dgr,c);
-	}
-
-	/*
-		At last we keep track of the worm by adding it on the global list
-	*/
-
-	worm=vlist_append_empty(dgr->worms);
-	
-	worm->startmidpoint=target1;
-	worm->endmidpoint=target2;
-	worm->deltalambda=deltalambda;
-
-	assert(get_worm(dgr,get_nr_worms(dgr)-1)->startmidpoint==target1);
-	assert(get_worm(dgr,get_nr_worms(dgr)-1)->endmidpoint==target2);
-	assert(get_worm(dgr,get_nr_worms(dgr)-1)->deltalambda==deltalambda);
-
-	get_vertex(dgr,target1)->refs++;
-	get_vertex(dgr,target2)->refs++;
-	
-	return true;
-}
-
-bool diagram_remove_worm(struct diagram_t *dgr,int index)
+bool recouple(struct diagram_t *dgr,int lo,int hi)
 {
-	int c,target1,target2,deltalambda;
-	struct worm_t *worm;
+	struct randomized_list_t *lst;
+	int j1,m1,j2,m2,j3,m3;
 
-	assert(index<get_nr_worms(dgr));
-	
-	worm=vlist_get_element(dgr->worms,index);
+	if(lo==hi+1)
+		return true;
 
-	target1=worm->startmidpoint;
-	target2=worm->endmidpoint;
-	deltalambda=worm->deltalambda;
+	j1=get_free_propagator(dgr,lo-1)->j;
+	m1=get_free_propagator(dgr,lo-1)->m;
 
-	assert(get_vertex(dgr,target1)->refs>0);
-	assert(get_vertex(dgr,target2)->refs>0);
+	j2=get_phonon_line_after_propagator(dgr,lo-1)->lambda;
+	m2=get_phonon_line_after_propagator(dgr,lo-1)->mu;
 
-	for(c=target1;c<target2;c++)
+	m3=-m1-m2;
+
+	lst=init_rlist();
+
+	for(j3=0;j3<=j1+j2;j3++)
 	{
-		struct vertex_info_t *thisvertex=get_vertex(dgr,c);
+		/*
+			m3 cannot exceed j3
+		*/
 
-		if((thisvertex->right->j-deltalambda)<0)
-		{
-			printf("Removal failed! Is it physical?");
-			
-			exit(0);
-			
-			return false;
-		}
+		if(abs(m3)>j3)
+			continue;
+
+		/*
+			If all ms are zero, then the sum of all js must be even.
+		*/
+
+		if((m1==m2)&&(m2==m3)&&(m3==0))
+			if(((j1+j2+j3)%2)==1)
+				continue;
+
+		/*
+			Check if the angular momenta satisfy the triangular inequality
+		*/
+
+		if(abs(j1-j2)>j3)
+			continue;
+
+		if(abs(j2-j3)>j1)
+			continue;
+
+		if(abs(j3-j1)>j2)
+			continue;
+
+		rlist_add_item(lst,j3);
 	}
 
-	vlist_remove_element(dgr->worms,index);
-
-	for(c=target1;c<=target2;c++)
+	while(rlist_get_elements(lst)>0)
 	{
-		printf("REMOVING_WORM [-] ==> %f\n",calculate_vertex_weight(dgr,c));
+		//get_free_propagator(dgr,lo)->j=rlist_pop_random_item(lst);
+		//get_free_propagator(dgr,lo)->m=m3;
 
-		dgr->weight/=calculate_vertex_weight(dgr,c);
+		if(recouple(dgr,lo+1,hi)==true)
+			return true;
 	}
 
-	for(c=target1;c<target2;c++)
-	{
-		struct vertex_info_t *thisvertex=get_vertex(dgr,c);
-
-		dgr->weight/=calculate_free_propagator_weight(dgr,thisvertex->right);
-
-		thisvertex->right->j-=deltalambda;
-
-		dgr->weight*=calculate_free_propagator_weight(dgr,thisvertex->right);
-	}
-
-	for(c=target1;c<=target2;c++)
-	{
-		printf("REMOVING_WORM [+] ==> %f\n",calculate_vertex_weight(dgr,c));
-
-		dgr->weight*=calculate_vertex_weight(dgr,c);
-	}
-
-	get_vertex(dgr,target1)->refs--;
-	get_vertex(dgr,target2)->refs--;
-
-	return true;
+	return false;
 }
+

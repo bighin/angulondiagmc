@@ -12,15 +12,6 @@
 #endif
 
 /*
-	A worm
-*/
-
-struct worm_t
-{
-	int startmidpoint,endmidpoint,deltalambda;
-};
-
-/*
 	The following structure defines an arc, i.e. a phonon line
 */
 
@@ -109,7 +100,6 @@ struct diagram_t
 	struct vlist_t *midpoints;
 	struct vlist_t *free_propagators;
 	struct vlist_t *vertices;
-	struct vlist_t *worms;
 
 	/*
 		The diagram weight is update incrementally
@@ -137,13 +127,11 @@ struct arc_t *get_phonon_line(struct diagram_t *dgr,int c);
 double get_midpoint(struct diagram_t *dgr,int c);
 struct g0_t *get_free_propagator(struct diagram_t *dgr,int c);
 struct vertex_info_t *get_vertex(struct diagram_t *dgr,int c);
-struct worm_t *get_worm(struct diagram_t *dgr,int c);
 
 int get_nr_phonons(struct diagram_t *dgr);
 int get_nr_midpoints(struct diagram_t *dgr);
 int get_nr_free_propagators(struct diagram_t *dgr);
 int get_nr_vertices(struct diagram_t *dgr);
-int get_nr_worms(struct diagram_t *dgr);
 
 struct g0_t *get_left_neighbour(struct diagram_t *dgr,int midpoint);
 struct g0_t *get_right_neighbour(struct diagram_t *dgr,int midpoint);

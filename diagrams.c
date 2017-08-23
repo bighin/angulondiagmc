@@ -64,7 +64,6 @@ struct diagram_t *init_diagram(struct diagram_cfg_t *cfg)
 	ret->midpoints=init_vlist(sizeof(double),16*1024);
 	ret->free_propagators=init_vlist(sizeof(struct g0_t),1+32*1024);
 	ret->vertices=init_vlist(sizeof(struct vertex_info_t),32*1024);
-	ret->worms=init_vlist(sizeof(struct worm_t),16*1024);
 
 	/*
 		We add the initial, lone propagator.
@@ -143,11 +142,6 @@ struct vertex_info_t *get_vertex(struct diagram_t *dgr,int c)
 	return vlist_get_element(dgr->vertices,c);
 }
 
-struct worm_t *get_worm(struct diagram_t *dgr,int c)
-{
-	return vlist_get_element(dgr->worms,c);
-}
-
 int get_nr_phonons(struct diagram_t *dgr)
 {
 	return vlist_get_nr_elements(dgr->phonons);
@@ -166,11 +160,6 @@ int get_nr_free_propagators(struct diagram_t *dgr)
 int get_nr_vertices(struct diagram_t *dgr)
 {
 	return vlist_get_nr_elements(dgr->vertices);
-}
-
-int get_nr_worms(struct diagram_t *dgr)
-{
-	return vlist_get_nr_elements(dgr->worms);
 }
 
 struct g0_t *get_left_neighbour(struct diagram_t *dgr,int midpoint)
@@ -330,10 +319,6 @@ void diagram_check_consistency(struct diagram_t *dgr)
 		diagram_check_consistency_of_times(dgr,thisline->starttau,thisline->startmidpoint);
 		diagram_check_consistency_of_times(dgr,thisline->endtau,thisline->endmidpoint);
 	}
-	
-	/*
-		...and worms! Still to write! FIXME
-	*/
 
 	/*
 		Finally, the weight calculate incrementally should match the non-incremental
@@ -511,7 +496,7 @@ int print_diagram(struct diagram_t *dgr,int flags)
 	if(flags&PRINT_INFO0)
 	{
 		if(!(flags&PRINT_DRYRUN))
-			printf("\n(diagram order: %d, # worms: %d, local weight: %f, length: %f)\n",get_nr_phonons(dgr),get_nr_worms(dgr),diagram_weight(dgr),dgr->endtau);
+			printf("\n(diagram order: %d, local weight: %f, length: %f)\n",get_nr_phonons(dgr),diagram_weight(dgr),dgr->endtau);
 		
 		plines+=2;
 	}

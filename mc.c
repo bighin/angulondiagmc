@@ -243,13 +243,6 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	lambda=arc->lambda;
 	mu=arc->mu;
 
-	/*
-		We cannot remove a midpoint if there are worms attached to it
-	*/
-
-	if((get_vertex(dgr,arc->startmidpoint)->refs!=0)||(get_vertex(dgr,arc->endmidpoint)->refs!=0))
-		return UPDATE_UNPHYSICAL;
-
 	diagram_remove_phonon_line(dgr,target);
 
 	acceptance_ratio=diagram_weight(dgr)/oldweight;
@@ -265,133 +258,6 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 
 		assert(fabs(diagram_weight(dgr)-oldweight)<1e-7*oldweight);
 	
-		return UPDATE_REJECTED;
-	}
-
-	return UPDATE_ACCEPTED;
-}
-
-int update_add_worm(struct diagram_t *dgr,struct configuration_t *cfg)
-{
-	int nr_midpoints,target1,target2,lambda1,lambda2,minlambda,deltalambda;
-	bool is_accepted;
-	double oldweight,acceptance_ratio;
-
-	/*
-		We select two midpoints, with uniform probability.
-	*/
-
-	nr_midpoints=get_nr_midpoints(dgr);
-
-	if(nr_midpoints<2)
-		return UPDATE_UNPHYSICAL;
-
-	target1=gsl_rng_uniform_int(dgr->rng_ctx,nr_midpoints);
-	target2=gsl_rng_uniform_int(dgr->rng_ctx,nr_midpoints-1);
-
-	if(target2>=target1)
-		target2++;
-
-	lambda1=vertex_get_lambda(get_vertex(dgr,target1));
-	lambda2=vertex_get_lambda(get_vertex(dgr,target2));
-
-	oldweight=diagram_weight(dgr);
-
-	/*
-		We choose deltalambda with uniform probability between
-		-min(lambda1,lambda2) and min(lambda1,lambda2), excluding 0.
-	*/
-
-	minlambda=MIN(lambda1,lambda2);
-	
-	if(minlambda==0)
-		return UPDATE_UNPHYSICAL;
-	
-	deltalambda=gsl_rng_uniform_int(dgr->rng_ctx,2*minlambda)-minlambda;
-	deltalambda=(deltalambda<0)?(deltalambda):(deltalambda+1);
-
-	/*
-		FIXME
-	
-		Va bene, però la parte statistica (di selezione) va migliorata,
-		e va matchata con update_remove_worm
-	*/
-
-	if((abs(deltalambda)%2)==1)
-		return UPDATE_UNPHYSICAL;
-
-	printf("Before worm! (%f)\n",dgr->weight);
-	print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
-
-	if(diagram_add_worm(dgr,MIN(target1,target2),MAX(target1,target2),deltalambda)==false)
-		return UPDATE_UNPHYSICAL;
-
-	printf("After! (%d) (%f)\n",deltalambda,dgr->weight);
-	print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
-
-	acceptance_ratio=diagram_weight(dgr)/oldweight;
-	is_accepted=(gsl_rng_uniform(dgr->rng_ctx)<acceptance_ratio)?(true):(false);
-
-	if(is_accepted==false)
-	{
-		bool result,zeroweight=false;
-
-		if(dgr->weight<10e-8)
-			zeroweight=true;
-
-		result=diagram_remove_worm(dgr,get_nr_worms(dgr)-1);
-		assert(result==true);
-
-		if(zeroweight==true)
-			dgr->weight=oldweight;
-
-		//printf("<<<%f %f %f>>>",diagram_weight(dgr),diagram_weight_non_incremental(dgr),oldweight);
-		
-		assert(fabs(diagram_weight(dgr)-oldweight)<1e-7*oldweight);
-	
-		return UPDATE_REJECTED;
-	}
-
-	return UPDATE_ACCEPTED;
-}
-
-int update_remove_worm(struct diagram_t *dgr,struct configuration_t *cfg)
-{
-	double oldweight,acceptance_ratio;
-	int nr_worms,target,v1,v2,deltalambda;
-	struct worm_t *worm;
-	bool is_accepted;
-
-	nr_worms=get_nr_worms(dgr);
-
-	if(nr_worms<=0)
-		return UPDATE_UNPHYSICAL;
-
-	oldweight=diagram_weight(dgr);
-	target=gsl_rng_uniform_int(dgr->rng_ctx,nr_worms);
-
-	worm=get_worm(dgr,target);
-	v1=worm->startmidpoint;
-	v2=worm->endmidpoint;
-	deltalambda=worm->deltalambda;
-
-	if(diagram_remove_worm(dgr,target)==false)
-	{
-		return UPDATE_UNPHYSICAL;
-	}
-
-	acceptance_ratio=diagram_weight(dgr)/oldweight;
-	is_accepted=(gsl_rng_uniform(dgr->rng_ctx)<acceptance_ratio)?(true):(false);
-
-	if(is_accepted==false)
-	{
-		bool result;
-		
-		result=diagram_add_worm(dgr,v1,v2,deltalambda);
-
-		assert(result==true);
-		assert(fabs(diagram_weight(dgr)-oldweight)<1e-7*oldweight);
-
 		return UPDATE_REJECTED;
 	}
 
@@ -615,7 +481,7 @@ int do_diagmc(char *configfile)
 	char fname[1024];
 	progressbar *progress;
 
-#define DIAGRAM_NR_UPDATES	(6)
+#define DIAGRAM_NR_UPDATES	(4)
 
 	int (*updates[DIAGRAM_NR_UPDATES])(struct diagram_t *,struct configuration_t *);
 	char *update_names[DIAGRAM_NR_UPDATES];
@@ -627,18 +493,12 @@ int do_diagmc(char *configfile)
 	updates[0]=update_length;
 	updates[1]=update_add_phonon_line;
 	updates[2]=update_remove_phonon_line;
-	updates[3]=update_add_worm;
-	updates[4]=update_remove_worm;
-	updates[5]=update_change_lambda;
-	//updates[6]=update_change_worm;
+	updates[3]=update_change_lambda;
 
 	update_names[0]="UpdateLength";
 	update_names[1]="AddPhononLine";
 	update_names[2]="RemovePhononLine";
-	update_names[3]="AddWorm";
-	update_names[4]="RemoveWorm";
-	update_names[5]="ChangeLambda";
-	//update_names[6]="ChangeWorm";
+	update_names[3]="ChangeLambda";
 
 	for(c=0;c<DIAGRAM_NR_UPDATES;c++)
 		proposed[c]=accepted[c]=rejected[c]=0;
