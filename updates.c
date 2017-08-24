@@ -424,21 +424,73 @@ void diagram_remove_end_midpoint(struct diagram_t *dgr,int c)
 		rightvertex->left=right;
 }
 
-void diagram_remove_phonon_line(struct diagram_t *dgr,int position)
+bool diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 {
-	int c,startmidpoint,endmidpoint;
+	int c,startmidpoint,endmidpoint,middle1,middle2;
+	double tau1,tau2,tau3,tau4;
 	struct arc_t *arc;
+	bool result=true;
 
 	assert(position<get_nr_phonons(dgr));
 
+	/*
+		At first we find the arc we are about to remove and fetch some basic data
+	*/
+
 	arc=vlist_get_element(dgr->phonons,position);
-
-	dgr->weight/=calculate_arc_weight(dgr,arc);
-
-#warning FIXME FIXME FIXME Vengono cambiati anche dei propagatori liberi!
 
 	startmidpoint=arc->startmidpoint;
 	endmidpoint=arc->endmidpoint;
+
+	/*
+		We update the diagram weight incrementally: now we remove the arc and the free
+		propagators stemming for each one of the two arc vertices. The new propagators
+		will be added to the weight at the end.
+	*/
+
+	dgr->weight/=calculate_arc_weight(dgr,arc);
+
+	dgr->weight/=calculate_free_propagator_weight(dgr,get_left_neighbour(dgr,startmidpoint));
+	dgr->weight/=calculate_free_propagator_weight(dgr,get_right_neighbour(dgr,startmidpoint));
+
+	/*
+		Tricky part: we must avoid overlaps between the propagators whose weight we remove!
+	*/
+
+	if(get_right_neighbour(dgr,startmidpoint)!=get_left_neighbour(dgr,endmidpoint))
+		dgr->weight/=calculate_free_propagator_weight(dgr,get_left_neighbour(dgr,endmidpoint));
+	
+	dgr->weight/=calculate_free_propagator_weight(dgr,get_right_neighbour(dgr,endmidpoint));
+
+	/*
+		Even trickier: given that a propagator inside the removed arc will be modified,
+		two vertices in the middle will change their value, as well, unless the removed
+		arc is so small that it does not contain vertices.
+	*/
+
+	middle1=startmidpoint+1;
+	middle2=endmidpoint-1;
+
+	if(middle1<=middle2)
+	{
+		dgr->weight/=calculate_vertex_weight(dgr,middle1);
+		
+		if(middle1!=middle2)
+			dgr->weight/=calculate_vertex_weight(dgr,middle2);
+	}
+
+	/*
+		These values are saved for debug purposes only
+	*/
+
+	tau1=get_left_neighbour(dgr,startmidpoint)->starttau;
+	tau2=get_right_neighbour(dgr,startmidpoint)->endtau;
+	tau3=get_left_neighbour(dgr,endmidpoint)->starttau;
+	tau4=get_right_neighbour(dgr,endmidpoint)->endtau;
+
+	/*
+		Now the hardcore part starts: we update all the field in a diagram_t struct.
+	*/
 
 	assert(startmidpoint<endmidpoint);
 
@@ -490,6 +542,8 @@ void diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 	diagram_remove_start_midpoint(dgr,startmidpoint);
 
 	endmidpoint--;
+	middle1--;
+	middle2--;
 
 	for(c=0;c<get_nr_phonons(dgr);c++)
 	{
@@ -521,6 +575,53 @@ void diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 	}
 
 	diagram_remove_end_midpoint(dgr,endmidpoint);
+
+	/*
+		Finally we fix the diagram weight, since we still have to add back the new free propagators.
+	*/
+
+	dgr->weight*=calculate_free_propagator_weight(dgr,get_free_propagator(dgr,startmidpoint));
+
+	/*
+		Again, one should pay attention not to take into account overlapping region,
+		i.e. -- in this case -- the same propagator.
+	*/
+
+	if(get_free_propagator(dgr,startmidpoint)!=get_free_propagator(dgr,endmidpoint))
+		dgr->weight*=calculate_free_propagator_weight(dgr,get_free_propagator(dgr,endmidpoint));
+
+	assert(tau1==get_free_propagator(dgr,startmidpoint)->starttau);
+	assert(tau4==get_free_propagator(dgr,endmidpoint)->endtau);
+
+	if(middle1<=middle2)
+	{
+		dgr->weight*=calculate_vertex_weight(dgr,middle1);
+
+		if(check_triangle_condition_and_parity(dgr,get_vertex(dgr,middle1))==false)
+		{
+			assert(fabs(calculate_vertex_weight(dgr,middle1))<10e-7);
+			result=false;
+		}
+
+		assert(tau2==get_free_propagator(dgr,startmidpoint)->endtau);
+		assert(tau3==get_free_propagator(dgr,endmidpoint)->starttau);
+
+		if(middle1==middle2)
+			assert(tau2==tau3);
+
+		if(middle1!=middle2)
+		{
+			dgr->weight*=calculate_vertex_weight(dgr,middle2);
+
+			if(check_triangle_condition_and_parity(dgr,get_vertex(dgr,middle2))==false)
+			{
+				assert(fabs(calculate_vertex_weight(dgr,middle2))<10e-7);
+				result=false;
+			}
+		}
+	}
+	
+	return result;
 }
 
 double calculate_free_propagator_weight(struct diagram_t *dgr,struct g0_t *g0)

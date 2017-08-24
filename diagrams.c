@@ -290,7 +290,9 @@ void diagram_check_consistency(struct diagram_t *dgr)
 		if(fabs(coupling)<=epsilon)
 		{
 			printf("Wrong coupling: (%d, %d) (%d, %d) (%d, %d)\n",j1,m1,j2,m2,j3,m3);
-			print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
+			
+			if(get_nr_vertices(dgr)<10)
+				print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
 		}
 
 		assert(fabs(coupling)>epsilon);
@@ -325,7 +327,19 @@ void diagram_check_consistency(struct diagram_t *dgr)
 		reference version
 	*/
 
-	assert((diagram_weight(dgr)-diagram_weight_non_incremental(dgr))<10e-7*diagram_weight(dgr));
+	{
+		double w1,w2;
+		
+		w1=diagram_weight(dgr);
+		w2=diagram_weight_non_incremental(dgr);
+	
+		if(!(fabs(w1-w2)<10e-7*w1))
+		{
+			printf("Consistency check for the incremental weight failed! (%f, %f)\n",w1,w2);
+		}
+	
+		assert(fabs(w1-w2)<10e-7*w1);
+	}
 }
 
 double diagram_weight(struct diagram_t *dgr)
@@ -365,7 +379,7 @@ double diagram_weight_non_incremental(struct diagram_t *dgr)
 		double timediff;
 
 		double c0,c1,c2,omega0,omega1,omega2;
-		
+	
 		c0=dgr->c0;
 		c1=dgr->c1;
 		c2=dgr->c2;

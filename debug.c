@@ -140,8 +140,7 @@ void debug_weight_old(struct diagram_t *dgr)
 		j3=thisvertex->phononline->lambda;
 		m3=thisvertex->phononline->mu;
 
-		coupling=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,2*m1,2*m2,2*m3)*
-			 gsl_sf_coupling_3j(2*j1,2*j2,2*j3,0,0,0)*
+		coupling=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,0,0,0)*
 		         sqrtf((2.0f*j1+1)*(2.0f*j2+1)*(2.0f*j3+1)/(4.0f*M_PI));
 	
 		printf("%f ((%d,%d),(%d,%d),(%d,%d))",coupling,j1,m1,j2,m2,j3,m3);
@@ -254,38 +253,87 @@ void debug_weight(struct diagram_t *dgr)
 	printf("Final result: %f\n",ret);
 }
 
-void stresstest(void)
+bool try_to_remove_phonon_line(struct diagram_t *dgr,int target)
+{
+	struct arc_t *arc;
+	double tau1,tau2,k,oldweight;
+	int lambda,mu;
+	bool result;
+
+	struct free_propagators_ctx_t fpc;
+
+	arc=get_phonon_line(dgr,target);
+
+	tau1=arc->starttau;
+	tau2=arc->endtau;
+	k=arc->k;
+	lambda=arc->lambda;
+	mu=arc->mu;
+
+	oldweight=dgr->weight;
+	save_free_propagators(dgr,&fpc,arc->startmidpoint,arc->endmidpoint);
+
+	result=diagram_remove_phonon_line(dgr,target);
+
+	if(result==false)
+	{
+		diagram_add_phonon_line(dgr,tau1,tau2,k,lambda,mu);
+		restore_free_propagators(dgr,&fpc);
+
+		/*
+			The update failed, so this means that the incremental
+			weight went to zero...
+		*/
+
+		dgr->weight=oldweight;
+		
+		return false;
+	}
+
+	unload_free_propagators_ctx(&fpc);
+
+	diagram_check_consistency(dgr);
+	
+	return true;
+}
+
+int stresstest(void)
 {
 	struct diagram_t *dgr;
 	struct diagram_cfg_t cfg;
 
 	gsl_rng *rctx;
 
-	int x,y,z;
-	int parx,pary,parz;
+	int x,y,w,z;
+	int parx,pary,parw,parz;
 
 	if((rctx=gsl_rng_alloc(gsl_rng_mt19937))==NULL)
 	{
 		printf("Couldn't initialize the random number generator\n");
-		return;
+		return 0;
 	}
 
 	//seed_rng(rctx);
 
 	cfg.endtau=1.0f;
 	cfg.j=2;
-	cfg.m=1;
+	cfg.m=0;
 	cfg.chempot=5.0f;
+
+	cfg.c0=1.5f;
+	cfg.c1=1.6f;
+	cfg.c2=1.7f;
+
+	cfg.omega0=-1.0f;
+	cfg.omega1=-1.1f;
+	cfg.omega2=-1.2f;
 
 	dgr=init_diagram(&cfg);
 
-	//parx=64;
-	//pary=128;
-	//parz=46;
-
-	parx=8;
-	pary=16;
-	parz=6;
+	parx=48;
+	pary=90;
+	parw=12;
+	parz=46;
 
 	assert(parz<pary);
 
@@ -294,6 +342,7 @@ void stresstest(void)
 		for(y=0;y<pary;y++)
 		{
 			double lo,hi,k;
+			double oldweight;
 			int lambda,mu;
 
 			lo=gsl_rng_uniform(rctx);
@@ -301,10 +350,7 @@ void stresstest(void)
 			k=gsl_rng_uniform(rctx);
 
 			lambda=gsl_rng_uniform_int(rctx,3);
-			mu=gsl_rng_uniform_int(rctx,lambda+1);
-
-			if(gsl_rng_uniform(rctx)<0.5f)
-				mu=-mu;
+			mu=0;
 
 			if(lo>hi)
 			{
@@ -317,11 +363,14 @@ void stresstest(void)
 
 			printf("<+ (%d) (w=%f)>\n",get_nr_phonons(dgr),diagram_weight(dgr));
 
+			oldweight=dgr->weight;
 			diagram_add_phonon_line(dgr,lo,hi,k,lambda,mu);
 
 			/*
 				The newly added line may violate the triangle condition, in this
 				case it is removed!
+			
+				In this case the weight will go to zero, it is our responsibility to fix it.
 			*/
 
 			{
@@ -329,17 +378,67 @@ void stresstest(void)
 				struct vertex_info_t *v1,*v2;
 			
 				v1=get_vertex(dgr,thisline->startmidpoint);
-				v2=get_vertex(dgr,thisline->startmidpoint);
+				v2=get_vertex(dgr,thisline->endmidpoint);
 
 				if((check_triangle_condition_and_parity(dgr,v1)==false)||(check_triangle_condition_and_parity(dgr,v2)==false))
 				{
 					int lastline=get_nr_phonons(dgr)-1;
 					diagram_remove_phonon_line(dgr,lastline);
+				
+					dgr->weight=oldweight;
 				}
 			}
 
 			diagram_check_consistency(dgr);
-			//print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
+		}
+
+		/*
+			We select a random free propagator and change it to a new value which
+			respects the selection rules.
+		*/
+
+		if(get_nr_free_propagators(dgr)>2)
+		{
+			for(w=0;w<parw;w++)
+			{
+				int index,oldj,newj;
+				struct g0_t *target;
+				struct vertex_info_t *v1,*v2;
+
+				index=1+gsl_rng_uniform_int(rctx,get_nr_free_propagators(dgr)-2);
+				target=get_free_propagator(dgr,index);
+
+				assert((index-1)>=0);
+				assert((index)>=0);
+				assert((index-1)<get_nr_vertices(dgr));
+				assert((index)<get_nr_vertices(dgr));
+
+				v1=get_vertex(dgr,index-1);
+				v2=get_vertex(dgr,index);
+		
+				oldj=target->j;
+				newj=gsl_rng_uniform_int(rctx,3);
+
+				target->j=newj;
+
+				if((check_triangle_condition_and_parity(dgr,v1)==false)||(check_triangle_condition_and_parity(dgr,v2)==false))
+				{
+					target->j=oldj;
+					continue;
+				}
+		
+				target->j=oldj;
+				dgr->weight/=calculate_free_propagator_weight(dgr,target);
+				dgr->weight/=calculate_vertex_weight(dgr,index-1);
+				dgr->weight/=calculate_vertex_weight(dgr,index);
+
+				target->j=newj;
+				dgr->weight*=calculate_free_propagator_weight(dgr,target);
+				dgr->weight*=calculate_vertex_weight(dgr,index-1);
+				dgr->weight*=calculate_vertex_weight(dgr,index);
+			}
+
+			diagram_check_consistency(dgr);
 		}
 
 		for(z=0;z<parz;z++)
@@ -347,17 +446,13 @@ void stresstest(void)
 			if(get_nr_phonons(dgr)>0)
 			{
 				int target;
-				
 				target=gsl_rng_uniform_int(rctx,get_nr_phonons(dgr));
-
-				diagram_remove_phonon_line(dgr,target);
-
-				diagram_check_consistency(dgr);
 			
-				printf("<- (%d)>\n",get_nr_phonons(dgr));
+				try_to_remove_phonon_line(dgr,target);
 			}
 		}
 	}
+
 	diagram_check_consistency(dgr);
 
 	while(get_nr_vertices(dgr)>0)
@@ -367,10 +462,16 @@ void stresstest(void)
 		if(get_nr_vertices(dgr)<=19)
 			print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
 
-		//printf("<- (%d)>\n",get_nr_phonons(dgr));
+		printf("<- (%d)>\n",get_nr_phonons(dgr));
 
 		target=gsl_rng_uniform_int(rctx,get_nr_phonons(dgr));
 
-		diagram_remove_phonon_line(dgr,target);
+		try_to_remove_phonon_line(dgr,target);
+
+		diagram_check_consistency(dgr);
 	}
+	
+	printf("\nINFO: stress test passed!\n");
+	
+	return 0;
 }

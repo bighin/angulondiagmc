@@ -281,6 +281,10 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	diagram_remove_phonon_line(dgr,target);
 
+#warning Not always the removal will succeed! The weight might have gone to zero even here!
+#warning This case is simple to see, because diagram_remove_phonon_line() will return false
+#warning Note that after a failed removed, the free propagators must be restored, as well.
+
 	/*
 		This is a bit tricky: if we just removed a bubble,
 		then there are no free propagators to recouple.
@@ -617,7 +621,7 @@ int do_diagmc(char *configfile)
 			assert(false);
 		}
 
-		assert((diagram_weight(dgr)-diagram_weight_non_incremental(dgr))<10e-7*diagram_weight(dgr));
+		assert(fabs(diagram_weight(dgr)-diagram_weight_non_incremental(dgr))<10e-7*diagram_weight(dgr));
 		diagram_check_consistency(dgr);
 
 		histogram_add_sample(ht,diagram_weight(dgr)*diagram_m_weight(dgr),dgr->endtau);

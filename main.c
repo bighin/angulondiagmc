@@ -19,7 +19,9 @@
 void usage(char *argv0)
 {
 	printf("Usage: %s <inifile>\n",argv0);
-	printf("       %s --test\n",argv0);
+	printf("       %s --testgraphs\n",argv0);
+	printf("       %s --stresstest\n",argv0);
+
 
 	exit(0);
 }
@@ -31,17 +33,16 @@ int main(int argc,char *argv[])
 	if(argc!=2)
 		usage(argv[0]);
 
-	if(strcmp(argv[1],"--test")==0)
+	if(strcmp(argv[1],"--testgraphs")==0)
 	{
 		return test_graphical_machinery();
-
-		//test_graph();
-		//return 0;
-
-		//stresstest();
-		//return 0;
 	}
-	
+
+	if(strcmp(argv[1],"--stresstest")==0)
+	{
+		return stresstest();
+	}
+
 	do_diagmc(argv[1]);
 	
 	return 0;
