@@ -435,6 +435,8 @@ void diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 
 	dgr->weight/=calculate_arc_weight(dgr,arc);
 
+#warning FIXME FIXME FIXME Vengono cambiati anche dei propagatori liberi!
+
 	startmidpoint=arc->startmidpoint;
 	endmidpoint=arc->endmidpoint;
 

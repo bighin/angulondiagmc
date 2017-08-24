@@ -138,7 +138,10 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	struct arc_t *thisline;
 	struct vertex_info_t *v1,*v2;
+
+#ifdef DO_RECOUPLE
 	struct free_propagators_ctx_t fpc;
+#endif
 
 	double omegas[3]={cfg->omega0,cfg->omega1,cfg->omega2};
 
@@ -197,14 +200,10 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 		return UPDATE_UNPHYSICAL;
 	}
 
-	printf("BEFORE DOING RECOUPLE!\n");
-	print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
-
+#ifdef DO_RECOUPLE
 	save_free_propagators(dgr,&fpc,thisline->startmidpoint,thisline->endmidpoint);
 	recouple(dgr,thisline->startmidpoint,thisline->endmidpoint);
-
-	printf("AFTER DOING RECOUPLE!\n");
-	print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
+#endif
 
 	acceptance_ratio=diagram_weight(dgr)/oldweight;	
 	acceptance_ratio*=3.0f*dgr->endtau;
@@ -222,11 +221,9 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 			undoes the recouple() call.
 		*/
 
+#ifdef DO_RECOUPLE
 		restore_free_propagators(dgr,&fpc);
-
-		printf("AFTER RESTORING G0S!\n");
-		print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
-
+#endif
 		lastline=get_nr_phonons(dgr)-1;
 		diagram_remove_phonon_line(dgr,lastline);
 
@@ -235,7 +232,9 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 		return UPDATE_REJECTED;
 	}
 
+#ifdef DO_RECOUPLE
 	unload_free_propagators_ctx(&fpc);
+#endif
 
 	return UPDATE_ACCEPTED;
 }
@@ -243,7 +242,10 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 {
 	struct arc_t *arc;
+
+#ifdef DO_RECOUPLE
 	struct free_propagators_ctx_t fpc;
+#endif
 
 	int target,lambda,mu,nr_phonons,startmidpoint,endmidpoint;
 	double acceptance_ratio,k,tau1,tau2,oldweight;
@@ -253,7 +255,7 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	oldweight=diagram_weight(dgr);
 	nr_phonons=get_nr_phonons(dgr);
-	
+
 	if(nr_phonons<=0)
 		return UPDATE_UNPHYSICAL;
 	
@@ -273,7 +275,10 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 		of the subsequent recouple() call!
 	*/
 
+#ifdef DO_RECOUPLE
 	save_free_propagators(dgr,&fpc,startmidpoint,endmidpoint);
+#endif
+
 	diagram_remove_phonon_line(dgr,target);
 
 	/*
@@ -281,8 +286,10 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 		then there are no free propagators to recouple.
 	*/
 
+#ifdef DO_RECOUPLE
 	if((startmidpoint+1)!=endmidpoint)
 		recouple(dgr,startmidpoint,endmidpoint-2);
+#endif
 
 	acceptance_ratio=diagram_weight(dgr)/oldweight;
 	acceptance_ratio/=3.0f*dgr->endtau;
@@ -294,70 +301,19 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	if(is_accepted==false)
 	{
 		diagram_add_phonon_line(dgr,tau1,tau2,k,lambda,mu);
+
+#ifdef DO_RECOUPLE
 		restore_free_propagators(dgr,&fpc);
+#endif
 
 		assert(fabs(diagram_weight(dgr)-oldweight)<1e-7*oldweight);
 	
 		return UPDATE_REJECTED;
 	}
 
+#ifdef DO_RECOUPLE
 	unload_free_propagators_ctx(&fpc);
-
-	return UPDATE_ACCEPTED;
-}
-
-int update_change_lambda(struct diagram_t *dgr,struct configuration_t *cfg)
-{
-	int nr_phonons,oldlambda,oldmu,newlambda,newmu;
-	struct arc_t *thisline;
-	struct vertex_info_t *v1,*v2;
-	double acceptance_ratio,oldweight,oldarcweight;
-	bool is_accepted;
-	
-	nr_phonons=get_nr_phonons(dgr);
-	
-	if(nr_phonons<=0)
-		return UPDATE_UNPHYSICAL;
-	
-	thisline=get_phonon_line(dgr,gsl_rng_uniform_int(dgr->rng_ctx,nr_phonons));
-
-	oldweight=diagram_weight(dgr);
-	oldarcweight=calculate_arc_weight(dgr,thisline);
-
-	oldlambda=thisline->lambda;
-	oldmu=thisline->mu;
-
-	newlambda=gsl_rng_uniform_int(dgr->rng_ctx,3);
-	newmu=0;
-
-	thisline->lambda=newlambda;
-	thisline->mu=newmu;
-
-	v1=get_vertex(dgr,thisline->startmidpoint);
-	v2=get_vertex(dgr,thisline->endmidpoint);
-
-	if((check_triangle_condition_and_parity(dgr,v1)==false)||(check_triangle_condition_and_parity(dgr,v2)==false))
-	{
-		thisline->lambda=oldlambda;
-		thisline->mu=oldmu;
-		
-		return UPDATE_UNPHYSICAL;
-	}
-
-	dgr->weight*=calculate_arc_weight(dgr,thisline)/oldarcweight;
-
-	acceptance_ratio=diagram_weight(dgr)/oldweight;
-	is_accepted=(gsl_rng_uniform(dgr->rng_ctx)<acceptance_ratio)?(true):(false);
-
-	if(is_accepted==false)
-	{
-		thisline->lambda=oldlambda;
-		thisline->mu=oldmu;
-
-		assert(fabs(diagram_weight(dgr)-oldweight)<1e-7*oldweight);
-
-		return UPDATE_REJECTED;
-	}
+#endif
 
 	return UPDATE_ACCEPTED;
 }
@@ -523,7 +479,7 @@ int do_diagmc(char *configfile)
 	char fname[1024];
 	progressbar *progress;
 
-#define DIAGRAM_NR_UPDATES	(4)
+#define DIAGRAM_NR_UPDATES	(3)
 
 	int (*updates[DIAGRAM_NR_UPDATES])(struct diagram_t *,struct configuration_t *);
 	char *update_names[DIAGRAM_NR_UPDATES];
@@ -535,12 +491,10 @@ int do_diagmc(char *configfile)
 	updates[0]=update_length;
 	updates[1]=update_add_phonon_line;
 	updates[2]=update_remove_phonon_line;
-	updates[3]=update_change_lambda;
 
 	update_names[0]="UpdateLength";
 	update_names[1]="AddPhononLine";
 	update_names[2]="RemovePhononLine";
-	update_names[3]="ChangeLambda";
 
 	for(c=0;c<DIAGRAM_NR_UPDATES;c++)
 		proposed[c]=accepted[c]=rejected[c]=0;
@@ -618,13 +572,10 @@ int do_diagmc(char *configfile)
 	{
 		int update_type,status;
 
-#warning CHANGEME
-
-		//update_type=gsl_rng_uniform_int(dgr->rng_ctx,DIAGRAM_NR_UPDATES);
+		update_type=gsl_rng_uniform_int(dgr->rng_ctx,DIAGRAM_NR_UPDATES);
 		update_type=gsl_rng_uniform_int(dgr->rng_ctx,3);
-		status=updates[update_type](dgr,&config);
 
-		printf("Doing update #%d\n",update_type);
+		status=updates[update_type](dgr,&config);
 
 		if((config.animate)&&(status==UPDATE_ACCEPTED)&&((update_type==1)||(update_type==2)))
 		{
@@ -666,35 +617,6 @@ int do_diagmc(char *configfile)
 			assert(false);
 		}
 
-		//FOLLOWING STUFF IS RELATED TO THE INSTABILITY
-
-#if 0
-		{
-			double en,tau,freeweight;
-			struct g0_t *g0=get_free_propagator(dgr,0);
-
-			en=g0->j*(g0->j+1.0f)-dgr->chempot;
-			tau=dgr->endtau-dgr->mintau;
-			freeweight=exp(-en*tau);
-
-			if(diagram_weight(dgr)>freeweight)
-			{
-				printf("MALE! (localweight: %f, freeweight: %f)\n",diagram_weight(dgr),freeweight);
-			
-				debug_weight(dgr);
-				
-				double diagram_weight_debug(struct diagram_t *dgr);
-				
-				diagram_weight_debug(dgr);
-				
-				print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS|PRINT_INFO0);
-			
-				exit(0);
-			}
-
-			//histogram_add_sample(ht,freeweight,dgr->endtau);
-		}
-#endif
 		assert((diagram_weight(dgr)-diagram_weight_non_incremental(dgr))<10e-7*diagram_weight(dgr));
 		diagram_check_consistency(dgr);
 
@@ -705,17 +627,7 @@ int do_diagmc(char *configfile)
 
 		avgorder[0]+=get_nr_phonons(dgr);
 		avgorder[1]++;
-
-#ifdef DEBUG9
-		printf("QUL<%d>\n",get_nr_phonons(dgr));
-
-		if(get_nr_phonons(dgr)>0)
-			printf("XXX<mWeight>: %f %f\n",diagram_m_weight(dgr),diagram_m_weight_reference(dgr));
-#endif
 	}
-
-	//print_diagram(dgr,PRINT_TOPOLOGY|PRINT_INFO0|PRINT_PROPAGATORS);
-	//debug_weight(dgr);
 
 	if(config.progressbar)
 		progressbar_finish(progress);
