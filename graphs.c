@@ -858,7 +858,7 @@ double diagram_m_weight_reference(struct diagram_t *dgr)
 		{
 			int j1,m1,j2,m2,j3,m3;
 
-			struct vertex_info_t *thisvertex=get_vertex(dgr,c);
+			struct vertex_t *thisvertex=get_vertex(dgr,c);
 
 			j1=thisvertex->left->j;
 			m1=thisvertex->left->m;

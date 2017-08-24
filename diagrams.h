@@ -41,11 +41,11 @@ struct g0_t
 };
 
 /*
-	A structure vertex_info_t is defined at every vertex, containing
+	A structure vertex_t is defined at every vertex, containing
 	a pointer to the left free line, the right free line and the phonon line.
 */
 
-struct vertex_info_t
+struct vertex_t
 {
 	struct g0_t *left,*right;
 	struct arc_t *phononline;
@@ -53,12 +53,12 @@ struct vertex_info_t
 	int refs;
 };
 
-int vertex_get_j1(struct vertex_info_t *vif);
-int vertex_get_m1(struct vertex_info_t *vif);
-int vertex_get_j2(struct vertex_info_t *vif);
-int vertex_get_m2(struct vertex_info_t *vif);
-int vertex_get_lambda(struct vertex_info_t *vif);
-int vertex_get_mu(struct vertex_info_t *vif);
+int vertex_get_j1(struct vertex_t *vif);
+int vertex_get_m1(struct vertex_t *vif);
+int vertex_get_j2(struct vertex_t *vif);
+int vertex_get_m2(struct vertex_t *vif);
+int vertex_get_lambda(struct vertex_t *vif);
+int vertex_get_mu(struct vertex_t *vif);
 
 /*
 	This structure defines a diagram
@@ -126,7 +126,7 @@ void fini_diagram(struct diagram_t *dgr);
 struct arc_t *get_phonon_line(struct diagram_t *dgr,int c);
 double get_midpoint(struct diagram_t *dgr,int c);
 struct g0_t *get_free_propagator(struct diagram_t *dgr,int c);
-struct vertex_info_t *get_vertex(struct diagram_t *dgr,int c);
+struct vertex_t *get_vertex(struct diagram_t *dgr,int c);
 
 int get_nr_phonons(struct diagram_t *dgr);
 int get_nr_midpoints(struct diagram_t *dgr);
@@ -151,6 +151,7 @@ double diagram_weight_non_incremental(struct diagram_t *dgr);
 
 int print_diagram(struct diagram_t *dgr,int flags);
 
-bool check_triangle_condition_and_parity(struct diagram_t *dgr,struct vertex_info_t *thisvertex);
+bool check_triangle_condition_and_parity(struct diagram_t *dgr,struct vertex_t *thisvertex);
+bool check_triangle_condition_and_parity_from_js(int j1,int j2,int j3);
 
 #endif //__DIAGRAMS_H__

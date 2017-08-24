@@ -53,7 +53,7 @@ void diagram_update_xrefs(struct diagram_t *dgr,int position)
 
 	for(c=position+1;c<get_nr_vertices(dgr);c++)
 	{
-		struct vertex_info_t *vtx=get_vertex(dgr,c);
+		struct vertex_t *vtx=get_vertex(dgr,c);
 
 		if(c!=position+1)
 			vtx->left++;
@@ -64,7 +64,7 @@ void diagram_update_xrefs(struct diagram_t *dgr,int position)
 
 void diagram_add_start_midpoint(struct diagram_t *dgr,int c,double tau,struct arc_t *phononline)
 {
-	struct vertex_info_t *thisvertex,*leftvertex,*rightvertex;
+	struct vertex_t *thisvertex,*leftvertex,*rightvertex;
 	struct g0_t *leftline,*rightline;
 
 	/*
@@ -128,7 +128,7 @@ void diagram_add_start_midpoint(struct diagram_t *dgr,int c,double tau,struct ar
 
 void diagram_add_end_midpoint(struct diagram_t *dgr,int c,double tau,struct arc_t *phononline)
 {
-	struct vertex_info_t *thisvertex,*leftvertex,*rightvertex;
+	struct vertex_t *thisvertex,*leftvertex,*rightvertex;
 	struct g0_t *leftline,*rightline;
 
 	/*
@@ -193,7 +193,7 @@ void diagram_add_end_midpoint(struct diagram_t *dgr,int c,double tau,struct arc_
 double calculate_arc_weight(struct diagram_t *dgr,struct arc_t *arc)
 {
 	int j1,j2,j3;
-	struct vertex_info_t *thisvertex;
+	struct vertex_t *thisvertex;
 	double timediff;
 	double c0,c1,c2,omega0,omega1,omega2;
 	double ret=1.0f;
@@ -322,7 +322,7 @@ void diagram_add_phonon_line(struct diagram_t *dgr,double tau1,double tau2,doubl
 void diagram_remove_start_midpoint(struct diagram_t *dgr,int c)
 {
 	struct g0_t *left,*right;
-	struct vertex_info_t *leftvertex,*rightvertex,*thisvertex;
+	struct vertex_t *leftvertex,*rightvertex,*thisvertex;
 
 	assert(c>=0);
 	assert(c<get_nr_vertices(dgr));
@@ -366,7 +366,7 @@ void diagram_remove_start_midpoint(struct diagram_t *dgr,int c)
 void diagram_remove_end_midpoint(struct diagram_t *dgr,int c)
 {
 	struct g0_t *left,*right;
-	struct vertex_info_t *leftvertex,*rightvertex,*thisvertex;
+	struct vertex_t *leftvertex,*rightvertex,*thisvertex;
 
 	assert(c>=0);
 	assert(c<get_nr_midpoints(dgr));
@@ -496,7 +496,7 @@ bool diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 
 	for(c=0;c<get_nr_vertices(dgr);c++)
 	{
-		struct vertex_info_t *vtx=get_vertex(dgr,c);
+		struct vertex_t *vtx=get_vertex(dgr,c);
 		
 		if(vtx->phononline>arc)
 			vtx->phononline--;
@@ -531,7 +531,7 @@ bool diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 
 	for(c=startmidpoint+1;c<get_nr_vertices(dgr);c++)
 	{
-		struct vertex_info_t *vtx=get_vertex(dgr,c);
+		struct vertex_t *vtx=get_vertex(dgr,c);
 
 		if(c>startmidpoint+1)
 			vtx->left--;
@@ -566,7 +566,7 @@ bool diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 
 	for(c=endmidpoint+1;c<get_nr_vertices(dgr);c++)
 	{
-		struct vertex_info_t *vtx=get_vertex(dgr,c);
+		struct vertex_t *vtx=get_vertex(dgr,c);
 
 		if(c>endmidpoint+1)
 			vtx->left--;
@@ -583,7 +583,7 @@ bool diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 	dgr->weight*=calculate_free_propagator_weight(dgr,get_free_propagator(dgr,startmidpoint));
 
 	/*
-		Again, one should pay attention not to take into account overlapping region,
+		Again, one must pay attention not to take into account overlapping region,
 		i.e. -- in this case -- the same propagator.
 	*/
 
@@ -641,7 +641,7 @@ double calculate_vertex_weight(struct diagram_t *dgr,int index)
 	int j1,j2,j3;
 	double coupling;
 
-	struct vertex_info_t *thisvertex=get_vertex(dgr,index);
+	struct vertex_t *thisvertex=get_vertex(dgr,index);
 
 	j1=thisvertex->left->j;
 	j2=thisvertex->right->j;
@@ -684,6 +684,10 @@ void save_free_propagators(struct diagram_t *dgr,struct free_propagators_ctx_t *
 	assert(fpc);
 	assert(hi>=lo);
 
+#ifdef DEBUG7
+	printf("I was asked to save the propagators between v1=%d and v2=%d\n",lo,hi);
+#endif
+
 	fpc->nr_free_propagators=hi-lo+1;
 	fpc->lo=lo;
 	fpc->hi=hi;
@@ -691,10 +695,20 @@ void save_free_propagators(struct diagram_t *dgr,struct free_propagators_ctx_t *
 	fpc->js=malloc(sizeof(int)*fpc->nr_free_propagators);
 
 	for(c=lo;c<hi;c++)
+	{
 		fpc->js[c-lo]=get_right_neighbour(dgr,c)->j;
+
+#ifdef DEBUG7
+		printf("Saving %d in position %d\n",fpc->js[c-lo],c);
+#endif
+	}
+
+#ifdef DEBUG7	
+	printf("Done!\n\n");
+#endif
 }
 
-void unload_free_propagators_ctx(struct free_propagators_ctx_t *fpc)
+void release_free_propagators_ctx(struct free_propagators_ctx_t *fpc)
 {
 	if(fpc)
 	{
@@ -719,7 +733,13 @@ void restore_free_propagators(struct diagram_t *dgr,struct free_propagators_ctx_
 	}
 
 	for(c=fpc->lo;c<fpc->hi;c++)
+	{
 		get_right_neighbour(dgr,c)->j=fpc->js[c-fpc->lo];
+
+#ifdef DEBUG7
+		printf("Restoring %d in position %d\n",fpc->js[c-fpc->lo],c);
+#endif
+	}
 
 	for(c=fpc->lo;c<=fpc->hi;c++)
 	{
@@ -729,7 +749,11 @@ void restore_free_propagators(struct diagram_t *dgr,struct free_propagators_ctx_
 			dgr->weight*=calculate_free_propagator_weight(dgr,get_right_neighbour(dgr,c));
 	}
 
-	unload_free_propagators_ctx(fpc);
+#ifdef DEBUG7
+	printf("Done!\n\n");
+#endif
+
+	release_free_propagators_ctx(fpc);
 }
 
 /*
@@ -742,19 +766,23 @@ void restore_free_propagators(struct diagram_t *dgr,struct free_propagators_ctx_
 
 bool recouple(struct diagram_t *dgr,int lo,int hi)
 {
-	int c,d,length;
-	int *deltalist;
+	int c,d,length,targettotal;
+	int *deltalist,*jlist;
 	
 	assert(hi>=lo);
 	
 	length=hi-lo+1;
 	deltalist=malloc(sizeof(int)*length);
+	jlist=malloc(sizeof(int)*length);
 
 #define MAX_TRIES	(1024)
+
+	targettotal=get_right_neighbour(dgr,hi)->j-get_left_neighbour(dgr,lo)->j;
 
 	for(d=0;d<=MAX_TRIES;d++)
 	{
 		int total=0;
+		bool failedtc;
 		
 		/*
 			At each vertex one can define a delta value, defined as the difference
@@ -791,7 +819,7 @@ bool recouple(struct diagram_t *dgr,int lo,int hi)
 
 		for(c=lo;c<=hi;c++)
 		{
-			struct vertex_info_t *vtx;
+			struct vertex_t *vtx;
 			int lambda;
 			
 			vtx=get_vertex(dgr,c);
@@ -802,8 +830,25 @@ bool recouple(struct diagram_t *dgr,int lo,int hi)
 
 		for(c=lo;c<=hi;c++)
 			total+=deltalist[c-lo];
+
+		/*
+			jlist[i] referes to the propagator *after* the i-th vertex
+		*/
+
+		jlist[0]=get_left_neighbour(dgr,lo)->j+deltalist[0];
 		
-		if(total==0)
+		failedtc=false;
+		for(c=lo+1;c<=hi;c++)
+		{
+			int lambda=get_vertex(dgr,c)->phononline->lambda;
+			
+			jlist[c-lo]=jlist[c-lo-1]+deltalist[c-lo];
+	
+			if(check_triangle_condition_and_parity_from_js(jlist[c-lo],jlist[c-lo-1],lambda)==false)
+				failedtc=true;
+		}
+
+		if((total==targettotal)&&(failedtc==false))
 			break;
 	}
 
@@ -836,7 +881,7 @@ bool recouple(struct diagram_t *dgr,int lo,int hi)
 
 	for(c=lo;c<hi;c++)
 	{
-		struct vertex_info_t *vtx=get_vertex(dgr,c);
+		struct vertex_t *vtx=get_vertex(dgr,c);
 
 		vtx->right->j=vtx->left->j+deltalist[c-lo];
 	}
@@ -854,9 +899,12 @@ bool recouple(struct diagram_t *dgr,int lo,int hi)
 	*/
 
 	{
-		struct vertex_info_t *vtx=get_vertex(dgr,hi);
+		struct vertex_t *vtx=get_vertex(dgr,hi);
 		assert(vtx->right->j==vtx->left->j+deltalist[hi-lo]);
 	}
+
+	if(jlist)
+		free(jlist);
 
 	if(deltalist)
 		free(deltalist);

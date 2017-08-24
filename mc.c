@@ -130,6 +130,8 @@ int update_length(struct diagram_t *dgr,struct configuration_t *cfg)
 	return UPDATE_ACCEPTED;
 }
 
+#define DO_RECOUPLE
+
 int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 {
 	int lambda,mu;
@@ -137,11 +139,8 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	bool is_accepted;
 
 	struct arc_t *thisline;
-	struct vertex_info_t *v1,*v2;
-
-#ifdef DO_RECOUPLE
+	struct vertex_t *v1,*v2;
 	struct free_propagators_ctx_t fpc;
-#endif
 
 	double omegas[3]={cfg->omega0,cfg->omega1,cfg->omega2};
 
@@ -200,8 +199,9 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 		return UPDATE_UNPHYSICAL;
 	}
 
-#ifdef DO_RECOUPLE
 	save_free_propagators(dgr,&fpc,thisline->startmidpoint,thisline->endmidpoint);
+
+#ifdef DO_RECOUPLE
 	recouple(dgr,thisline->startmidpoint,thisline->endmidpoint);
 #endif
 
@@ -224,6 +224,7 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 #ifdef DO_RECOUPLE
 		restore_free_propagators(dgr,&fpc);
 #endif
+
 		lastline=get_nr_phonons(dgr)-1;
 		diagram_remove_phonon_line(dgr,lastline);
 
@@ -233,7 +234,7 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	}
 
 #ifdef DO_RECOUPLE
-	unload_free_propagators_ctx(&fpc);
+	release_free_propagators_ctx(&fpc);
 #endif
 
 	return UPDATE_ACCEPTED;
@@ -242,10 +243,7 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 {
 	struct arc_t *arc;
-
-#ifdef DO_RECOUPLE
 	struct free_propagators_ctx_t fpc;
-#endif
 
 	int target,lambda,mu,nr_phonons,startmidpoint,endmidpoint;
 	double acceptance_ratio,k,tau1,tau2,oldweight;
@@ -275,25 +273,45 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 		of the subsequent recouple() call!
 	*/
 
-#ifdef DO_RECOUPLE
+	diagram_check_consistency(dgr);
+
 	save_free_propagators(dgr,&fpc,startmidpoint,endmidpoint);
-#endif
 
-	diagram_remove_phonon_line(dgr,target);
+	/*
+		A line removal can fail, since it may leave the remaining
+		lines in a unphysical state.
+	*/
+	
+	diagram_check_consistency(dgr);
+	
+	if(diagram_remove_phonon_line(dgr,target)==false)
+	{	
+		diagram_add_phonon_line(dgr,tau1,tau2,k,lambda,mu);
+		restore_free_propagators(dgr,&fpc);
 
-#warning Not always the removal will succeed! The weight might have gone to zero even here!
-#warning This case is simple to see, because diagram_remove_phonon_line() will return false
-#warning Note that after a failed removed, the free propagators must be restored, as well.
+		/*
+			The update failed, so this means that the incremental
+			weight went to zero, and we need to fix it...
+		*/
+
+		dgr->weight=oldweight;
+	
+		return UPDATE_UNPHYSICAL;
+	}
 
 	/*
 		This is a bit tricky: if we just removed a bubble,
 		then there are no free propagators to recouple.
 	*/
 
+	diagram_check_consistency(dgr);
+
 #ifdef DO_RECOUPLE
 	if((startmidpoint+1)!=endmidpoint)
 		recouple(dgr,startmidpoint,endmidpoint-2);
 #endif
+
+	diagram_check_consistency(dgr);
 
 	acceptance_ratio=diagram_weight(dgr)/oldweight;
 	acceptance_ratio/=3.0f*dgr->endtau;
@@ -304,20 +322,24 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	if(is_accepted==false)
 	{
+		diagram_check_consistency(dgr);
+
 		diagram_add_phonon_line(dgr,tau1,tau2,k,lambda,mu);
 
-#ifdef DO_RECOUPLE
-		restore_free_propagators(dgr,&fpc);
-#endif
+		diagram_check_consistency(dgr);
 
+		/*
+			Nasty, nasty, nasty: diagram_add_phonon_line() doesn't 
+		*/
+
+		restore_free_propagators(dgr,&fpc);
+		
 		assert(fabs(diagram_weight(dgr)-oldweight)<1e-7*oldweight);
 	
 		return UPDATE_REJECTED;
 	}
 
-#ifdef DO_RECOUPLE
-	unload_free_propagators_ctx(&fpc);
-#endif
+	release_free_propagators_ctx(&fpc);
 
 	return UPDATE_ACCEPTED;
 }

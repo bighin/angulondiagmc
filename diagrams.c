@@ -11,32 +11,32 @@
 #include "aux.h"
 #include "debug.h"
 
-int vertex_get_j1(struct vertex_info_t *vif)
+int vertex_get_j1(struct vertex_t *vif)
 {
 	return vif->left->j;
 }
 
-int vertex_get_m1(struct vertex_info_t *vif)
+int vertex_get_m1(struct vertex_t *vif)
 {
 	return vif->left->m;
 }
 
-int vertex_get_j2(struct vertex_info_t *vif)
+int vertex_get_j2(struct vertex_t *vif)
 {
 	return vif->right->j;
 }
 
-int vertex_get_m2(struct vertex_info_t *vif)
+int vertex_get_m2(struct vertex_t *vif)
 {
 	return vif->right->m;
 }
 
-int vertex_get_lambda(struct vertex_info_t *vif)
+int vertex_get_lambda(struct vertex_t *vif)
 {
 	return vif->phononline->lambda;
 }
 
-int vertex_get_mu(struct vertex_info_t *vif)
+int vertex_get_mu(struct vertex_t *vif)
 {
 	return vif->phononline->mu;
 }
@@ -63,7 +63,7 @@ struct diagram_t *init_diagram(struct diagram_cfg_t *cfg)
 	ret->phonons=init_vlist(sizeof(struct arc_t),16*1024);
 	ret->midpoints=init_vlist(sizeof(double),16*1024);
 	ret->free_propagators=init_vlist(sizeof(struct g0_t),1+32*1024);
-	ret->vertices=init_vlist(sizeof(struct vertex_info_t),32*1024);
+	ret->vertices=init_vlist(sizeof(struct vertex_t),32*1024);
 
 	/*
 		We add the initial, lone propagator.
@@ -137,7 +137,7 @@ struct g0_t *get_free_propagator(struct diagram_t *dgr,int c)
 	return vlist_get_element(dgr->free_propagators,c);
 }
 
-struct vertex_info_t *get_vertex(struct diagram_t *dgr,int c)
+struct vertex_t *get_vertex(struct diagram_t *dgr,int c)
 {
 	return vlist_get_element(dgr->vertices,c);
 }
@@ -239,7 +239,7 @@ void diagram_check_consistency(struct diagram_t *dgr)
 
 	for(c=0;c<get_nr_vertices(dgr);c++)
 	{
-		struct vertex_info_t *thisvertex=get_vertex(dgr,c);
+		struct vertex_t *thisvertex=get_vertex(dgr,c);
 		int d=0;
 		
 		assert(thisvertex->left->endmidpoint==thisvertex->right->startmidpoint);
@@ -273,7 +273,7 @@ void diagram_check_consistency(struct diagram_t *dgr)
 		int j1,m1,j2,m2,j3,m3;
 		double coupling,epsilon;
 
-		struct vertex_info_t *thisvertex=get_vertex(dgr,c);
+		struct vertex_t *thisvertex=get_vertex(dgr,c);
 
 		j1=thisvertex->left->j;
 		m1=thisvertex->left->m;
@@ -420,7 +420,7 @@ double diagram_weight_non_incremental(struct diagram_t *dgr)
 		int j1,j2,j3;
 		double coupling;
 
-		struct vertex_info_t *thisvertex=get_vertex(dgr,c);
+		struct vertex_t *thisvertex=get_vertex(dgr,c);
 
 		j1=thisvertex->left->j;
 		j2=thisvertex->right->j;
@@ -546,7 +546,7 @@ int print_diagram(struct diagram_t *dgr,int flags)
 	return plines;
 }
 
-bool check_triangle_condition_and_parity(struct diagram_t *dgr,struct vertex_info_t *thisvertex)
+bool check_triangle_condition_and_parity(struct diagram_t *dgr,struct vertex_t *thisvertex)
 {
 	int j1,j2,j3;
 	bool result;
@@ -571,6 +571,25 @@ bool check_triangle_condition_and_parity(struct diagram_t *dgr,struct vertex_inf
 		however we must check them because of the 3j symbols with all the
 		magnetic quantum numbers to zero, that appear at every vertex.
 	*/
+
+	if(!ISEVEN(j1+j2+j3))
+		result=false;
+
+	return result;
+}
+
+bool check_triangle_condition_and_parity_from_js(int j1,int j2,int j3)
+{
+	bool result=true;
+
+	if(j1+j2<j3)
+		result=false;
+
+	if(j2+j3<j1)
+		result=false;
+
+	if(j3+j1<j2)
+		result=false;
 
 	if(!ISEVEN(j1+j2+j3))
 		result=false;

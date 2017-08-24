@@ -28,7 +28,7 @@ struct free_propagators_ctx_t
 };
 
 void save_free_propagators(struct diagram_t *dgr,struct free_propagators_ctx_t *fpc,int lo,int hi);
-void unload_free_propagators_ctx(struct free_propagators_ctx_t *fpc);
+void release_free_propagators_ctx(struct free_propagators_ctx_t *fpc);
 void restore_free_propagators(struct diagram_t *dgr,struct free_propagators_ctx_t *fpc);
 
 #endif //__UPDATES_H__

@@ -31,7 +31,7 @@ void debug_vertices(struct diagram_t *dgr)
 
 	for(c=0;c<get_nr_vertices(dgr);c++)
 	{
-		struct vertex_info_t *thisvertex=get_vertex(dgr,c);
+		struct vertex_t *thisvertex=get_vertex(dgr,c);
 		
 		if(thisvertex)
 			printf("%d %d [%d %d]\n",thisvertex->left->endmidpoint,thisvertex->right->startmidpoint,thisvertex->phononline->startmidpoint,thisvertex->phononline->endmidpoint);
@@ -48,7 +48,7 @@ void debug_vertices_ext(struct diagram_t *dgr)
 
 	for(c=0;c<get_nr_vertices(dgr);c++)
 	{
-		struct vertex_info_t *thisvertex=get_vertex(dgr,c);
+		struct vertex_t *thisvertex=get_vertex(dgr,c);
 
 		if(!thisvertex)
 		{
@@ -129,7 +129,7 @@ void debug_weight_old(struct diagram_t *dgr)
 		int j1,m1,j2,m2,j3,m3;
 		double coupling;
 
-		struct vertex_info_t *thisvertex=get_vertex(dgr,c);
+		struct vertex_t *thisvertex=get_vertex(dgr,c);
 
 		j1=thisvertex->left->j;
 		m1=thisvertex->left->m;
@@ -230,7 +230,7 @@ void debug_weight(struct diagram_t *dgr)
 		int j1,m1,j2,m2,j3,m3;
 		double coupling;
 
-		struct vertex_info_t *thisvertex=get_vertex(dgr,c);
+		struct vertex_t *thisvertex=get_vertex(dgr,c);
 
 		j1=thisvertex->left->j;
 		m1=thisvertex->left->m;
@@ -290,7 +290,7 @@ bool try_to_remove_phonon_line(struct diagram_t *dgr,int target)
 		return false;
 	}
 
-	unload_free_propagators_ctx(&fpc);
+	release_free_propagators_ctx(&fpc);
 
 	diagram_check_consistency(dgr);
 	
@@ -375,7 +375,7 @@ int stresstest(void)
 
 			{
 				struct arc_t *thisline=get_phonon_line(dgr,get_nr_phonons(dgr)-1);
-				struct vertex_info_t *v1,*v2;
+				struct vertex_t *v1,*v2;
 			
 				v1=get_vertex(dgr,thisline->startmidpoint);
 				v2=get_vertex(dgr,thisline->endmidpoint);
@@ -403,7 +403,7 @@ int stresstest(void)
 			{
 				int index,oldj,newj;
 				struct g0_t *target;
-				struct vertex_info_t *v1,*v2;
+				struct vertex_t *v1,*v2;
 
 				index=1+gsl_rng_uniform_int(rctx,get_nr_free_propagators(dgr)-2);
 				target=get_free_propagator(dgr,index);
