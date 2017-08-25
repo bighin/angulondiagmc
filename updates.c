@@ -389,7 +389,7 @@ void diagram_remove_end_midpoint(struct diagram_t *dgr,int c)
 	c--;
 
 	/*
-		...but then we have to check everywhere for negative zero!
+		...but then we have to check everywhere for negative values of c!
 	*/
 
 	if(c>=0)
@@ -450,6 +450,7 @@ bool diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 
 	dgr->weight/=calculate_arc_weight(dgr,arc);
 
+#if 0
 	dgr->weight/=calculate_free_propagator_weight(dgr,get_left_neighbour(dgr,startmidpoint));
 	dgr->weight/=calculate_free_propagator_weight(dgr,get_right_neighbour(dgr,startmidpoint));
 
@@ -461,6 +462,10 @@ bool diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 		dgr->weight/=calculate_free_propagator_weight(dgr,get_left_neighbour(dgr,endmidpoint));
 	
 	dgr->weight/=calculate_free_propagator_weight(dgr,get_right_neighbour(dgr,endmidpoint));
+#else
+	for(c=0;c<get_nr_free_propagators(dgr);c++)
+		dgr->weight/=calculate_free_propagator_weight(dgr,get_free_propagator(dgr,c));
+#endif
 
 	/*
 		Even trickier: given that a propagator inside the removed arc will be modified,
@@ -471,6 +476,7 @@ bool diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 	middle1=startmidpoint+1;
 	middle2=endmidpoint-1;
 
+#if 0
 	if(middle1<=middle2)
 	{
 		dgr->weight/=calculate_vertex_weight(dgr,middle1);
@@ -478,6 +484,68 @@ bool diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 		if(middle1!=middle2)
 			dgr->weight/=calculate_vertex_weight(dgr,middle2);
 	}
+#else
+	{
+		static int counter=0;
+		
+		printf("[[[%d]]]\n",counter++);
+	}
+	
+	{
+		printf("Info: [%d %d]\n",startmidpoint,endmidpoint);
+		
+		print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
+		
+		printf("Usual method: [-] ");
+
+		if(middle1<=middle2)
+		{
+			printf("%d ",middle1);
+		
+			if(middle1!=middle2)
+				printf("(%d) ",middle2);
+		}
+	
+		printf("\n");
+	}
+
+	{
+		printf("New method: [-] ");
+
+		for(c=startmidpoint;c<endmidpoint;c++)
+		{
+			if((c==startmidpoint)||(c==endmidpoint))
+				continue;
+
+			printf("(%d : %f) ",c,calculate_vertex_weight(dgr,c));
+		}
+	
+		printf("\n");
+	}
+
+	{
+		printf("New method alternative: [-] ");
+
+		for(c=0;c<get_nr_vertices(dgr);c++)
+		{
+			if((c==startmidpoint)||(c==endmidpoint))
+				continue;
+
+			printf("(%d : %f) ",c,calculate_vertex_weight(dgr,c));
+		}
+	
+		printf("\n");
+	}
+
+	//for(c=0;c<get_nr_vertices(dgr);c++)
+	for(c=startmidpoint;c<endmidpoint;c++)
+	{
+		if((c==startmidpoint)||(c==endmidpoint))
+			continue;
+
+		dgr->weight/=calculate_vertex_weight(dgr,c);
+	}
+#endif
 
 	/*
 		These values are saved for debug purposes only
@@ -580,6 +648,7 @@ bool diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 		Finally we fix the diagram weight, since we still have to add back the new free propagators.
 	*/
 
+#if 0
 	dgr->weight*=calculate_free_propagator_weight(dgr,get_free_propagator(dgr,startmidpoint));
 
 	/*
@@ -589,10 +658,14 @@ bool diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 
 	if(get_free_propagator(dgr,startmidpoint)!=get_free_propagator(dgr,endmidpoint))
 		dgr->weight*=calculate_free_propagator_weight(dgr,get_free_propagator(dgr,endmidpoint));
+#else
+	for(c=0;c<get_nr_free_propagators(dgr);c++)
+		dgr->weight*=calculate_free_propagator_weight(dgr,get_free_propagator(dgr,c));
+#endif
 
 	assert(tau1==get_free_propagator(dgr,startmidpoint)->starttau);
 	assert(tau4==get_free_propagator(dgr,endmidpoint)->endtau);
-
+#if 0
 	if(middle1<=middle2)
 	{
 		dgr->weight*=calculate_vertex_weight(dgr,middle1);
@@ -620,6 +693,79 @@ bool diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 			}
 		}
 	}
+#else
+	//for(c=0;c<get_nr_vertices(dgr);c++)
+	for(c=startmidpoint;c<endmidpoint;c++)
+		dgr->weight*=calculate_vertex_weight(dgr,c);
+
+	if(middle1<=middle2)
+	{
+		if(check_triangle_condition_and_parity(dgr,get_vertex(dgr,middle1))==false)
+		{
+			assert(fabs(calculate_vertex_weight(dgr,middle1))<10e-7);
+			result=false;
+		}
+
+		assert(tau2==get_free_propagator(dgr,startmidpoint)->endtau);
+		assert(tau3==get_free_propagator(dgr,endmidpoint)->starttau);
+
+		if(middle1==middle2)
+			assert(tau2==tau3);
+
+		if(middle1!=middle2)
+		{
+			if(check_triangle_condition_and_parity(dgr,get_vertex(dgr,middle2))==false)
+			{
+				assert(fabs(calculate_vertex_weight(dgr,middle2))<10e-7);
+				result=false;
+			}
+		}
+	}
+
+	{
+		printf("Second part info follows:\n");
+		
+		print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
+
+		printf("Usual method: [+] ");
+
+		if(middle1<=middle2)
+		{
+			printf("%d ",middle1);
+		
+			if(middle1!=middle2)
+				printf("(%d) ",middle2);
+		}
+	
+		printf("\n");
+	}
+
+	{
+		printf("New method: [+] ");
+
+		for(c=startmidpoint;c<endmidpoint;c++)
+		{
+			if((c==startmidpoint)||(c==endmidpoint))
+				continue;
+
+			printf("(%d : %f) ",c,calculate_vertex_weight(dgr,c));
+		}
+	
+		printf("\n");
+	}
+
+	{
+		printf("New method alternative: [+] ");
+
+		for(c=0;c<get_nr_vertices(dgr);c++)
+		{
+			printf("(%d : %f) ",c,calculate_vertex_weight(dgr,c));
+		}
+	
+		printf("\n");
+	}
+#endif
+
 	
 	return result;
 }

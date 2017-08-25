@@ -100,7 +100,7 @@ int update_length(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	/*
 		We calculate newendtau between lasttau and maxtau
-		using an exponential distribution with rate rate.
+		using an exponential distribution with rate 'rate'.
 	*/
 
 	oldendtau=dgr->endtau;
@@ -290,7 +290,7 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 		restore_free_propagators(dgr,&fpc);
 
 		/*
-			The update failed, so this means that the incremental
+			The phonon line removal failed, so this means that the incremental
 			weight went to zero, and we need to fix it...
 		*/
 
@@ -327,10 +327,6 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 		diagram_add_phonon_line(dgr,tau1,tau2,k,lambda,mu);
 
 		diagram_check_consistency(dgr);
-
-		/*
-			Nasty, nasty, nasty: diagram_add_phonon_line() doesn't 
-		*/
 
 		restore_free_propagators(dgr,&fpc);
 		
