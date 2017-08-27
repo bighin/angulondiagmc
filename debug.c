@@ -330,6 +330,9 @@ int stresstest(void)
 
 	dgr=init_diagram(&cfg);
 
+	dgr->rng_ctx=gsl_rng_alloc(gsl_rng_mt19937);
+	assert(dgr->rng_ctx!=NULL);
+
 	parx=48;
 	pary=90;
 	parw=12;
@@ -470,7 +473,12 @@ int stresstest(void)
 
 		diagram_check_consistency(dgr);
 	}
-	
+
+	if(dgr->rng_ctx)
+		gsl_rng_free(dgr->rng_ctx);
+
+	fini_diagram(dgr);
+
 	printf("\nINFO: stress test passed!\n");
 	
 	return 0;

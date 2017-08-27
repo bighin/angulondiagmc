@@ -1,9 +1,9 @@
 TARGET = diagmc
 LIBS = 
-#CC = gcc-mp-6
-CC = clang-mp-4.0
+CC = gcc-mp-6
+#CC = clang-mp-4.0
 #CFLAGS = -DNDEBUG -O2 -Wall -fopenmp -std=c11 -I/opt/local/include/
-CFLAGS = -Wall -pedantic -O0 -g -I/opt/local/include/
+CFLAGS = -Wall -pedantic -O2 -g -pg -DNDEBUG -I/opt/local/include/
 LDFLAGS = -lncurses -lgsl -L/opt/local/lib/
 
 .PHONY: clean all default

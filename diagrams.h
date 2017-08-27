@@ -49,8 +49,6 @@ struct vertex_t
 {
 	struct g0_t *left,*right;
 	struct arc_t *phononline;
-	
-	int refs;
 };
 
 int vertex_get_j1(struct vertex_t *vif);
@@ -143,6 +141,9 @@ void diagram_check_consistency_of_times(struct diagram_t *dgr,double tau,int c);
 void diagram_check_consistency(struct diagram_t *dgr);
 double diagram_weight(struct diagram_t *dgr);
 double diagram_weight_non_incremental(struct diagram_t *dgr);
+
+void diagram_copy(struct diagram_t *src,struct diagram_t *dst);
+struct diagram_t *diagram_clone(struct diagram_t *src);
 
 #define PRINT_TOPOLOGY		(0x1)
 #define PRINT_PROPAGATORS	(0x2)

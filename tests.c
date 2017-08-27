@@ -78,6 +78,9 @@ int test_one_diagram(int index,int j1,int j2,int j3,int j4,int flags)
 	mode=PRINT_TOPOLOGY;//|PRINT_PROPAGATORS;
 	dgr=init_diagram(&dcfg);
 
+	dgr->rng_ctx=gsl_rng_alloc(gsl_rng_mt19937);
+	assert(dgr->rng_ctx!=NULL);
+
 	switch(index)
 	{
 		/*
@@ -237,6 +240,11 @@ int test_one_diagram(int index,int j1,int j2,int j3,int j4,int flags)
 		assert(relative_distance(w2,w3)<10e-6);
 		assert(sign(w2)==sign(w3));
 	}
+
+	if(dgr->rng_ctx)
+		gsl_rng_free(dgr->rng_ctx);
+
+	fini_diagram(dgr);
 
 	return 0;
 }

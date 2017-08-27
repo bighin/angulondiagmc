@@ -158,64 +158,31 @@ int vlist_get_nr_elements(struct vlist_t *lst)
 	return lst->nelements;
 }
 
-/*
-	A simpler list, with the possibility of requiring a random element.
-*/
-
-struct randomized_list_t *init_rlist(void)
+struct vlist_t *vlist_clone(struct vlist_t *lst)
 {
-	struct randomized_list_t *ret;
-	
-	if(!(ret=malloc(sizeof(struct randomized_list_t))))
-		return NULL;
-	
-	ret->nitems=0;
-	ret->nalloced=ret->blocksize=16*1024;
+	struct vlist_t *ret;
 
-	ret->items=malloc(sizeof(int)*ret->nalloced);
-	
+	assert(vlist_get_nr_elements(lst)<lst->nalloced);
+
+	if(!(ret=init_vlist(lst->elementsize,lst->nalloced)))
+		return NULL;
+
+	memcpy(ret->mem,lst->mem,lst->elementsize*vlist_get_nr_elements(lst));
+
+	ret->nelements=vlist_get_nr_elements(lst);
+
 	return ret;
 }
 
-void fini_rlist(struct randomized_list_t *lst)
+void vlist_copy(struct vlist_t *src,struct vlist_t *dst)
 {
-	if(lst)
-		free(lst);
-}
+	assert((src!=NULL)&&(dst!=NULL));
+	assert(src->elementsize==dst->elementsize);
+	assert(src->nalloced==dst->nalloced);
 
-void rlist_add_item(struct randomized_list_t *lst,int item)
-{
-	if(lst->nitems==lst->nalloced)
-	{
-		lst->nalloced+=lst->blocksize;
-		lst->items=realloc(lst->items,sizeof(int)*lst->nalloced);
-	}
+	memcpy(dst->mem,src->mem,src->elementsize*vlist_get_nr_elements(src));
 
-	lst->items[lst->nitems]=item;
-	lst->nitems++;
-}
-
-int rlist_get_random_item(struct randomized_list_t *lst,gsl_rng *rng_ctx)
-{
-	assert(lst->nitems>0);
-	
-	return lst->items[gsl_rng_uniform_int(rng_ctx,lst->nitems)];
-}
-
-int rlist_get_elements(struct randomized_list_t *lst)
-{
-	return lst->nitems;
-}
-
-void rlist_remove_element(struct randomized_list_t *lst,int position)
-{
-	void *base,*target;
-
-	base=lst->items+sizeof(int)*position;
-	target=lst->items+sizeof(int)*(position+1);
-
-	memmove(base,target,sizeof(int)*(lst->nitems-position));
-	lst->nitems--;
+	dst->nelements=src->nelements;
 }
 
 void seed_rng(gsl_rng *rng)

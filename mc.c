@@ -130,17 +130,15 @@ int update_length(struct diagram_t *dgr,struct configuration_t *cfg)
 	return UPDATE_ACCEPTED;
 }
 
-#define DO_RECOUPLE
-
 int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 {
 	int lambda,mu;
-	double k,tau1,tau2,acceptance_ratio,oldweight;
+	double k,tau1,tau2,acceptance_ratio;
 	bool is_accepted;
 
 	struct arc_t *thisline;
 	struct vertex_t *v1,*v2;
-	struct free_propagators_ctx_t fpc;
+	struct diagram_t *old;
 
 	double omegas[3]={cfg->omega0,cfg->omega1,cfg->omega2};
 
@@ -150,8 +148,6 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	if(get_nr_phonons(dgr)>=cfg->maxorder)
 		return UPDATE_UNPHYSICAL;
-
-	oldweight=diagram_weight(dgr);
 
 	/*
 		The new lambda is chosen using a uniform distribution
@@ -170,9 +166,10 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	tau2=doubly_truncated_exp_dist(dgr->rng_ctx,omegas[lambda],tau1,dgr->endtau);
 
 	/*
-		The line is added...
+		We save the current diagram and the line is added...
 	*/
 
+	old=diagram_clone(dgr);
 	diagram_add_phonon_line(dgr,tau1,tau2,k,lambda,mu);
 
 	/*
@@ -185,27 +182,15 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	if((check_triangle_condition_and_parity(dgr,v1)==false)||(check_triangle_condition_and_parity(dgr,v2)==false))
 	{
-		int lastline=get_nr_phonons(dgr)-1;
-		
-		diagram_remove_phonon_line(dgr,lastline);
-
-		/*
-			The weight went to zero due to bad couplings, so we cannot trust
-			the incremental update...
-		*/
-
-		dgr->weight=oldweight;
+		diagram_copy(old,dgr);
+		fini_diagram(old);
 
 		return UPDATE_UNPHYSICAL;
 	}
 
-	save_free_propagators(dgr,&fpc,thisline->startmidpoint,thisline->endmidpoint);
-
-#ifdef DO_RECOUPLE
 	recouple(dgr,thisline->startmidpoint,thisline->endmidpoint);
-#endif
 
-	acceptance_ratio=diagram_weight(dgr)/oldweight;	
+	acceptance_ratio=diagram_weight(dgr)/diagram_weight(old);
 	acceptance_ratio*=3.0f*dgr->endtau;
 	acceptance_ratio/=get_nr_phonons(dgr)+1;
 	acceptance_ratio/=doubly_truncated_exp_pdf(dgr->rng_ctx,omegas[lambda],tau1,dgr->endtau,tau2);
@@ -214,28 +199,13 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	if(is_accepted==false)
 	{
-		int lastline;
-
-		/*
-			Restoring the free propagators effectively
-			undoes the recouple() call.
-		*/
-
-#ifdef DO_RECOUPLE
-		restore_free_propagators(dgr,&fpc);
-#endif
-
-		lastline=get_nr_phonons(dgr)-1;
-		diagram_remove_phonon_line(dgr,lastline);
-
-		assert(fabs(diagram_weight(dgr)-oldweight)<1e-7*oldweight);
+		diagram_copy(old,dgr);
+		fini_diagram(old);
 
 		return UPDATE_REJECTED;
 	}
 
-#ifdef DO_RECOUPLE
-	release_free_propagators_ctx(&fpc);
-#endif
+	fini_diagram(old);
 
 	return UPDATE_ACCEPTED;
 }
@@ -243,15 +213,14 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 {
 	struct arc_t *arc;
-	struct free_propagators_ctx_t fpc;
-
+	struct diagram_t *old;
+	
 	int target,lambda,mu,nr_phonons,startmidpoint,endmidpoint;
-	double acceptance_ratio,k,tau1,tau2,oldweight;
+	double acceptance_ratio,k,tau1,tau2;
 	bool is_accepted;
 
 	double omegas[3]={cfg->omega0,cfg->omega1,cfg->omega2};
 
-	oldweight=diagram_weight(dgr);
 	nr_phonons=get_nr_phonons(dgr);
 
 	if(nr_phonons<=0)
@@ -268,33 +237,17 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	startmidpoint=arc->startmidpoint;
 	endmidpoint=arc->endmidpoint;
 
-	/*
-		Note the order of the following two function calls and
-		of the subsequent recouple() call!
-	*/
-
-	diagram_check_consistency(dgr);
-
-	save_free_propagators(dgr,&fpc,startmidpoint,endmidpoint);
+	old=diagram_clone(dgr);
 
 	/*
 		A line removal can fail, since it may leave the remaining
 		lines in a unphysical state.
 	*/
 	
-	diagram_check_consistency(dgr);
-	
 	if(diagram_remove_phonon_line(dgr,target)==false)
 	{	
-		diagram_add_phonon_line(dgr,tau1,tau2,k,lambda,mu);
-		restore_free_propagators(dgr,&fpc);
-
-		/*
-			The phonon line removal failed, so this means that the incremental
-			weight went to zero, and we need to fix it...
-		*/
-
-		dgr->weight=oldweight;
+		diagram_copy(old,dgr);
+		fini_diagram(old);
 	
 		return UPDATE_UNPHYSICAL;
 	}
@@ -304,16 +257,16 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 		then there are no free propagators to recouple.
 	*/
 
-	diagram_check_consistency(dgr);
-
-#ifdef DO_RECOUPLE
 	if((startmidpoint+1)!=endmidpoint)
 		recouple(dgr,startmidpoint,endmidpoint-2);
-#endif
 
-	diagram_check_consistency(dgr);
+#warning FIXME
+	
+	/*
+		...however the bubble may be 'asymmetric'...
+	*/
 
-	acceptance_ratio=diagram_weight(dgr)/oldweight;
+	acceptance_ratio=diagram_weight(dgr)/diagram_weight(old);
 	acceptance_ratio/=3.0f*dgr->endtau;
 	acceptance_ratio*=nr_phonons;
 	acceptance_ratio*=doubly_truncated_exp_pdf(dgr->rng_ctx,omegas[lambda],tau1,dgr->endtau,tau2);
@@ -322,20 +275,13 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	if(is_accepted==false)
 	{
-		diagram_check_consistency(dgr);
+		diagram_copy(old,dgr);
+		fini_diagram(old);
 
-		diagram_add_phonon_line(dgr,tau1,tau2,k,lambda,mu);
-
-		diagram_check_consistency(dgr);
-
-		restore_free_propagators(dgr,&fpc);
-		
-		assert(fabs(diagram_weight(dgr)-oldweight)<1e-7*oldweight);
-	
 		return UPDATE_REJECTED;
 	}
 
-	release_free_propagators_ctx(&fpc);
+	fini_diagram(old);
 
 	return UPDATE_ACCEPTED;
 }
@@ -576,6 +522,9 @@ int do_diagmc(char *configfile)
 	dgr=init_diagram(&dcfg);
 	ht=init_histogram(config.bins,config.width);
 
+	dgr->rng_ctx=gsl_rng_alloc(gsl_rng_mt19937);
+	assert(dgr->rng_ctx!=NULL);
+
 	if(config.seedrng)
 		seed_rng(dgr->rng_ctx);
 
@@ -642,7 +591,12 @@ int do_diagmc(char *configfile)
 		assert(fabs(diagram_weight(dgr)-diagram_weight_non_incremental(dgr))<10e-7*diagram_weight(dgr));
 		diagram_check_consistency(dgr);
 
-		histogram_add_sample(ht,diagram_weight(dgr)*diagram_m_weight(dgr),dgr->endtau);
+		/*
+			Note that by using diagram_m_weight() we are effectively summing over
+			all values of m, so that we have to divide the weight by (2j + 1).
+		*/
+
+		histogram_add_sample(ht,diagram_weight(dgr)*diagram_m_weight(dgr)/(2.0f*dcfg.j+1.0f),dgr->endtau);
 
 		if((config.progressbar)&&((c%16384)==0))
 			progressbar_inc(progress);
@@ -713,6 +667,9 @@ int do_diagmc(char *configfile)
 
 	if(out)
 		fclose(out);
+
+	if(dgr->rng_ctx)
+		gsl_rng_free(dgr->rng_ctx);
 
 	fini_histogram(ht);
 	fini_diagram(dgr);

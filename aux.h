@@ -27,20 +27,8 @@ void *vlist_add_empty(struct vlist_t *lst,int position);
 void *vlist_append(struct vlist_t *lst,void *element);
 void *vlist_append_empty(struct vlist_t *lst);
 int vlist_get_nr_elements(struct vlist_t *lst);
-
-struct randomized_list_t
-{
-	int *items;
-	int nitems,nalloced,blocksize;
-};
-
-struct randomized_list_t *init_rlist(void);
-void fini_rlist(struct randomized_list_t *lst);
-
-void rlist_add_item(struct randomized_list_t *lst,int item);
-int rlist_get_random_item(struct randomized_list_t *lst,gsl_rng *rng_ctx);
-int rlist_get_elements(struct randomized_list_t *lst);
-void rlist_remove_element(struct randomized_list_t *lst,int position);
+struct vlist_t *vlist_clone(struct vlist_t *lst);
+void vlist_copy(struct vlist_t *src,struct vlist_t *dst);
 
 void seed_rng(gsl_rng *rng);
 

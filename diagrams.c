@@ -87,13 +87,6 @@ struct diagram_t *init_diagram(struct diagram_cfg_t *cfg)
 
 	ret->weight=diagram_weight_non_incremental(ret);
 
-	/*
-		And finally we initialize the RNG associated with this diagram
-	*/
-
-	ret->rng_ctx=gsl_rng_alloc(gsl_rng_mt19937);
-	assert(ret->rng_ctx!=NULL);
-
 	return ret;
 }
 
@@ -105,8 +98,6 @@ void fini_diagram(struct diagram_t *dgr)
 		fini_vlist(dgr->midpoints);
 		fini_vlist(dgr->free_propagators);
 		fini_vlist(dgr->vertices);
-		
-		gsl_rng_free(dgr->rng_ctx);
 		
 		free(dgr);
 	}
@@ -544,6 +535,69 @@ int print_diagram(struct diagram_t *dgr,int flags)
 		free(pattern);
 
 	return plines;
+}
+
+void diagram_copy(struct diagram_t *src,struct diagram_t *dst)
+{
+	int c;
+
+	dst->mintau=src->mintau;
+	dst->endtau=src->endtau;
+	dst->chempot=src->chempot;
+
+	dst->c0=src->c0;
+	dst->c1=src->c1;
+	dst->c2=src->c2;
+	dst->omega0=src->omega0;
+	dst->omega1=src->omega1;
+	dst->omega2=src->omega2;
+	
+	dst->weight=src->weight;
+	dst->rng_ctx=src->rng_ctx;
+
+	vlist_copy(src->phonons,dst->phonons);
+	vlist_copy(src->midpoints,dst->midpoints);
+	vlist_copy(src->free_propagators,dst->free_propagators);
+	vlist_copy(src->vertices,dst->vertices);
+	
+	for(c=0;c<get_nr_vertices(dst);c++)
+	{
+		struct vertex_t *thisvertex=get_vertex(dst,c);
+	
+		thisvertex->left=get_left_neighbour(dst,c);
+		thisvertex->right=get_right_neighbour(dst,c);
+	}
+
+	for(c=0;c<get_nr_phonons(dst);c++)
+	{
+		struct arc_t *arc=get_phonon_line(dst,c);
+	
+		get_vertex(dst,arc->startmidpoint)->phononline=arc;
+		get_vertex(dst,arc->endmidpoint)->phononline=arc;
+	}
+}
+
+struct diagram_t *diagram_clone(struct diagram_t *src)
+{
+	struct diagram_t *ret;
+
+	if(!(ret=malloc(sizeof(struct diagram_t))))
+		return NULL;
+	
+	ret->phonons=init_vlist(sizeof(struct arc_t),16*1024);
+	ret->midpoints=init_vlist(sizeof(double),16*1024);
+	ret->free_propagators=init_vlist(sizeof(struct g0_t),1+32*1024);
+	ret->vertices=init_vlist(sizeof(struct vertex_t),32*1024);
+	
+	diagram_copy(src,ret);
+
+	assert(get_nr_free_propagators(src)==get_nr_free_propagators(ret));
+	assert(get_nr_phonons(src)==get_nr_phonons(ret));
+	assert(get_nr_vertices(src)==get_nr_vertices(ret));
+
+	diagram_check_consistency(ret);
+
+	return ret;
 }
 
 bool check_triangle_condition_and_parity(struct diagram_t *dgr,struct vertex_t *thisvertex)
