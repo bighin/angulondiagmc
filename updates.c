@@ -425,9 +425,12 @@ void diagram_remove_end_midpoint(struct diagram_t *dgr,int c)
 bool diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 {
 	int c,startmidpoint,endmidpoint,middle1,middle2;
-	double tau1,tau2,tau3,tau4;
 	struct arc_t *arc;
 	bool result=true,asymmetric_bubble_flag=false;
+
+#ifndef NDEBUG
+	double tau1,tau2,tau3,tau4;
+#endif
 
 	assert(position<get_nr_phonons(dgr));
 
@@ -512,10 +515,12 @@ bool diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 		These values are saved for debug purposes only
 	*/
 
+#ifndef NDEBUG
 	tau1=get_left_neighbour(dgr,startmidpoint)->starttau;
 	tau2=get_right_neighbour(dgr,startmidpoint)->endtau;
 	tau3=get_left_neighbour(dgr,endmidpoint)->starttau;
 	tau4=get_right_neighbour(dgr,endmidpoint)->endtau;
+#endif
 
 	/*
 		Now the hardcore part starts: we update all the field in a diagram_t struct.
@@ -819,6 +824,17 @@ bool recouple(struct diagram_t *dgr,int lo,int hi)
 		bool failedtc;
 		
 		/*
+			This is just to silence CLang's static analyzer. Actually deltalist[0]
+			is correctly inizitialed in the subsequent 'for' loop.
+		
+			Probably... I should check this better!
+		*/
+
+#warning CHECKME!
+
+		deltalist[0]=0;
+
+		/*
 			At each vertex one can define a delta value, defined as the difference
 			in angular momenta between the left propagator and the right propagator.
 
@@ -863,7 +879,9 @@ bool recouple(struct diagram_t *dgr,int lo,int hi)
 		}
 
 		for(c=lo;c<=hi;c++)
+		{
 			total+=deltalist[c-lo];
+		}
 
 		/*
 			jlist[i] referes to the propagator *after* the i-th vertex
@@ -930,10 +948,12 @@ bool recouple(struct diagram_t *dgr,int lo,int hi)
 		As a final check, we verify the consistency of the last coupling.
 	*/
 
+#ifndef NDEBUG
 	{
 		struct vertex_t *vtx=get_vertex(dgr,hi);
 		assert(vtx->right->j==vtx->left->j+deltalist[hi-lo]);
 	}
+#endif
 
 	if(jlist)
 		free(jlist);

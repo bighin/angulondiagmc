@@ -28,22 +28,29 @@ void usage(char *argv0)
 
 int main(int argc,char *argv[])
 {
+	int c;
+
 	init_njsummat();
 
-	if(argc!=2)
+	if(argc<2)
 		usage(argv[0]);
 
-	if(strcmp(argv[1],"--testgraphs")==0)
+	for(c=1;c<argc;c++)
 	{
-		return test_graphical_machinery();
+		if(strcmp(argv[c],"--testgraphs")==0)
+		{
+			test_graphical_machinery();
+			continue;
+		}
+
+		if(strcmp(argv[c],"--stresstest")==0)
+		{
+			stresstest();
+			continue;
+		}
+
+		do_diagmc(argv[c]);
 	}
 
-	if(strcmp(argv[1],"--stresstest")==0)
-	{
-		return stresstest();
-	}
-
-	do_diagmc(argv[1]);
-	
 	return 0;
 }

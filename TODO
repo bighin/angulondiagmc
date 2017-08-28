@@ -1,7 +1,7 @@
-Re-run cppcheck
-
-Remove all the pointers in diagram_t so that the object is easily copyable!
+Re-run cppcheck, use Coverity Scan
 
 This chemical potential obviously needs to be chosen below E0(k), otherwise mostly large Ï diagrams will be generated, and the statistics at small Ï will be poor, leading to an inaccurate normalization.
 
 Check when is appropriate to replace gsl_rng_uniform() with gsl_rng_uniform_pos()
+
+There is a memory leak in njsummat/njformul.c. This is not serious, but in a typical run a ~25MB per minute are leaked.

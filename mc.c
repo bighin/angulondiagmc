@@ -6,6 +6,7 @@
 #include <assert.h>
 #include <gsl/gsl_rng.h>
 #include <unistd.h>
+#include <omp.h>
 
 #include "diagrams.h"
 #include "updates.h"
@@ -13,6 +14,7 @@
 #include "aux.h"
 #include "graphs.h"
 #include "debug.h"
+#include "mc.h"
 
 #include "inih/ini.h"
 #include "libprogressbar/progressbar.h"
@@ -44,40 +46,6 @@ void init_terminal_data(void)
 		fprintf(stderr, "Terminal type `%s' is not defined.\n",termtype);
 }
 
-struct configuration_t
-{
-	/* "general" section */
-
-	char *prefix;
-	bool seedrng;
-	bool progressbar;
-	bool animate;
-
-	/* "parameters" section */
-
-	int j;
-	int m;
-	double endtau;
-	double chempot;
-	double maxtau;
-	int maxorder;
-
-	/* "potential" section */
-	
-	double c0;
-	double c1;
-	double c2;
-	double omega0;
-	double omega1;
-	double omega2;
-
-	/* "sampling" section */
-
-	int iterations;
-	int bins;
-	double width;
-};
-
 #define UPDATE_UNPHYSICAL	(0)
 #define UPDATE_REJECTED		(1)
 #define UPDATE_ACCEPTED		(2)
@@ -86,11 +54,13 @@ struct configuration_t
 int update_length(struct diagram_t *dgr,struct configuration_t *cfg)
 {
 	int nr_midpoints,nr_free_propagators;
-	double lasttau,oldendtau,newendtau,rate,oldweight;
+	double lasttau,oldendtau,newendtau,rate;
 	struct g0_t *lastg0;
 	bool is_accepted;
 
-	oldweight=diagram_weight(dgr);
+#ifndef NDEBUG
+	double oldweight=diagram_weight(dgr);
+#endif
 
 	nr_midpoints=get_nr_midpoints(dgr);
 	nr_free_propagators=get_nr_free_propagators(dgr);
@@ -215,8 +185,8 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	struct arc_t *arc;
 	struct diagram_t *old;
 	
-	int target,lambda,mu,nr_phonons,startmidpoint,endmidpoint;
-	double acceptance_ratio,k,tau1,tau2;
+	int target,lambda,nr_phonons,startmidpoint,endmidpoint;
+	double acceptance_ratio,tau1,tau2;
 	bool is_accepted;
 
 	double omegas[3]={cfg->omega0,cfg->omega1,cfg->omega2};
@@ -231,9 +201,7 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	tau1=arc->starttau;
 	tau2=arc->endtau;
-	k=arc->k;
 	lambda=arc->lambda;
-	mu=arc->mu;
 	startmidpoint=arc->startmidpoint;
 	endmidpoint=arc->endmidpoint;
 
@@ -310,6 +278,9 @@ void load_config_defaults(struct configuration_t *config)
 	config->iterations=10000000;
 	config->bins=50;
 	config->width=0.25;
+
+	config->parallel=false;
+	config->nthreads=1;
 }
 
 static int configuration_handler(void *user,const char *section,const char *name,const char *value)
@@ -409,6 +380,22 @@ static int configuration_handler(void *user,const char *section,const char *name
 	{	
 		pconfig->width=atof(value);
 	}
+	else if(MATCH("parallel","parallel"))
+	{
+		if(!strcmp(value,"true"))
+			pconfig->parallel=true;
+		else if(!strcmp(value,"false"))
+			pconfig->parallel=false;
+		else
+			return 0;
+	}
+	else if(MATCH("parallel","nthreads"))
+	{
+		if(!strcmp(value,"auto"))
+			pconfig->nthreads=omp_get_max_threads();
+		else
+			pconfig->nthreads=atoi(value);
+	}
 	else
 	{
 		/* Unknown section/name, error */
@@ -479,7 +466,7 @@ int do_diagmc(char *configfile)
 	if(ini_parse(configfile,configuration_handler,&config)<0)
 	{
 		fprintf(stderr,"Couldn't read or parse '%s'\n",configfile);
-		exit(0);
+		return 1;
 	}
 
 	if((config.animate==true)&&(config.progressbar==true))
@@ -488,9 +475,12 @@ int do_diagmc(char *configfile)
 		exit(0);
 	}
 
+	if(config.parallel==false)
+		config.nthreads=1;
+
 	fprintf(stderr,"Diagrammatic Monte Carlo for the angulon\n");
 	fprintf(stderr,"Loaded '%s'\n",configfile);
-	fprintf(stderr,"Performing %d iterations\n",config.iterations);
+	fprintf(stderr,"Performing %d iterations, using %d thread(s)\n",config.iterations,config.nthreads);
 
 	snprintf(fname,1024,"%s.dat",config.prefix);
 	
@@ -544,7 +534,6 @@ int do_diagmc(char *configfile)
 		int update_type,status;
 
 		update_type=gsl_rng_uniform_int(dgr->rng_ctx,DIAGRAM_NR_UPDATES);
-		update_type=gsl_rng_uniform_int(dgr->rng_ctx,3);
 
 		status=updates[update_type](dgr,&config);
 

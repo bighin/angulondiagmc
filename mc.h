@@ -12,6 +12,7 @@ struct configuration_t
 	char *prefix;
 	bool seedrng;
 	bool progressbar;
+	bool animate;
 
 	/* "parameters" section */
 
@@ -20,6 +21,7 @@ struct configuration_t
 	double endtau;
 	double chempot;
 	double maxtau;
+	int maxorder;
 
 	/* "potential" section */
 	
@@ -35,14 +37,12 @@ struct configuration_t
 	int iterations;
 	int bins;
 	double width;
+
+	/* "parallel" section */
+	
+	bool parallel;
+	int nthreads;
 };
-
-#define DIAGRAM_NR_UPDATES	(5)
-
-#define UPDATE_UNPHYSICAL	(0)
-#define UPDATE_REJECTED		(1)
-#define UPDATE_ACCEPTED		(2)
-#define UPDATE_ERROR		(3)
 
 int update_length(struct diagram_t *dgr,struct configuration_t *cfg);
 int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg);
@@ -50,8 +50,8 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 int update_add_worm(struct diagram_t *dgr,struct configuration_t *cfg);
 int update_remove_worm(struct diagram_t *dgr,struct configuration_t *cfg);
 
-int do_diagmc(char *configfile);
-
 void load_config_defaults(struct configuration_t *config);
+
+int do_diagmc(char *configfile);
 
 #endif //__MC_H__
