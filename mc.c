@@ -424,12 +424,11 @@ void show_update_statistics(FILE *out,int proposed,int accepted,int rejected)
 
 int do_diagmc(char *configfile)
 {
-	struct diagram_t *dgr;
 	struct diagram_cfg_t dcfg;
 	struct configuration_t config;
 	struct histogram_t *ht;
 
-	int c;	
+	int d;
 	FILE *out;
 	char fname[1024];
 	progressbar *progress;
@@ -451,8 +450,8 @@ int do_diagmc(char *configfile)
 	update_names[1]="AddPhononLine";
 	update_names[2]="RemovePhononLine";
 
-	for(c=0;c<DIAGRAM_NR_UPDATES;c++)
-		proposed[c]=accepted[c]=rejected[c]=0;
+	for(d=0;d<DIAGRAM_NR_UPDATES;d++)
+		proposed[d]=accepted[d]=rejected[d]=0;
 	
 	avgorder[0]=avgorder[1]=0;
 
@@ -472,6 +471,12 @@ int do_diagmc(char *configfile)
 	if((config.animate==true)&&(config.progressbar==true))
 	{
 		fprintf(stderr,"The options 'animate' and 'progressbar' cannot be set at the same time!\n");
+		exit(0);
+	}
+
+	if((config.animate==true)&&(config.parallel==true))
+	{
+		fprintf(stderr,"The options 'animate' and 'parallel' cannot be set at the same time!\n");
 		exit(0);
 	}
 
@@ -504,94 +509,121 @@ int do_diagmc(char *configfile)
 	dcfg.omega1=config.omega1;
 	dcfg.omega2=config.omega2;
 
-	/*
-		We initialize some basic data structures and various other stuff, as well as the
-		random number generator, in case a NON deterministic seed is requested.
-	*/
-
-	dgr=init_diagram(&dcfg);
-	ht=init_histogram(config.bins,config.width);
-
-	dgr->rng_ctx=gsl_rng_alloc(gsl_rng_mt19937);
-	assert(dgr->rng_ctx!=NULL);
-
-	if(config.seedrng)
-		seed_rng(dgr->rng_ctx);
+        init_terminal_data();
 
 	if(config.progressbar)
 		progress=progressbar_new("Progress",config.iterations/16384);
 	else
 		progress=NULL;
 
-        init_terminal_data();
+	ht=init_histogram(config.bins,config.width);
 
 	/*
 		This is the main DiagMC loop
 	*/
 
-	for(c=0;c<config.iterations;c++)
+#pragma omp parallel for
+
+	for(d=0;d<config.nthreads;d++)
 	{
-		int update_type,status;
+		struct diagram_t *dgr;
+		int c;
 
-		update_type=gsl_rng_uniform_int(dgr->rng_ctx,DIAGRAM_NR_UPDATES);
+		/*
+			We initialize some basic data structures and various other stuff, as well as the
+			random number generator, in case a NON deterministic seed is requested.
+		*/
 
-		status=updates[update_type](dgr,&config);
+		dgr=init_diagram(&dcfg);
 
-		if((config.animate)&&(status==UPDATE_ACCEPTED)&&((update_type==1)||(update_type==2)))
+		dgr->rng_ctx=gsl_rng_alloc(gsl_rng_mt19937);
+		assert(dgr->rng_ctx!=NULL);
+
+		if(config.seedrng)
+			seed_rng(dgr->rng_ctx);
+
+		for(c=0;c<config.iterations/config.nthreads;c++)
 		{
-			if((c%16)==0)
+			int update_type,status;
+
+			update_type=gsl_rng_uniform_int(dgr->rng_ctx,DIAGRAM_NR_UPDATES);
+
+			status=updates[update_type](dgr,&config);
+
+			if((config.nthreads==1)&&(config.animate)&&(status==UPDATE_ACCEPTED)&&((update_type==1)||(update_type==2)))
 			{
-				int d,plines;
+				if((c%16)==0)
+				{
+					int d,plines;
 
-				plines=print_diagram(dgr,PRINT_TOPOLOGY|PRINT_INFO0|PRINT_DRYRUN);
+					plines=print_diagram(dgr,PRINT_TOPOLOGY|PRINT_INFO0|PRINT_DRYRUN);
 		
-				for(d=plines;d<tgetnum("li");d++)
-						printf("\n");
+					for(d=plines;d<tgetnum("li");d++)
+							printf("\n");
 
-				print_diagram(dgr,PRINT_TOPOLOGY|PRINT_INFO0);
-				usleep(5000);
+					print_diagram(dgr,PRINT_TOPOLOGY|PRINT_INFO0);
+					usleep(5000);
+				}
+			}
+
+			switch(status)
+			{
+				case UPDATE_ACCEPTED:
+				
+#pragma omp critical
+				{
+					proposed[update_type]++;
+					accepted[update_type]++;
+				}
+
+				break;
+
+				/*
+					FIXME
+
+					Here unphysical and rejected updates are treated in exactly the same
+					way. Is this OK?
+				*/
+
+				case UPDATE_UNPHYSICAL:
+				case UPDATE_REJECTED:
+
+#pragma omp critical
+				{
+					proposed[update_type]++;
+					rejected[update_type]++;
+				}
+
+				break;
+
+				case UPDATE_ERROR:
+				assert(false);
+			}
+
+			assert(fabs(diagram_weight(dgr)-diagram_weight_non_incremental(dgr))<10e-7*diagram_weight(dgr));
+			diagram_check_consistency(dgr);
+
+			/*
+				Note that by using diagram_m_weight() we are effectively summing over
+				all values of m, so that we have to divide the weight by (2j + 1).
+			*/
+
+#pragma omp critical
+			{
+				histogram_add_sample(ht,diagram_weight(dgr)*diagram_m_weight(dgr)/(2.0f*dcfg.j+1.0f),dgr->endtau);
+
+				if((config.progressbar)&&((c%16384)==0))
+					progressbar_inc(progress);
+
+				avgorder[0]+=get_nr_phonons(dgr);
+				avgorder[1]++;
 			}
 		}
 
-		switch(status)
-		{
-			case UPDATE_ACCEPTED:
-			proposed[update_type]++;
-			accepted[update_type]++;
-			break;
+		if(dgr->rng_ctx)
+			gsl_rng_free(dgr->rng_ctx);
 
-			/*
-				FIXME
-
-				Here unphysical and rejected updates are treated in exactly the same
-				way. Is this OK?
-			*/
-
-			case UPDATE_UNPHYSICAL:
-			case UPDATE_REJECTED:
-			proposed[update_type]++;
-			rejected[update_type]++;
-			break;
-
-			case UPDATE_ERROR:
-			assert(false);
-		}
-
-		assert(fabs(diagram_weight(dgr)-diagram_weight_non_incremental(dgr))<10e-7*diagram_weight(dgr));
-		diagram_check_consistency(dgr);
-
-		/*
-			Note that by using diagram_m_weight() we are effectively summing over
-			all values of m, so that we have to divide the weight by (2j + 1).
-		*/
-
-		histogram_add_sample(ht,diagram_weight(dgr)*diagram_m_weight(dgr)/(2.0f*dcfg.j+1.0f),dgr->endtau);
-
-		if((config.progressbar)&&((c%16384)==0))
-			progressbar_inc(progress);
-
-		avgorder[0]+=get_nr_phonons(dgr);
-		avgorder[1]++;
+		fini_diagram(dgr);
 	}
 
 	if(config.progressbar)
@@ -617,14 +649,14 @@ int do_diagmc(char *configfile)
 
 	fprintf(out,"# Update statistics:\n");
 
-	for(c=0;c<DIAGRAM_NR_UPDATES;c++)
+	for(d=0;d<DIAGRAM_NR_UPDATES;d++)
 	{
-		fprintf(out,"# Update #%d (%s): ",c,update_names[c]);
-		show_update_statistics(out,proposed[c],accepted[c],rejected[c]);
+		fprintf(out,"# Update #%d (%s): ",d,update_names[d]);
+		show_update_statistics(out,proposed[d],accepted[d],rejected[d]);
 	
-		total_proposed+=proposed[c];
-		total_accepted+=accepted[c];
-		total_rejected+=rejected[c];
+		total_proposed+=proposed[d];
+		total_accepted+=accepted[d];
+		total_rejected+=rejected[d];
 	}
 
 	fprintf(out,"# Total: ");
@@ -640,12 +672,12 @@ int do_diagmc(char *configfile)
 
 	fprintf(out,"# <Bin center> <Average> <Stddev>\n");
 
-	for(c=0;c<=config.bins;c++)
+	for(d=0;d<=config.bins;d++)
 	{
-		fprintf(out,"%f %f ",config.width*c+config.width/2.0f,histogram_get_bin_average(ht,c));
+		fprintf(out,"%f %f ",config.width*d+config.width/2.0f,histogram_get_bin_average(ht,d));
 		
-		if(ht->sctx->smpls[c]->next>1)
-			fprintf(out,"%f\n",sqrtf(histogram_get_bin_variance(ht,c)/(ht->sctx->smpls[c]->next)));
+		if(ht->sctx->smpls[d]->next>1)
+			fprintf(out,"%f\n",sqrtf(histogram_get_bin_variance(ht,d)/(ht->sctx->smpls[d]->next)));
 		else
 			fprintf(out,"%f\n",0.0f);
 	}
@@ -657,11 +689,7 @@ int do_diagmc(char *configfile)
 	if(out)
 		fclose(out);
 
-	if(dgr->rng_ctx)
-		gsl_rng_free(dgr->rng_ctx);
-
 	fini_histogram(ht);
-	fini_diagram(dgr);
 
 	return 0;
 }
