@@ -1,7 +1,7 @@
 TARGET = diagmc
 LIBS = -lncurses -lgsl -lm
-#CC = gcc-mp-6
-CC = clang-mp-4.0
+CC = gcc-mp-6
+#CC = clang-mp-4.0
 #CC = /opt/local/libexec/llvm-5.0/libexec/ccc-analyzer
 #CFLAGS = -DNDEBUG -O2 -Wall -fopenmp -std=c11 -I/opt/local/include/
 CFLAGS = -Wall -pedantic -O2 -fopenmp -I/opt/local/include/
@@ -12,8 +12,8 @@ LDFLAGS = -L/opt/local/lib/
 default: $(TARGET)
 all: default
 
-OBJECTS = $(patsubst %.c, %.o, $(wildcard *.c libprogressbar/*.c inih/*.c njsummat/*.c))
-HEADERS = $(wildcard *.h  libprogressbar/*.h inih/*.h njsummat/*.h)
+OBJECTS = $(patsubst %.c, %.o, $(wildcard *.c libprogressbar/*.c inih/*.c njsummat/*.c murmurhash3/*.c))
+HEADERS = $(wildcard *.h  libprogressbar/*.h inih/*.h njsummat/*.h murmurhash3/*.h)
 
 %.o: %.c $(HEADERS)
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -24,5 +24,5 @@ $(TARGET): $(OBJECTS)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJECTS) -Wall $(LIBS) -o $@
 
 clean:
-	-rm -f *.o libprogressbar/*.o inih/*.o njsummat/*.o
+	-rm -f *.o libprogressbar/*.o inih/*.o njsummat/*.o murmurhash3/*.o
 	-rm -f $(TARGET)

@@ -6,7 +6,10 @@
 #include <assert.h>
 #include <gsl/gsl_rng.h>
 #include <unistd.h>
+
+#if defined(_OPENMP)
 #include <omp.h>
+#endif
 
 #include "diagrams.h"
 #include "updates.h"
@@ -160,7 +163,7 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	recouple(dgr,thisline->startmidpoint,thisline->endmidpoint);
 
-	acceptance_ratio=diagram_weight(dgr)/diagram_weight(old);
+	acceptance_ratio=(diagram_weight(dgr)*diagram_m_weight(dgr))/(diagram_weight(old)*diagram_m_weight(old));
 	acceptance_ratio*=3.0f*dgr->endtau;
 	acceptance_ratio/=get_nr_phonons(dgr)+1;
 	acceptance_ratio/=doubly_truncated_exp_pdf(dgr->rng_ctx,omegas[lambda],tau1,dgr->endtau,tau2);
@@ -226,15 +229,26 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	*/
 
 	if((startmidpoint+1)!=endmidpoint)
+	{
 		recouple(dgr,startmidpoint,endmidpoint-2);
-
-#warning FIXME
+	}
+	else
+	{
+		/*
+			...however the bubble may be 'asymmetric': that would be an error!
+		*/
 	
-	/*
-		...however the bubble may be 'asymmetric'...
-	*/
+		if(get_left_neighbour(old,startmidpoint)->j!=get_right_neighbour(old,endmidpoint)->j)
+		{
+			print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
+		
+			printf("%f\n",diagram_weight(old)*diagram_m_weight(old));
 
-	acceptance_ratio=diagram_weight(dgr)/diagram_weight(old);
+			exit(0);
+		}
+	}
+
+	acceptance_ratio=(diagram_weight(dgr)*diagram_m_weight(dgr))/(diagram_weight(old)*diagram_m_weight(old));
 	acceptance_ratio/=3.0f*dgr->endtau;
 	acceptance_ratio*=nr_phonons;
 	acceptance_ratio*=doubly_truncated_exp_pdf(dgr->rng_ctx,omegas[lambda],tau1,dgr->endtau,tau2);
@@ -390,9 +404,15 @@ static int configuration_handler(void *user,const char *section,const char *name
 			return 0;
 	}
 	else if(MATCH("parallel","nthreads"))
-	{
+	{		
 		if(!strcmp(value,"auto"))
+		{
+#if defined(_OPENMP)
 			pconfig->nthreads=omp_get_max_threads();
+#else
+			pconfig->nthreads=1;
+#endif
+		}
 		else
 			pconfig->nthreads=atoi(value);
 	}
@@ -480,10 +500,17 @@ int do_diagmc(char *configfile)
 		exit(0);
 	}
 
+#if !defined(_OPENMP)
+	if(config.nthreads>1)
+	{
+		fprintf(stderr,"Warning: parallel run requested, but the current binary has been compiled without OpenMP support.\n");
+		config.nthreads=1;
+	}
+#endif
+
 	if(config.parallel==false)
 		config.nthreads=1;
 
-	fprintf(stderr,"Diagrammatic Monte Carlo for the angulon\n");
 	fprintf(stderr,"Loaded '%s'\n",configfile);
 	fprintf(stderr,"Performing %d iterations, using %d thread(s)\n",config.iterations,config.nthreads);
 
@@ -522,7 +549,9 @@ int do_diagmc(char *configfile)
 		This is the main DiagMC loop
 	*/
 
+#if defined(_OPENMP)
 #pragma omp parallel for
+#endif
 
 	for(d=0;d<config.nthreads;d++)
 	{
@@ -541,6 +570,18 @@ int do_diagmc(char *configfile)
 
 		if(config.seedrng)
 			seed_rng(dgr->rng_ctx);
+
+		/*
+			If we are running many threads in parallel, we must initialized
+			the RNG in each thread in a different way, otherwise we are sampling
+			the same diagrams.
+		
+			In case a random seed has NOT been required (config.seedrng==false),
+			we use a deterministic seed (just the thread number).
+		*/
+
+		if((config.parallel)&&(!config.seedrng))
+			gsl_rng_set(dgr->rng_ctx,d);
 
 		for(c=0;c<config.iterations/config.nthreads;c++)
 		{
@@ -569,8 +610,10 @@ int do_diagmc(char *configfile)
 			switch(status)
 			{
 				case UPDATE_ACCEPTED:
-				
+
+#if defined(_OPENMP)				
 #pragma omp critical
+#endif
 				{
 					proposed[update_type]++;
 					accepted[update_type]++;
@@ -588,7 +631,9 @@ int do_diagmc(char *configfile)
 				case UPDATE_UNPHYSICAL:
 				case UPDATE_REJECTED:
 
+#if defined(_OPENMP)
 #pragma omp critical
+#endif
 				{
 					proposed[update_type]++;
 					rejected[update_type]++;
@@ -607,8 +652,9 @@ int do_diagmc(char *configfile)
 				Note that by using diagram_m_weight() we are effectively summing over
 				all values of m, so that we have to divide the weight by (2j + 1).
 			*/
-
+#if defined(_OPENMP)
 #pragma omp critical
+#endif
 			{
 				histogram_add_sample(ht,diagram_weight(dgr)*diagram_m_weight(dgr)/(2.0f*dcfg.j+1.0f),dgr->endtau);
 

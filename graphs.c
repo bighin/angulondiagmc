@@ -12,6 +12,7 @@
 
 #include "njsummat/njformul.h"
 #include "njsummat/njsummat.h"
+#include "murmurhash3/murmurhash3.h"
 
 /*
 	FIXME: it would be nice to have everywhere a check, to see if we are hitting the maximum
@@ -791,30 +792,152 @@ void diagram_to_graph(struct diagram_t *dgr,struct graph_t *gt)
 	}
 }
 
+/*
+	The following code implements a very simple hashtable, to avoid
+	calculating the value of the same graph over and over...
+*/
+
+struct hashentry_t hashtable[HASHTABLE_ENTRIES];
+int hashtable_lookups,hashtable_matches;
+
+void hashtable_init(void)
+{
+	int c;
+	
+	for(c=0;c<HASHTABLE_ENTRIES;c++)
+		hashtable[c].valid=HASHTABLE_INVALID_ENTRY;
+	
+	printf("Initalized graph hashtable, with %d entries, %ld KB\n",HASHTABLE_ENTRIES,HASHTABLE_ENTRIES*sizeof(struct graph_t)/1024);
+
+	hashtable_lookups=hashtable_matches=0;
+}
+
+void hasthtable_show_stats(void)
+{
+	printf("Hashtable lookups: %d (%f%% matches)\n",hashtable_lookups,100.f*((float)(hashtable_matches))/((float)(hashtable_lookups)));
+}
+
+bool graphs_are_equivalent(struct graph_t *a,struct graph_t *b)
+{
+	if(a->nr_lines!=b->nr_lines)
+		return false;
+	
+	if(a->nr_arcs!=b->nr_arcs)
+		return false;
+
+	if(a->maxj!=b->maxj)
+		return false;
+	
+	if(memcmp(a->lines,b->lines,sizeof(int)*a->nr_lines)!=0)
+		return false;
+
+	if(memcmp(a->arcs,b->arcs,3*sizeof(int)*a->nr_arcs)!=0)
+		return false;
+
+	if(memcmp(a->js,b->js,sizeof(int)*(a->nr_lines+a->nr_arcs))!=0)
+		return false;
+	
+	return true;
+}
+
+bool hashtable_probe(struct graph_t *gt,double *value,int *hashindex)
+{
+	unsigned int h;
+
+	h=0xCAFEBABE;
+	h^=murmur3_hash((void *)(gt->lines),sizeof(int)*gt->nr_lines);	
+	h^=murmur3_hash((void *)(gt->arcs),3*sizeof(int)*gt->nr_arcs);
+	h^=murmur3_hash((void *)(gt->js),sizeof(int)*(gt->nr_lines+gt->nr_arcs));
+	h=h%HASHTABLE_ENTRIES;
+
+	*hashindex=h;
+
+#if defined(_OPENMP)				
+#pragma omp atomic
+#endif	
+	hashtable_lookups++;
+
+	if(hashtable[*hashindex].valid==HASHTABLE_VALID_ENTRY)
+	{
+		//if(memcmp(gt,&hashtable[*hashindex].gt,sizeof(struct graph_t))==0)
+		if(graphs_are_equivalent(gt,&hashtable[*hashindex].gt)==true)
+		{
+			*value=hashtable[*hashindex].value;
+
+#if defined(_OPENMP)				
+#pragma omp atomic
+#endif	
+			hashtable_matches++;
+
+			return true;
+		}
+	}
+
+	return false;
+}
+
+void hashtable_insert(struct graph_t *gt,double value,int hashindex)
+{
+	struct graph_t *dst=&hashtable[hashindex].gt;
+
+#warning Qui devo mettere critical!
+
+	{
+		dst->nr_lines=gt->nr_lines;
+		dst->nr_arcs=gt->nr_arcs;
+		dst->maxj=gt->maxj;
+		
+		memcpy(dst->lines,gt->lines,sizeof(int)*gt->nr_lines);
+		memcpy(dst->arcs,gt->arcs,3*sizeof(int)*gt->nr_arcs);
+		memcpy(dst->js,gt->js,sizeof(int)*(gt->nr_lines+gt->nr_arcs));
+
+		hashtable[hashindex].valid=HASHTABLE_VALID_ENTRY;
+		hashtable[hashindex].value=value;
+	}
+}
+
 double diagram_m_weight(struct diagram_t *dgr)
 {
 	struct graph_t gt;
 	double value;
 
+	bool use_hashtable=false;
+	int hashindex;
+
 	/*
-		FIXME: is the memset() call needed? Would gt be undefined otherwise?
+		FIXME: are these memset() call needed? Would gt and gt.f be undefined otherwise?
 	*/
 
 	memset(&gt,0,sizeof(struct graph_t));
+	memset(&gt.f,0,sizeof(FORMULA));
 
 	diagram_to_graph(dgr,&gt);
+
+	if((use_hashtable==true)&&(hashtable_probe(&gt,&value,&hashindex)==true))
+	{
+		assert(value==evaluate_graph(&gt,false));
+
+		return value;
+	}
 
 	value=evaluate_graph(&gt,false);
 
 	if((gt.f.nrjs>MAXJ)||(gt.f.nrks>MAXK)||(gt.f.nrsixjs>MAXSIXJ))
 	{
 		printf("The current diagram translates to a formula exceeding the limits of NJSUMMAT.");
-		printf("Please tune the limits in njformul.h\n");
+		printf(" Please tune the limits in njformul.h\n");
 		exit(0);
 	}
 
-	formula_to_wolfram(gt.f);
-	
+	//formula_to_wolfram(gt.f);
+
+	if(use_hashtable==true)
+	{
+		memset(&gt.f,0,sizeof(FORMULA));
+
+		hashtable_insert(&gt,value,hashindex);
+	}
+
 	return value;
 }
 

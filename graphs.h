@@ -24,7 +24,7 @@ struct graph_t
 
 #define MAX_LINES		(1024)
 #define MAX_ARCS		(512)
-#define MAX_DELTAS	(512)
+#define MAX_DELTAS		(512)
 
 	/*
 		lines[i] contains the label number of the momentum
@@ -36,7 +36,7 @@ struct graph_t
 	
 		The momentum j0 is not used.
 
-		arcs[j] is an array of three ints, indicating, resepctively,
+		arcs[j] is an array of three ints, indicating, respectively,
 		the starting vertex, the ending vertex and the momentum
 		label circulating inside the vertex.
 	*/
@@ -92,6 +92,24 @@ void k_to_k(struct graph_t *gt,int kindex1,int kindex2);
 
 double evaluate_graph(struct graph_t *gt,bool debugswap);
 void diagram_to_graph(struct diagram_t *dgr,struct graph_t *gt);
+
+struct hashentry_t
+{
+	int valid;
+
+	struct graph_t gt;
+	double value;
+};
+
+#define HASHTABLE_ENTRIES	(1024)
+
+#define HASHTABLE_VALID_ENTRY	(101)
+#define HASHTABLE_INVALID_ENTRY	(102)
+	
+void hashtable_init(void);
+bool hashtable_probe(struct graph_t *gt,double *value,int *hashindex);
+void hashtable_insert(struct graph_t *gt,double value,int hashindex);
+void hasthtable_show_stats(void);
 
 double diagram_m_weight(struct diagram_t *dgr);
 double diagram_m_weight_reference(struct diagram_t *dgr);

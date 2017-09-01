@@ -29,8 +29,10 @@ void usage(char *argv0)
 int main(int argc,char *argv[])
 {
 	int c;
+	bool first=true;
 
 	init_njsummat();
+	hashtable_init();
 
 	if(argc<2)
 		usage(argv[0]);
@@ -49,8 +51,17 @@ int main(int argc,char *argv[])
 			continue;
 		}
 
+		if(first==true)
+			fprintf(stderr,"Diagrammatic Monte Carlo for the angulon\n");
+
 		do_diagmc(argv[c]);
+		first=false;
+		
+		if((c+1)!=argc)
+			printf("\n");
 	}
+
+	hasthtable_show_stats();
 
 	return 0;
 }

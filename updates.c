@@ -830,8 +830,6 @@ bool recouple(struct diagram_t *dgr,int lo,int hi)
 			Probably... I should check this better!
 		*/
 
-#warning CHECKME!
-
 		deltalist[0]=0;
 
 		/*
