@@ -558,6 +558,15 @@ int do_diagmc(char *configfile)
 		struct diagram_t *dgr;
 		int c;
 
+#define LOCALSTORAGE	(1024*16)
+
+		double localtotalweight[LOCALSTORAGE][2];
+		int localavgorder[2];
+		int progressbarticks;
+
+		localavgorder[0]=localavgorder[1]=0;
+		progressbarticks=0;
+
 		/*
 			We initialize some basic data structures and various other stuff, as well as the
 			random number generator, in case a NON deterministic seed is requested.
@@ -586,9 +595,9 @@ int do_diagmc(char *configfile)
 		for(c=0;c<config.iterations/config.nthreads;c++)
 		{
 			int update_type,status;
+			double totalweight;
 
 			update_type=gsl_rng_uniform_int(dgr->rng_ctx,DIAGRAM_NR_UPDATES);
-
 			status=updates[update_type](dgr,&config);
 
 			if((config.nthreads==1)&&(config.animate)&&(status==UPDATE_ACCEPTED)&&((update_type==1)||(update_type==2)))
@@ -607,17 +616,19 @@ int do_diagmc(char *configfile)
 				}
 			}
 
+#if defined(_OPENMP)				
+#pragma omp atomic
+#endif
+			proposed[update_type]++;
+
 			switch(status)
 			{
 				case UPDATE_ACCEPTED:
 
 #if defined(_OPENMP)				
-#pragma omp critical
+#pragma omp atomic
 #endif
-				{
-					proposed[update_type]++;
-					accepted[update_type]++;
-				}
+				accepted[update_type]++;
 
 				break;
 
@@ -632,12 +643,9 @@ int do_diagmc(char *configfile)
 				case UPDATE_REJECTED:
 
 #if defined(_OPENMP)
-#pragma omp critical
+#pragma omp atomic
 #endif
-				{
-					proposed[update_type]++;
-					rejected[update_type]++;
-				}
+				rejected[update_type]++;
 
 				break;
 
@@ -652,17 +660,52 @@ int do_diagmc(char *configfile)
 				Note that by using diagram_m_weight() we are effectively summing over
 				all values of m, so that we have to divide the weight by (2j + 1).
 			*/
+
+			totalweight=diagram_weight(dgr)*diagram_m_weight(dgr)/(2.0f*dcfg.j+1.0f);
+			
+			localtotalweight[c%LOCALSTORAGE][0]=totalweight;
+			localtotalweight[c%LOCALSTORAGE][1]=dgr->endtau;
+
+			localavgorder[0]+=get_nr_phonons(dgr);
+			localavgorder[1]++;
+
+			if((config.progressbar)&&((c%16384)==0))
+				progressbarticks++;
+
+			if(((c+1)%LOCALSTORAGE)==0)
+			{
+#if defined(_OPENMP)
+#pragma omp atomic
+#endif
+				avgorder[0]+=localavgorder[0];
+
+#if defined(_OPENMP)
+#pragma omp atomic
+#endif
+
+				avgorder[1]+=localavgorder[1];
+		
 #if defined(_OPENMP)
 #pragma omp critical
 #endif
-			{
-				histogram_add_sample(ht,diagram_weight(dgr)*diagram_m_weight(dgr)/(2.0f*dcfg.j+1.0f),dgr->endtau);
+				{
+					int i;
+					
+					for(i=0;i<LOCALSTORAGE;i++)
+						histogram_add_sample(ht,localtotalweight[i][0],localtotalweight[i][1]);
+				}
 
-				if((config.progressbar)&&((c%16384)==0))
-					progressbar_inc(progress);
+#if defined(_OPENMP)
+#pragma omp atomic
+#endif
 
-				avgorder[0]+=get_nr_phonons(dgr);
-				avgorder[1]++;
+				progress->value+=progressbarticks;
+				progressbarticks=0;
+
+				if(omp_get_thread_num()==0)
+				{
+					progressbar_update(progress,progress->value);
+				}
 			}
 		}
 

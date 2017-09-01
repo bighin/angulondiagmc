@@ -61,7 +61,12 @@ int main(int argc,char *argv[])
 			printf("\n");
 	}
 
-	hasthtable_show_stats();
+	{
+		extern int hashtable_lookups;
+		
+		if(hashtable_lookups>0)
+			hasthtable_show_stats();
+	}
 
 	return 0;
 }

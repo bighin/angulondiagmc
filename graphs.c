@@ -852,27 +852,19 @@ bool hashtable_probe(struct graph_t *gt,double *value,int *hashindex)
 
 	*hashindex=h;
 
-#if defined(_OPENMP)				
-#pragma omp atomic
-#endif	
 	hashtable_lookups++;
 
 	if(hashtable[*hashindex].valid==HASHTABLE_VALID_ENTRY)
 	{
-		//if(memcmp(gt,&hashtable[*hashindex].gt,sizeof(struct graph_t))==0)
 		if(graphs_are_equivalent(gt,&hashtable[*hashindex].gt)==true)
 		{
 			*value=hashtable[*hashindex].value;
-
-#if defined(_OPENMP)				
-#pragma omp atomic
-#endif	
 			hashtable_matches++;
 
 			return true;
 		}
 	}
-
+	
 	return false;
 }
 
@@ -880,20 +872,16 @@ void hashtable_insert(struct graph_t *gt,double value,int hashindex)
 {
 	struct graph_t *dst=&hashtable[hashindex].gt;
 
-#warning Qui devo mettere critical!
-
-	{
-		dst->nr_lines=gt->nr_lines;
-		dst->nr_arcs=gt->nr_arcs;
-		dst->maxj=gt->maxj;
+	dst->nr_lines=gt->nr_lines;
+	dst->nr_arcs=gt->nr_arcs;
+	dst->maxj=gt->maxj;
 		
-		memcpy(dst->lines,gt->lines,sizeof(int)*gt->nr_lines);
-		memcpy(dst->arcs,gt->arcs,3*sizeof(int)*gt->nr_arcs);
-		memcpy(dst->js,gt->js,sizeof(int)*(gt->nr_lines+gt->nr_arcs));
+	memcpy(dst->lines,gt->lines,sizeof(int)*gt->nr_lines);
+	memcpy(dst->arcs,gt->arcs,3*sizeof(int)*gt->nr_arcs);
+	memcpy(dst->js,gt->js,sizeof(int)*(gt->nr_lines+gt->nr_arcs));
 
-		hashtable[hashindex].valid=HASHTABLE_VALID_ENTRY;
-		hashtable[hashindex].value=value;
-	}
+	hashtable[hashindex].valid=HASHTABLE_VALID_ENTRY;
+	hashtable[hashindex].value=value;
 }
 
 double diagram_m_weight(struct diagram_t *dgr)
