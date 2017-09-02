@@ -13,11 +13,11 @@ struct configuration_t
 	bool seedrng;
 	bool progressbar;
 	bool animate;
+	bool use_hashtable;
 
 	/* "parameters" section */
 
 	int j;
-	int m;
 	double endtau;
 	double chempot;
 	double maxtau;

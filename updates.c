@@ -123,6 +123,7 @@ void diagram_add_start_midpoint(struct diagram_t *dgr,int c,double tau,struct ar
 
 	rightline->j=leftline->j;
 	rightline->m=leftline->m;
+	rightline->arcs_over_me=leftline->arcs_over_me;
 }
 
 void diagram_add_end_midpoint(struct diagram_t *dgr,int c,double tau,struct arc_t *phononline)
@@ -186,6 +187,7 @@ void diagram_add_end_midpoint(struct diagram_t *dgr,int c,double tau,struct arc_
 
 	leftline->j=rightline->j;
 	leftline->m=rightline->m;
+	leftline->arcs_over_me=rightline->arcs_over_me;
 }
 
 double calculate_arc_weight(struct diagram_t *dgr,struct arc_t *arc)
@@ -311,6 +313,9 @@ void diagram_add_phonon_line(struct diagram_t *dgr,double tau1,double tau2,doubl
 	diagram_add_end_midpoint(dgr,hi,tau2,arc);
 	diagram_update_xrefs(dgr,hi);
 	arc->endmidpoint=hi;
+
+	for(c=arc->startmidpoint;c<arc->endmidpoint;c++)
+		get_right_neighbour(dgr,c)->arcs_over_me++;
 
 	dgr->weight*=calculate_arc_weight(dgr,arc);
 
@@ -442,6 +447,9 @@ bool diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 
 	startmidpoint=arc->startmidpoint;
 	endmidpoint=arc->endmidpoint;
+
+	for(c=arc->startmidpoint;c<arc->endmidpoint;c++)
+		get_right_neighbour(dgr,c)->arcs_over_me--;
 
 	/*
 		We update the diagram weight incrementally: now we remove the arc and the free

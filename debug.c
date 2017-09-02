@@ -317,7 +317,6 @@ int stresstest(void)
 
 	cfg.endtau=1.0f;
 	cfg.j=2;
-	cfg.m=0;
 	cfg.chempot=5.0f;
 
 	cfg.c0=1.5f;

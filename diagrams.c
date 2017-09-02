@@ -72,13 +72,14 @@ struct diagram_t *init_diagram(struct diagram_cfg_t *cfg)
 	g0=vlist_append_empty(ret->free_propagators);
 
 	g0->j=cfg->j;
-	g0->m=cfg->m;
 
 	g0->startmidpoint=-1;
 	g0->endmidpoint=0;
 
 	g0->starttau=0.0f;
 	g0->endtau=cfg->endtau;
+	
+	g0->arcs_over_me=0;
 
 	/*
 		We set the initial value for the diagram weight, it will
@@ -331,6 +332,30 @@ void diagram_check_consistency(struct diagram_t *dgr)
 	
 		assert(fabs(w1-w2)<10e-7*w1);
 	}
+	
+	/*
+		Now we check the consistency of the arcs_over_me field
+	*/
+	
+	{
+		int count=0;
+
+		for(c=0;c<get_nr_vertices(dgr);c++)
+		{
+			struct arc_t *thisline=get_vertex(dgr,c)->phononline;
+			
+			assert((c==thisline->startmidpoint)||(c==thisline->endmidpoint));
+
+			if(thisline->startmidpoint==c)
+				count++;
+			else
+				count--;
+			
+			assert(get_right_neighbour(dgr,c)->arcs_over_me==count);
+		}
+		
+		assert(count==0);
+	}
 }
 
 double diagram_weight(struct diagram_t *dgr)
@@ -490,6 +515,33 @@ int print_diagram(struct diagram_t *dgr,int flags)
 				if(!(flags&PRINT_DRYRUN))
 					printf("|%d|",c+1);
 			}
+		}
+
+		if(!(flags&PRINT_DRYRUN))
+			printf("\n");
+
+		plines+=1;
+
+		if(flags&PRINT_ARCS_OVER_ME)
+		{
+			if(!(flags&PRINT_DRYRUN))
+				printf("|  |");
+
+			for(c=0;c<get_nr_free_propagators(dgr);c++)
+			{
+				char ch='0'+(get_left_neighbour(dgr,c)->arcs_over_me%10);
+				
+				if(!(flags&PRINT_DRYRUN))
+					print_chars(ch,dashing);
+		
+				if(!(flags&PRINT_DRYRUN))
+					printf("|  |");
+			}
+	
+			if(!(flags&PRINT_DRYRUN))
+				printf("\n");
+
+			plines+=1;
 		}
 
 		if(!(flags&PRINT_DRYRUN))

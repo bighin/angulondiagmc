@@ -884,12 +884,11 @@ void hashtable_insert(struct graph_t *gt,double value,int hashindex)
 	hashtable[hashindex].value=value;
 }
 
-double diagram_m_weight(struct diagram_t *dgr)
+double diagram_m_weight(struct diagram_t *dgr,bool use_hashtable)
 {
 	struct graph_t gt;
 	double value;
 
-	bool use_hashtable=false;
 	int hashindex;
 
 	/*

@@ -38,6 +38,8 @@ struct g0_t
 	/*
 		The first and last line in a diagram have immutable j and m.
 	*/
+
+	int arcs_over_me;
 };
 
 /*
@@ -74,7 +76,6 @@ struct diagram_cfg_t
 	*/
 
 	int j;
-	int m;
 	double endtau;
 	double chempot;
 
@@ -145,10 +146,11 @@ double diagram_weight_non_incremental(struct diagram_t *dgr);
 void diagram_copy(struct diagram_t *src,struct diagram_t *dst);
 struct diagram_t *diagram_clone(struct diagram_t *src);
 
-#define PRINT_TOPOLOGY		(0x1)
-#define PRINT_PROPAGATORS	(0x2)
-#define PRINT_DRYRUN		(0x4)
-#define PRINT_INFO0		(0x8)
+#define PRINT_TOPOLOGY		(0x01)
+#define PRINT_PROPAGATORS	(0x02)
+#define PRINT_DRYRUN		(0x04)
+#define PRINT_INFO0		(0x08)
+#define PRINT_ARCS_OVER_ME	(0x10)
 
 int print_diagram(struct diagram_t *dgr,int flags);
 
