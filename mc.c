@@ -404,8 +404,6 @@ int sigma_update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t
 		{
 			for(c=startmidpoint+1;c<endmidpoint-1;c++)
 			{
-				struct g0_t *g0=get_right_neighbour(dgr,c);
-
 				if(get_right_neighbour(dgr,c)->arcs_over_me<=1)
 					found_a_line=false;
 			}
@@ -716,7 +714,7 @@ int do_diagmc(char *configfile)
 	}
 #endif
 
-	if(config.j*(config.j)<=config.chempot)
+	if(config.j*(config.j+1)<=config.chempot)
 	{
 		fprintf(stderr,"Warning: the chemical potential should be set below j(j+1).\n");
 	}
@@ -880,7 +878,8 @@ int do_diagmc(char *configfile)
 			*/
 
 			totalweight=diagram_weight(dgr)*diagram_m_weight(dgr,config.use_hashtable)/(2.0f*dcfg.j+1.0f);
-			
+			assert(totalweight>=0.0f);
+
 			localtotalweight[c%LOCALSTORAGE][0]=totalweight;
 			localtotalweight[c%LOCALSTORAGE][1]=dgr->endtau;
 
