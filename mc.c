@@ -37,7 +37,7 @@ void init_terminal_data(void)
 	char *termtype=getenv("TERM");
 	int success;
 
-	if (termtype==NULL)
+	if(termtype==NULL)
 		fprintf(stderr,"Please specify a terminal type with 'setenv TERM <yourtype>'.\n");
 
 	success=tgetent(term_buffer,termtype);
