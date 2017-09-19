@@ -195,9 +195,8 @@ double calculate_arc_weight(struct diagram_t *dgr,struct arc_t *arc)
 	int j1,j2,j3;
 	struct vertex_t *thisvertex;
 	double timediff;
-	double c0,c1,c2,omega0,omega1,omega2;
 	double ret=1.0f;
-	
+
 	thisvertex=get_vertex(dgr,arc->startmidpoint);
 
 	j1=thisvertex->left->j;
@@ -218,32 +217,22 @@ double calculate_arc_weight(struct diagram_t *dgr,struct arc_t *arc)
 
 	timediff=arc->endtau-arc->starttau;
 
-	c0=dgr->c0;
-	c1=dgr->c1;
-	c2=dgr->c2;
-	omega0=dgr->omega0;
-	omega1=dgr->omega1;
-	omega2=dgr->omega2;
-
 	assert(timediff>=0);
 
 	switch(arc->lambda)
 	{
 		case 0:
-		ret*=c0*exp(-timediff*omega0);
+		ret*=get_point(dgr->v0table,timediff);
 		break;
 
 		case 1:
-		ret*=c1*exp(-timediff*omega1);
-		break;
-
-		case 2:
-		ret*=c2*exp(-timediff*omega2);
+		ret*=get_point(dgr->v1table,timediff);
 		break;
 		
 		default:
 		assert(false);
 	}
+
 	
 	return ret;
 }

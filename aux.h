@@ -30,6 +30,21 @@ int vlist_get_nr_elements(struct vlist_t *lst);
 struct vlist_t *vlist_clone(struct vlist_t *lst);
 void vlist_copy(struct vlist_t *src,struct vlist_t *dst);
 
+struct interpolation_t
+{
+	double *x;
+	double *y;
+
+	int n;
+	
+	double *y2;
+};
+
+struct interpolation_t *init_interpolation(double *x,double *y,int n);
+void fini_interpolation(struct interpolation_t *it);
+void copy_interpolation(struct interpolation_t *dst,struct interpolation_t *src);
+double get_point(struct interpolation_t *it,double x);
+
 void seed_rng(gsl_rng *rng);
 
 #endif //__AUX_H__

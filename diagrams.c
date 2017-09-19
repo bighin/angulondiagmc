@@ -10,6 +10,8 @@
 #include "diagrams.h"
 #include "aux.h"
 #include "debug.h"
+#include "selfenergies.h"
+#include "stat.h"
 
 int vertex_get_j1(struct vertex_t *vif)
 {
@@ -53,17 +55,14 @@ struct diagram_t *init_diagram(struct diagram_cfg_t *cfg)
 	ret->endtau=cfg->endtau;
 	ret->chempot=cfg->chempot;
 
-	ret->c0=cfg->c0;
-	ret->c1=cfg->c1;
-	ret->c2=cfg->c2;
-	ret->omega0=cfg->omega0;
-	ret->omega1=cfg->omega1;
-	ret->omega2=cfg->omega2;
+	ret->n=cfg->n;
 
 	ret->phonons=init_vlist(sizeof(struct arc_t),16*1024);
 	ret->midpoints=init_vlist(sizeof(double),16*1024);
 	ret->free_propagators=init_vlist(sizeof(struct g0_t),1+32*1024);
 	ret->vertices=init_vlist(sizeof(struct vertex_t),32*1024);
+
+	init_vertex_tables(ret,cfg->maxtau,1024);
 
 	/*
 		We add the initial, lone propagator.
@@ -99,7 +98,9 @@ void fini_diagram(struct diagram_t *dgr)
 		fini_vlist(dgr->midpoints);
 		fini_vlist(dgr->free_propagators);
 		fini_vlist(dgr->vertices);
-		
+
+		//fini_vertex_tables(dgr);
+	
 		free(dgr);
 	}
 }
@@ -394,15 +395,6 @@ double diagram_weight_non_incremental(struct diagram_t *dgr)
 		struct arc_t *arc;
 		double timediff;
 
-		double c0,c1,c2,omega0,omega1,omega2;
-	
-		c0=dgr->c0;
-		c1=dgr->c1;
-		c2=dgr->c2;
-		omega0=dgr->omega0;
-		omega1=dgr->omega1;
-		omega2=dgr->omega2;
-
 		arc=get_phonon_line(dgr,c);
 		timediff=arc->endtau-arc->starttau;
 
@@ -411,15 +403,11 @@ double diagram_weight_non_incremental(struct diagram_t *dgr)
 		switch(arc->lambda)
 		{
 			case 0:
-			ret*=c0*exp(-timediff*omega0);
+			ret*=get_point(dgr->v0table,timediff);
 			break;
 
 			case 1:
-			ret*=c1*exp(-timediff*omega1);
-			break;
-
-			case 2:
-			ret*=c2*exp(-timediff*omega2);
+			ret*=get_point(dgr->v1table,timediff);
 			break;
 			
 			default:
@@ -597,13 +585,19 @@ void diagram_copy(struct diagram_t *src,struct diagram_t *dst)
 	dst->endtau=src->endtau;
 	dst->chempot=src->chempot;
 
-	dst->c0=src->c0;
-	dst->c1=src->c1;
-	dst->c2=src->c2;
-	dst->omega0=src->omega0;
-	dst->omega1=src->omega1;
-	dst->omega2=src->omega2;
-	
+	dst->n=src->n;
+
+	dst->v0table=malloc(sizeof(struct interpolation_t));
+	dst->v1table=malloc(sizeof(struct interpolation_t));
+
+	dst->v0intercept=src->v0intercept;
+	dst->v0slope=src->v0slope;
+	dst->v1intercept=src->v1intercept;
+	dst->v1slope=src->v1slope;
+
+	dst->v0table=src->v0table;
+	dst->v1table=src->v1table;
+
 	dst->weight=src->weight;
 	dst->rng_ctx=src->rng_ctx;
 
@@ -640,7 +634,7 @@ struct diagram_t *diagram_clone(struct diagram_t *src)
 	ret->midpoints=init_vlist(sizeof(double),16*1024);
 	ret->free_propagators=init_vlist(sizeof(struct g0_t),1+32*1024);
 	ret->vertices=init_vlist(sizeof(struct vertex_t),32*1024);
-	
+
 	diagram_copy(src,ret);
 
 	assert(get_nr_free_propagators(src)==get_nr_free_propagators(ret));
@@ -701,4 +695,84 @@ bool check_triangle_condition_and_parity_from_js(int j1,int j2,int j3)
 		result=false;
 
 	return result;
+}
+
+/*
+	The values of corresponding to the k integral for each line
+	joining two vertices are precalculated and an interpolation is
+	created.
+*/
+
+bool init_vertex_tables(struct diagram_t *dgr,double maxtau,int steps)
+{
+	int c;
+	double n,step;
+	double *x,*y0,*y1;
+
+	n=dgr->n;
+	step=maxtau/steps;
+
+
+	if(!(x=malloc(sizeof(double)*steps)))
+		return false;
+
+	if(!(y0=malloc(sizeof(double)*steps)))
+		return false;
+
+	if(!(y1=malloc(sizeof(double)*steps)))
+		return false;
+
+	for(c=0;c<steps;c++)
+	{
+		double deltatau=step*c;
+
+		x[c]=deltatau;
+		y0[c]=chi(0,deltatau,n);
+		y1[c]=chi(1,deltatau,n);
+	}
+
+	dgr->v0table=init_interpolation(x,y0,steps);
+	dgr->v1table=init_interpolation(x,y1,steps);
+
+	/*
+		Now we use the same data to get an exponential fit of the function,
+		which will be used when adding/removing a phonon line...
+	*/
+
+	{
+		struct linreg_ctx_t *lct0,*lct1;
+		
+		lct0=init_linreg_ctx();
+		lct1=init_linreg_ctx();
+
+		for(c=0;c<steps;c++)
+		{
+			if((step*c)>3.5f)
+				break;
+			
+			linreg_add_entry(lct0,x[c],log(y0[c]));
+			linreg_add_entry(lct1,x[c],log(y1[c]));
+		}
+
+		dgr->v0slope=y0[0];
+		dgr->v0intercept=slope(lct0);
+
+		dgr->v1slope=y1[0];
+		dgr->v1intercept=slope(lct1);
+	
+		fini_linreg_ctx(lct0);
+		fini_linreg_ctx(lct1);
+	}
+
+	if(x) free(x);
+	if(y0) free(y0);
+	if(y1) free(y1);
+	
+	return true;
+}
+
+void fini_vertex_tables(struct diagram_t *dgr)
+{
+	fini_interpolation(dgr->v0table);
+	fini_interpolation(dgr->v1table);
 }

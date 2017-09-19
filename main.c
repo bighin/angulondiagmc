@@ -15,6 +15,7 @@
 #include "mc.h"
 #include "graphs.h"
 #include "tests.h"
+#include "selfenergies.h"
 
 void usage(char *argv0)
 {

@@ -24,7 +24,7 @@
 
 /*
 	The following headers need to be included after graphs.h, becuase it defines a 'lines' macro
-	which conflicts with a field in struct graph_t
+	conflicting with a field in struct graph_t
 */
 
 #include <curses.h>
@@ -43,7 +43,7 @@ void init_terminal_data(void)
 	success=tgetent(term_buffer,termtype);
 	
 	if(success<0)
-		fprintf(stderr, "Could not access the termcap data base.\n");
+		fprintf(stderr, "Could not access the termcap database.\n");
 
 	if(success==0)
 		fprintf(stderr, "Terminal type `%s' is not defined.\n",termtype);
@@ -106,28 +106,31 @@ int update_length(struct diagram_t *dgr,struct configuration_t *cfg)
 int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 {
 	int lambda,mu;
-	double k,tau1,tau2,acceptance_ratio;
+	double k,tau1,tau2,acceptance_ratio,omegaeff,g0eff;
 	bool is_accepted;
 
 	struct arc_t *thisline;
 	struct vertex_t *v1,*v2;
 	struct diagram_t *old;
 
-	double omegas[3]={cfg->omega0,cfg->omega1,cfg->omega2};
-
 	/*
-		Do we want to limit the simulation only to first order diagrams?
+		Do we want to limit the simulation only to first order diagrams (or at a certain maximum order)?
 	*/
 
 	if(get_nr_phonons(dgr)>=cfg->maxorder)
 		return UPDATE_UNPHYSICAL;
 
 	/*
-		The new lambda is chosen using a uniform distribution
+		The new lambda is chosen using a uniform distribution.
+		Note that mu does not need to be initialized, we will sum over all mu's
+		when evaluating the weight of a diagram.
 	*/
 
-	lambda=gsl_rng_uniform_int(dgr->rng_ctx,3);
+	lambda=gsl_rng_uniform_int(dgr->rng_ctx,2);
 	mu=0;
+
+	omegaeff=(lambda==0)?(fabs(dgr->v0slope)):(fabs(dgr->v1slope));
+	g0eff=(lambda==0)?(fabs(dgr->v0intercept)):(fabs(dgr->v1intercept));
 
 	/*
 		The start time tau1 is sampled uniformly, whereas tau2 is sampled from
@@ -136,7 +139,7 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	
 	k=0.0f;
 	tau1=gsl_rng_uniform(dgr->rng_ctx)*dgr->endtau;
-	tau2=doubly_truncated_exp_dist(dgr->rng_ctx,omegas[lambda],tau1,dgr->endtau);
+	tau2=doubly_truncated_exp_dist(dgr->rng_ctx,omegaeff,tau1,dgr->endtau);
 
 	/*
 		We save the current diagram and the line is added...
@@ -166,7 +169,8 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	acceptance_ratio=(diagram_weight(dgr)*diagram_m_weight(dgr,cfg->use_hashtable))/(diagram_weight(old)*diagram_m_weight(old,cfg->use_hashtable));
 	acceptance_ratio*=3.0f*dgr->endtau;
 	acceptance_ratio/=get_nr_phonons(dgr)+1;
-	acceptance_ratio/=doubly_truncated_exp_pdf(dgr->rng_ctx,omegas[lambda],tau1,dgr->endtau,tau2);
+	acceptance_ratio/=doubly_truncated_exp_pdf(dgr->rng_ctx,omegaeff,tau1,dgr->endtau,tau2);
+	acceptance_ratio/=g0eff;
 
 	is_accepted=(gsl_rng_uniform(dgr->rng_ctx)<acceptance_ratio)?(true):(false);
 
@@ -189,10 +193,8 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	struct diagram_t *old;
 	
 	int target,lambda,nr_phonons,startmidpoint,endmidpoint;
-	double acceptance_ratio,tau1,tau2;
+	double acceptance_ratio,tau1,tau2,omegaeff,g0eff;
 	bool is_accepted;
-
-	double omegas[3]={cfg->omega0,cfg->omega1,cfg->omega2};
 
 	nr_phonons=get_nr_phonons(dgr);
 
@@ -248,212 +250,14 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 		}
 	}
 
-	acceptance_ratio=(diagram_weight(dgr)*diagram_m_weight(dgr,cfg->use_hashtable))/(diagram_weight(old)*diagram_m_weight(old,cfg->use_hashtable));
-	acceptance_ratio/=3.0f*dgr->endtau;
-	acceptance_ratio*=nr_phonons;
-	acceptance_ratio*=doubly_truncated_exp_pdf(dgr->rng_ctx,omegas[lambda],tau1,dgr->endtau,tau2);
-
-	is_accepted=(gsl_rng_uniform(dgr->rng_ctx)<acceptance_ratio)?(true):(false);
-
-	if(is_accepted==false)
-	{
-		diagram_copy(old,dgr);
-		fini_diagram(old);
-
-		return UPDATE_REJECTED;
-	}
-
-	fini_diagram(old);
-
-	return UPDATE_ACCEPTED;
-}
-
-int sigma_update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
-{
-	int lambda,mu,nr_phonons;
-	double k,tau1,tau2,acceptance_ratio,firsttau,lasttau;
-	bool is_accepted;
-
-	struct arc_t *thisline;
-	struct vertex_t *v1,*v2;
-	struct diagram_t *old;
-
-	double omegas[3]={cfg->omega0,cfg->omega1,cfg->omega2};
-
-	/*
-		Do we want to limit the simulation only to first order diagrams?
-	*/
-
-	nr_phonons=get_nr_phonons(dgr);
-
-	if(nr_phonons>=cfg->maxorder)
-		return UPDATE_UNPHYSICAL;
-
-	/*
-		The new lambda is chosen using a uniform distribution
-	*/
-
-	lambda=gsl_rng_uniform_int(dgr->rng_ctx,3);
-	mu=0;
-
-	/*
-		If there are no phonon lines, the G0 and \Sigma updates coincide...
-	*/
-
-	if(nr_phonons==0)
-		return update_add_phonon_line(dgr,cfg);
-
-	/*
-		...otherwise we have to make sure that the newly-added phonon line
-		still gives us an irreducible diagram.
-	*/
-
-
-	firsttau=get_vertex(dgr,0)->left->endtau;
-	lasttau=get_vertex(dgr,get_nr_vertices(dgr)-1)->left->endtau;
-
-	/*
-		tau1 is chosen in the internval [0, lasttau]
-		while tau2 is chosen in the interval [MAX(firsttau,tau1), endtau]
-
-		where firsttau and lasttau are the time of the first and last vertex, respectively,
-		while endtau is the total length of the diagram.
-	*/
-
-	k=0.0f;
-	tau1=gsl_rng_uniform(dgr->rng_ctx)*lasttau;
-	tau2=doubly_truncated_exp_dist(dgr->rng_ctx,omegas[lambda],MAX(firsttau,tau1),dgr->endtau);
-
-	/*
-		We save the current diagram and the line is added...
-	*/
-
-	old=diagram_clone(dgr);
-	diagram_add_phonon_line(dgr,tau1,tau2,k,lambda,mu);
-
-	/*
-		...and then we check if the new line makes sense physically!
-	*/
-
-	thisline=get_phonon_line(dgr,get_nr_phonons(dgr)-1);
-	v1=get_vertex(dgr,thisline->startmidpoint);
-	v2=get_vertex(dgr,thisline->endmidpoint);
-
-	if((check_triangle_condition_and_parity(dgr,v1)==false)||(check_triangle_condition_and_parity(dgr,v2)==false))
-	{
-		diagram_copy(old,dgr);
-		fini_diagram(old);
-
-		return UPDATE_UNPHYSICAL;
-	}
-
-	recouple(dgr,thisline->startmidpoint,thisline->endmidpoint);
-
-	acceptance_ratio=(diagram_weight(dgr)*diagram_m_weight(dgr,cfg->use_hashtable))/(diagram_weight(old)*diagram_m_weight(old,cfg->use_hashtable));
-	acceptance_ratio*=3.0f*dgr->endtau;
-	acceptance_ratio/=get_nr_phonons(dgr)+1;
-	acceptance_ratio/=doubly_truncated_exp_pdf(dgr->rng_ctx,omegas[lambda],tau1,dgr->endtau,tau2);
-	
-#warning CheckMe! Is this update correct? Is it still balanced if I use a different distribution above? 
-
-	is_accepted=(gsl_rng_uniform(dgr->rng_ctx)<acceptance_ratio)?(true):(false);
-
-	if(is_accepted==false)
-	{
-		diagram_copy(old,dgr);
-		fini_diagram(old);
-
-		return UPDATE_REJECTED;
-	}
-
-	fini_diagram(old);
-
-	return UPDATE_ACCEPTED;
-}
-
-int sigma_update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
-{
-	struct arc_t *arc;
-	struct diagram_t *old;
-	
-	int c,target,lambda,nr_phonons,startmidpoint,endmidpoint;
-	double acceptance_ratio,tau1,tau2;
-	bool is_accepted,found_a_line;
-
-	double omegas[3]={cfg->omega0,cfg->omega1,cfg->omega2};
-
-	nr_phonons=get_nr_phonons(dgr);
-
-	if(nr_phonons<=0)
-		return UPDATE_UNPHYSICAL;
-
-	for(found_a_line=false;found_a_line!=true;)
-	{
-		target=gsl_rng_uniform_int(dgr->rng_ctx,nr_phonons);
-		arc=get_phonon_line(dgr,target);
-
-		tau1=arc->starttau;
-		tau2=arc->endtau;
-		lambda=arc->lambda;
-		startmidpoint=arc->startmidpoint;
-		endmidpoint=arc->endmidpoint;
-
-		found_a_line=true;
-
-		if(nr_phonons>=1)
-		{
-			for(c=startmidpoint+1;c<endmidpoint-1;c++)
-			{
-				if(get_right_neighbour(dgr,c)->arcs_over_me<=1)
-					found_a_line=false;
-			}
-		}
-	}
-
-	old=diagram_clone(dgr);
-
-	/*
-		A line removal can fail, since it may leave the remaining
-		lines in a unphysical state.
-	*/
-	
-	if(diagram_remove_phonon_line(dgr,target)==false)
-	{	
-		diagram_copy(old,dgr);
-		fini_diagram(old);
-	
-		return UPDATE_UNPHYSICAL;
-	}
-
-	/*
-		This is a bit tricky: if we just removed a bubble,
-		then there are no free propagators to recouple.
-	*/
-
-	if((startmidpoint+1)!=endmidpoint)
-	{
-		recouple(dgr,startmidpoint,endmidpoint-2);
-	}
-	else
-	{
-		/*
-			...however the bubble may be 'asymmetric': that would be an error!
-		*/
-	
-		if(get_left_neighbour(old,startmidpoint)->j!=get_right_neighbour(old,endmidpoint)->j)
-		{
-			print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
-		
-			printf("%f\n",diagram_weight(old)*diagram_m_weight(old,cfg->use_hashtable));
-
-			exit(0);
-		}
-	}
+	omegaeff=(lambda==0)?(fabs(dgr->v0slope)):(fabs(dgr->v1slope));
+	g0eff=(lambda==0)?(fabs(dgr->v0intercept)):(fabs(dgr->v1intercept));
 
 	acceptance_ratio=(diagram_weight(dgr)*diagram_m_weight(dgr,cfg->use_hashtable))/(diagram_weight(old)*diagram_m_weight(old,cfg->use_hashtable));
 	acceptance_ratio/=3.0f*dgr->endtau;
 	acceptance_ratio*=nr_phonons;
-	acceptance_ratio*=doubly_truncated_exp_pdf(dgr->rng_ctx,omegas[lambda],tau1,dgr->endtau,tau2);
+	acceptance_ratio*=doubly_truncated_exp_pdf(dgr->rng_ctx,omegaeff,tau1,dgr->endtau,tau2);
+	acceptance_ratio*=g0eff;
 
 	is_accepted=(gsl_rng_uniform(dgr->rng_ctx)<acceptance_ratio)?(true):(false);
 
@@ -483,12 +287,7 @@ void load_config_defaults(struct configuration_t *config)
 	config->maxtau=100.0f;
 	config->maxorder=1024;
 	
-	config->c0=1.5;
-	config->c1=0.75;
-	config->c2=0.35;
-	config->omega0=0.8;
-	config->omega1=0.8;
-	config->omega2=0.8;
+	config->n=exp(-10.0f);
 
 	config->iterations=10000000;
 	config->bins=50;
@@ -564,37 +363,17 @@ static int configuration_handler(void *user,const char *section,const char *name
 	{
 		pconfig->maxorder=atoi(value);
 	}
-	else if(MATCH("potential","c0"))
+	else if(MATCH("potential","logn"))
 	{
-		pconfig->c0=atof(value);
-	}
-	else if(MATCH("potential","c1"))
-	{
-		pconfig->c1=atof(value);
-	}
-	else if(MATCH("potential","c2"))
-	{
-		pconfig->c2=atof(value);
-	}
-	else if(MATCH("potential","omega0"))
-	{
-		pconfig->omega0=atof(value);
-	}
-	else if(MATCH("potential","omega1"))
-	{
-		pconfig->omega1=atof(value);
-	}
-	else if(MATCH("potential","omega2"))
-	{
-		pconfig->omega2=atof(value);
-	}
-	else if(MATCH("sampling","iterations"))
-	{
-		pconfig->iterations=atoi(value);
+		pconfig->n=exp(atof(value));
 	}
 	else if(MATCH("sampling","bins"))
 	{
 		pconfig->bins=atoi(value);
+	}
+	else if(MATCH("sampling","iterations"))
+	{
+		pconfig->iterations=atoi(value);
 	}
 	else if(MATCH("sampling","width"))
 	{	
@@ -743,14 +522,10 @@ int do_diagmc(char *configfile)
 
 	dcfg.j=config.j;
 	dcfg.endtau=config.endtau;
+	dcfg.maxtau=config.maxtau;
 	dcfg.chempot=config.chempot;
 
-	dcfg.c0=config.c0;
-	dcfg.c1=config.c1;
-	dcfg.c2=config.c2;
-	dcfg.omega0=config.omega0;
-	dcfg.omega1=config.omega1;
-	dcfg.omega2=config.omega2;
+	dcfg.n=config.n;
 
         init_terminal_data();
 
@@ -959,7 +734,7 @@ int do_diagmc(char *configfile)
 	fprintf(out,"# Chemical potential: %f\n",config.chempot);
 	fprintf(out,"# Initial diagram length: %f\n",config.endtau);
 	fprintf(out,"# Max diagram length: %f\n",config.maxtau);
-	fprintf(out,"# Potential parameters: (c0, c1, c2, omega0, omega1, omega2) = (%f, %f, %f, %f, %f, %f)\n",config.c0,config.c1,config.c2,config.omega0,config.omega1,config.omega2);
+	fprintf(out,"# Potential parameters: (logn) = (%f)\n",log(config.n));
 	fprintf(out,"#\n");
 
 	total_proposed=total_accepted=total_rejected=0;

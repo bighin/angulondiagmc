@@ -66,13 +66,7 @@ int test_one_diagram(int index,int j1,int j2,int j3,int j4,int flags)
 	dcfg.endtau=1.0f;
 	dcfg.chempot=5.75f;
 
-	dcfg.c0=0.05f;
-	dcfg.c1=0.05f;
-	dcfg.c2=0.05f;
-
-	dcfg.omega0=16.0f;
-	dcfg.omega1=16.0f;
-	dcfg.omega2=16.0f;
+	dcfg.n=1.0f;
 
 	mode=PRINT_TOPOLOGY;//|PRINT_PROPAGATORS;
 	dgr=init_diagram(&dcfg);

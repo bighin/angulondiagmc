@@ -70,88 +70,6 @@ void debug_vertices_ext(struct diagram_t *dgr)
 	}
 }
 
-void debug_weight_old(struct diagram_t *dgr)
-{
-	int c;
-	
-	/*
-		We calculate the weight associated to each free rotor line...
-	*/
-	
-	printf("<");
-	
-	for(c=0;c<get_nr_free_propagators(dgr);c++)
-	{
-		struct g0_t *g0=get_free_propagator(dgr,c);
-		double en,tau;
-		
-		en=g0->j*(g0->j+1.0f)-dgr->chempot;
-		tau=g0->endtau-g0->starttau;
-
-		printf("%f (%f,%f)",-en*tau,en,tau);
-	
-		if(c!=get_nr_free_propagators(dgr)-1)
-			printf(", ");
-	}
-
-	printf("> <");
-
-	/*
-		...then we add the phonon arcs...
-	*/
-
-	for(c=0;c<get_nr_phonons(dgr);c++)
-	{
-		struct arc_t *arc;
-		double timediff,omega0;
-
-		omega0=dgr->omega0;
-
-		arc=get_phonon_line(dgr,c);
-		timediff=arc->endtau-arc->starttau;
-
-		assert(timediff>=0);
-
-		printf("%f",-timediff*omega0);
-
-		if(c!=get_nr_phonons(dgr)-1)
-			printf(", ");
-	}
-
-	printf("> <");
-
-	/*
-		...and finally we consider the vertices.
-	*/
-
-	for(c=0;c<get_nr_vertices(dgr);c++)
-	{
-		int j1,m1,j2,m2,j3,m3;
-		double coupling;
-
-		struct vertex_t *thisvertex=get_vertex(dgr,c);
-
-		j1=thisvertex->left->j;
-		m1=thisvertex->left->m;
-
-		j2=thisvertex->right->j;
-		m2=thisvertex->right->m;
-
-		j3=thisvertex->phononline->lambda;
-		m3=thisvertex->phononline->mu;
-
-		coupling=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,0,0,0)*
-		         sqrtf((2.0f*j1+1)*(2.0f*j2+1)*(2.0f*j3+1)/(4.0f*M_PI));
-	
-		printf("%f ((%d,%d),(%d,%d),(%d,%d))",coupling,j1,m1,j2,m2,j3,m3);
-
-		if(c!=get_nr_vertices(dgr)-1)
-			printf(", ");
-	}
-
-	printf("> Total: <%f>\n",diagram_weight(dgr));
-}
-
 void debug_weight(struct diagram_t *dgr)
 {
 	int c;
@@ -183,16 +101,7 @@ void debug_weight(struct diagram_t *dgr)
 	for(c=0;c<get_nr_phonons(dgr);c++)
 	{
 		struct arc_t *arc;
-		double timediff;
-
-		double c0,c1,c2,omega0,omega1,omega2;
-		
-		c0=dgr->c0;
-		c1=dgr->c1;
-		c2=dgr->c2;
-		omega0=dgr->omega0;
-		omega1=dgr->omega1;
-		omega2=dgr->omega2;
+		double factor,timediff;
 
 		arc=get_phonon_line(dgr,c);
 		timediff=arc->endtau-arc->starttau;
@@ -202,23 +111,19 @@ void debug_weight(struct diagram_t *dgr)
 		switch(arc->lambda)
 		{
 			case 0:
-			ret*=c0*exp(-timediff*omega0);
-			printf("Adding %f * exp(%f) [%f %f]\n",c0,-timediff*omega0,timediff,omega0);
+			factor=get_point(dgr->v0table,timediff);
 			break;
 
 			case 1:
-			ret*=c1*exp(-timediff*omega1);
-			printf("Adding %f * exp(%f) [%f %f]\n",c1,-timediff*omega1,timediff,omega1);
+			factor=get_point(dgr->v1table,timediff);
 			break;
 
-			case 2:
-			ret*=c2*exp(-timediff*omega2);
-			printf("Adding %f * exp(%f) [%f %f]\n",c2,-timediff*omega2,timediff,omega2);
-			break;
-			
 			default:
 			assert(false);
 		}
+
+		ret*=factor;
+		printf("Adding %f (vertex from precalculated tables, lambda=%d)\n",factor,arc->lambda);
 	}
 
 	/*
@@ -319,14 +224,8 @@ int stresstest(void)
 	cfg.j=2;
 	cfg.chempot=5.0f;
 
-	cfg.c0=1.5f;
-	cfg.c1=1.6f;
-	cfg.c2=1.7f;
-
-	cfg.omega0=-1.0f;
-	cfg.omega1=-1.1f;
-	cfg.omega2=-1.2f;
-
+	cfg.n=1.0f;
+	
 	dgr=init_diagram(&cfg);
 
 	dgr->rng_ctx=gsl_rng_alloc(gsl_rng_mt19937);

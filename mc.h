@@ -25,12 +25,7 @@ struct configuration_t
 
 	/* "potential" section */
 	
-	double c0;
-	double c1;
-	double c2;
-	double omega0;
-	double omega1;
-	double omega2;
+	double n;
 
 	/* "sampling" section */
 

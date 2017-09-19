@@ -5,6 +5,7 @@
 #include <gsl/gsl_rng.h>
 
 #include "aux.h"
+#include "spline.h"
 
 /*
 	Variable length list
@@ -183,6 +184,75 @@ void vlist_copy(struct vlist_t *src,struct vlist_t *dst)
 	memcpy(dst->mem,src->mem,src->elementsize*vlist_get_nr_elements(src));
 
 	dst->nelements=src->nelements;
+}
+
+/*
+	Spline interpolation, given a grid of points, essentially a nice wrapper
+	over the code contained in Numerical Recipes (NR).
+
+	Note that the code in NR is __not__ thread safe, the static keyword has to
+	be removed in the splint() function.
+*/
+
+struct interpolation_t *init_interpolation(double *x,double *y,int n)
+{
+	struct interpolation_t *ret;
+	
+	if(!(ret=malloc(sizeof(struct interpolation_t))))
+		return NULL;
+
+	ret->x=malloc(sizeof(double)*n);
+	ret->y=malloc(sizeof(double)*n);
+	ret->y2=malloc(sizeof(double)*n);
+
+	if((!ret->x)||(!ret->y)||(!ret->y2))
+		return NULL;
+
+	memcpy(ret->x,x,sizeof(double)*n);
+	memcpy(ret->y,y,sizeof(double)*n);
+	ret->n=n;
+	
+	spline(ret->x,ret->y,ret->n,0.0f,0.0f,ret->y2);
+
+	return ret;
+}
+
+void fini_interpolation(struct interpolation_t *it)
+{
+	if(it)
+	{
+		if(it->x)
+			free(it->x);
+
+		if(it->y)
+			free(it->y);
+
+		if(it->y2)
+			free(it->y2);
+	
+		free(it);
+	}
+}
+
+void copy_interpolation(struct interpolation_t *dst,struct interpolation_t *src)
+{
+	assert(dst);
+	assert(src);
+
+	dst->n=src->n;
+
+	memcpy(dst->x,src->x,sizeof(double)*dst->n);
+	memcpy(dst->y,src->y,sizeof(double)*dst->n);
+	memcpy(dst->y2,src->y2,sizeof(double)*dst->n);
+}
+
+double get_point(struct interpolation_t *it,double x)
+{
+	double y;
+	
+	splint(it->x,it->y,it->y2,it->n,x,&y);
+	
+	return y;
 }
 
 void seed_rng(gsl_rng *rng)

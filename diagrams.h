@@ -83,12 +83,13 @@ struct diagram_cfg_t
 		Parameters defining the interaction potential
 	*/
 	
-	double c0;
-	double c1;
-	double c2;
-	double omega0;
-	double omega1;
-	double omega2;
+	double n;
+	
+	/*
+		The maximum allowed lenght
+	*/
+	
+	double maxtau;
 };
 
 struct diagram_t
@@ -107,10 +108,18 @@ struct diagram_t
 	double weight;
 
 	/*
-		Parameters defining the interaction potential
+		Parameters defining the interaction potential.
+	
+		n is the adimensional density
+		v0table and v1table contain the tables for the \chi_{\lambda}(\Delta t) function
+		
+		Finally I have a short-time estimate of the behaviour of \chi_{\lambda}(\Delta t),
+		used when adding or removing a phonon. The fit is of the form intercept*exp(-slope*x).
 	*/
 
-	double c0,c1,c2,omega0,omega1,omega2;
+	double n;
+	struct interpolation_t *v0table,*v1table;
+	double v0intercept,v0slope,v1intercept,v1slope;
 
 	/*
 		A GSL random number generator context
@@ -156,5 +165,8 @@ int print_diagram(struct diagram_t *dgr,int flags);
 
 bool check_triangle_condition_and_parity(struct diagram_t *dgr,struct vertex_t *thisvertex);
 bool check_triangle_condition_and_parity_from_js(int j1,int j2,int j3);
+
+bool init_vertex_tables(struct diagram_t *dgr,double maxtau,int steps);
+void fini_vertex_tables(struct diagram_t *dgr);
 
 #endif //__DIAGRAMS_H__
