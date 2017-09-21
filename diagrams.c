@@ -99,7 +99,7 @@ void fini_diagram(struct diagram_t *dgr)
 		fini_vlist(dgr->free_propagators);
 		fini_vlist(dgr->vertices);
 
-		//fini_vertex_tables(dgr);
+		fini_vertex_tables(dgr);
 	
 		free(dgr);
 	}
@@ -329,6 +329,8 @@ void diagram_check_consistency(struct diagram_t *dgr)
 		if(!(fabs(w1-w2)<10e-7*w1))
 		{
 			printf("Consistency check for the incremental weight failed! (%f, %f)\n",w1,w2);
+			debug_weight(dgr);
+			exit(0);
 		}
 	
 		assert(fabs(w1-w2)<10e-7*w1);
@@ -472,9 +474,12 @@ int print_diagram(struct diagram_t *dgr,int flags)
 		for(c=0;c<get_nr_phonons(dgr);c++)
 		{
 			struct arc_t *thisline=vlist_get_element(dgr->phonons,c);
-		
-			print_chars(' ',2+(dashing+4)*(1+thisline->startmidpoint));
-			print_chars('_',-1+(dashing+4)*(thisline->endmidpoint-thisline->startmidpoint));
+			
+			if(!(flags&PRINT_DRYRUN))
+			{
+				print_chars(' ',2+(dashing+4)*(1+thisline->startmidpoint));
+				print_chars('_',-1+(dashing+4)*(thisline->endmidpoint-thisline->startmidpoint));
+			}
 
 			pattern[1+(dashing+4)*(1+thisline->startmidpoint)]='|';
 			pattern[1+(dashing+4)*(1+thisline->endmidpoint)]='|';
@@ -587,16 +592,13 @@ void diagram_copy(struct diagram_t *src,struct diagram_t *dst)
 
 	dst->n=src->n;
 
-	dst->v0table=malloc(sizeof(struct interpolation_t));
-	dst->v1table=malloc(sizeof(struct interpolation_t));
-
 	dst->v0intercept=src->v0intercept;
 	dst->v0slope=src->v0slope;
 	dst->v1intercept=src->v1intercept;
 	dst->v1slope=src->v1slope;
 
-	dst->v0table=src->v0table;
-	dst->v1table=src->v1table;
+	copy_interpolation(dst->v0table,src->v0table);
+	copy_interpolation(dst->v1table,src->v1table);
 
 	dst->weight=src->weight;
 	dst->rng_ctx=src->rng_ctx;
@@ -629,11 +631,22 @@ struct diagram_t *diagram_clone(struct diagram_t *src)
 
 	if(!(ret=malloc(sizeof(struct diagram_t))))
 		return NULL;
-	
+
 	ret->phonons=init_vlist(sizeof(struct arc_t),16*1024);
 	ret->midpoints=init_vlist(sizeof(double),16*1024);
 	ret->free_propagators=init_vlist(sizeof(struct g0_t),1+32*1024);
 	ret->vertices=init_vlist(sizeof(struct vertex_t),32*1024);
+
+	ret->v0table=malloc(sizeof(struct interpolation_t));
+	ret->v1table=malloc(sizeof(struct interpolation_t));
+
+	ret->v0table->x=malloc(sizeof(double)*src->v0table->n);
+	ret->v0table->y=malloc(sizeof(double)*src->v0table->n);
+	ret->v0table->y2=malloc(sizeof(double)*src->v0table->n);
+
+	ret->v1table->x=malloc(sizeof(double)*src->v1table->n);
+	ret->v1table->y=malloc(sizeof(double)*src->v1table->n);
+	ret->v1table->y2=malloc(sizeof(double)*src->v1table->n);
 
 	diagram_copy(src,ret);
 
@@ -711,7 +724,6 @@ bool init_vertex_tables(struct diagram_t *dgr,double maxtau,int steps)
 
 	n=dgr->n;
 	step=maxtau/steps;
-
 
 	if(!(x=malloc(sizeof(double)*steps)))
 		return false;

@@ -146,13 +146,12 @@ void debug_weight(struct diagram_t *dgr)
 		j3=thisvertex->phononline->lambda;
 		m3=thisvertex->phononline->mu;
 
-		coupling=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,2*m1,2*m2,2*m3)*
-			 gsl_sf_coupling_3j(2*j1,2*j2,2*j3,0,0,0)*
+		coupling=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,0,0,0)*
 		         sqrtf((2.0f*j1+1)*(2.0f*j2+1)*(2.0f*j3+1)/(4.0f*M_PI));
 	
 		ret*=coupling;
 
-		printf("Adding %f\n",coupling);
+		printf("Adding %f (coupling of %d %d %d)\n",coupling,j1,j2,j3);
 	}
 
 	printf("Final result: %f\n",ret);
@@ -221,6 +220,7 @@ int stresstest(void)
 	//seed_rng(rctx);
 
 	cfg.endtau=1.0f;
+	cfg.maxtau=10.0f;
 	cfg.j=2;
 	cfg.chempot=5.0f;
 
@@ -231,8 +231,8 @@ int stresstest(void)
 	dgr->rng_ctx=gsl_rng_alloc(gsl_rng_mt19937);
 	assert(dgr->rng_ctx!=NULL);
 
-	parx=48;
-	pary=90;
+	parx=58;
+	pary=86;
 	parw=12;
 	parz=46;
 
@@ -250,7 +250,7 @@ int stresstest(void)
 			hi=gsl_rng_uniform(rctx);
 			k=gsl_rng_uniform(rctx);
 
-			lambda=gsl_rng_uniform_int(rctx,3);
+			lambda=gsl_rng_uniform_int(rctx,2);
 			mu=0;
 
 			if(lo>hi)
@@ -318,7 +318,7 @@ int stresstest(void)
 				v2=get_vertex(dgr,index);
 		
 				oldj=target->j;
-				newj=gsl_rng_uniform_int(rctx,3);
+				newj=gsl_rng_uniform_int(rctx,2);
 
 				target->j=newj;
 
