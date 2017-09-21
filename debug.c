@@ -91,7 +91,7 @@ void debug_weight(struct diagram_t *dgr)
 
 		ret*=exp(-en*tau);
 		
-		printf("Adding exp(%f)\n",-en*tau);
+		printf("Adding exp(%f) = %f\n",-en*tau,exp(-en*tau));
 	}
 
 	/*

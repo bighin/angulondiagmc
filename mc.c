@@ -49,6 +49,18 @@ void init_terminal_data(void)
 		fprintf(stderr, "Terminal type `%s' is not defined.\n",termtype);
 }
 
+/*
+	Quick routines for double comparison
+*/
+
+bool almost_same_float(double a,double b)
+{
+	if((fabs(a-b)/fabs(a))<10e-7)
+		return true;
+	
+	return false;
+}
+
 #define UPDATE_UNPHYSICAL	(0)
 #define UPDATE_REJECTED		(1)
 #define UPDATE_ACCEPTED		(2)
@@ -81,10 +93,16 @@ int update_length(struct diagram_t *dgr,struct configuration_t *cfg)
 	newendtau=doubly_truncated_exp_dist(dgr->rng_ctx,rate,lasttau,cfg->maxtau);
 
 	/*
-		This update is always accepted
+		This update is always accepted. Still, we have to update the diagram weight
+		on the fly!
 	*/
 
+	dgr->weight/=calculate_free_propagator_weight(dgr,get_free_propagator(dgr,nr_free_propagators-1));
 	diagram_update_length(dgr,newendtau);
+	dgr->weight*=calculate_free_propagator_weight(dgr,get_free_propagator(dgr,nr_free_propagators-1));
+
+	assert(almost_same_float(dgr->weight,diagram_weight_non_incremental(dgr)));
+
 	is_accepted=true;
 
 	/*
@@ -94,8 +112,11 @@ int update_length(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	if(is_accepted==false)
 	{
+		dgr->weight/=calculate_free_propagator_weight(dgr,get_free_propagator(dgr,nr_free_propagators-1));
 		diagram_update_length(dgr,oldendtau);
-		assert(diagram_weight(dgr)==oldweight);
+		dgr->weight*=calculate_free_propagator_weight(dgr,get_free_propagator(dgr,nr_free_propagators-1));
+
+		assert(almost_same_float(diagram_weight(dgr),oldweight));
 	
 		return UPDATE_REJECTED;
 	}
@@ -103,10 +124,26 @@ int update_length(struct diagram_t *dgr,struct configuration_t *cfg)
 	return UPDATE_ACCEPTED;
 }
 
+double calculate_propagators_and_vertices(struct diagram_t *dgr,int startmidpoint,int endmidpoint)
+{
+	double ret=1.0f;
+	int c;
+
+	for(c=startmidpoint;c<=endmidpoint;c++)
+	{
+		ret*=calculate_free_propagator_weight(dgr,get_left_neighbour(dgr,c));
+		ret*=calculate_vertex_weight(dgr,c);
+	}
+
+	ret*=calculate_free_propagator_weight(dgr,get_right_neighbour(dgr,endmidpoint));
+
+	return ret;
+}
+
 int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 {
 	int lambda,mu;
-	double k,tau1,tau2,acceptance_ratio,omegaeff,g0eff;
+	double k,tau1,tau2,weightratio,acceptance_ratio,omegaeff,g0eff;
 	bool is_accepted;
 
 	struct arc_t *thisline;
@@ -146,6 +183,7 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	*/
 
 	old=diagram_clone(dgr);
+
 	diagram_add_phonon_line(dgr,tau1,tau2,k,lambda,mu);
 
 	/*
@@ -156,6 +194,8 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	v1=get_vertex(dgr,thisline->startmidpoint);
 	v2=get_vertex(dgr,thisline->endmidpoint);
 
+	recouple(dgr,thisline->startmidpoint,thisline->endmidpoint);
+
 	if((check_triangle_condition_and_parity(dgr,v1)==false)||(check_triangle_condition_and_parity(dgr,v2)==false))
 	{
 		diagram_copy(old,dgr);
@@ -164,9 +204,21 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 		return UPDATE_UNPHYSICAL;
 	}
 
-	recouple(dgr,thisline->startmidpoint,thisline->endmidpoint);
+	/*
+		We calculate the weight ratio (the fundamental quantity in accepting/rejecting the update)
+		and we use it to update the diagram weight, as well.
+	*/
 
-	acceptance_ratio=(diagram_weight(dgr)*diagram_m_weight(dgr,cfg->use_hashtable))/(diagram_weight(old)*diagram_m_weight(old,cfg->use_hashtable));
+	weightratio=calculate_arc_weight(dgr,thisline);
+	weightratio*=calculate_propagators_and_vertices(dgr,thisline->startmidpoint,thisline->endmidpoint);
+	weightratio/=calculate_propagators_and_vertices(old,thisline->startmidpoint,thisline->endmidpoint-2);
+
+	dgr->weight*=weightratio;
+	
+	assert(almost_same_float(dgr->weight,diagram_weight_non_incremental(dgr))==true);
+
+	acceptance_ratio=weightratio;
+	acceptance_ratio*=diagram_m_weight(dgr,cfg->use_hashtable)/diagram_m_weight(old,cfg->use_hashtable);
 	acceptance_ratio*=3.0f*dgr->endtau;
 	acceptance_ratio/=get_nr_phonons(dgr)+1;
 	acceptance_ratio/=doubly_truncated_exp_pdf(dgr->rng_ctx,omegaeff,tau1,dgr->endtau,tau2);
@@ -193,7 +245,7 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	struct diagram_t *old;
 	
 	int target,lambda,nr_phonons,startmidpoint,endmidpoint;
-	double acceptance_ratio,tau1,tau2,omegaeff,g0eff;
+	double weightratio,targetweight,acceptance_ratio,tau1,tau2,omegaeff,g0eff;
 	bool is_accepted;
 
 	nr_phonons=get_nr_phonons(dgr);
@@ -203,6 +255,7 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	
 	target=gsl_rng_uniform_int(dgr->rng_ctx,nr_phonons);
 	arc=get_phonon_line(dgr,target);
+	targetweight=calculate_arc_weight(dgr,arc);
 
 	tau1=arc->starttau;
 	tau2=arc->endtau;
@@ -253,7 +306,16 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	omegaeff=(lambda==0)?(fabs(dgr->v0slope)):(fabs(dgr->v1slope));
 	g0eff=(lambda==0)?(fabs(dgr->v0intercept)):(fabs(dgr->v1intercept));
 
-	acceptance_ratio=(diagram_weight(dgr)*diagram_m_weight(dgr,cfg->use_hashtable))/(diagram_weight(old)*diagram_m_weight(old,cfg->use_hashtable));
+	weightratio=1.0f/targetweight;
+	weightratio*=calculate_propagators_and_vertices(dgr,startmidpoint,endmidpoint-2);
+	weightratio/=calculate_propagators_and_vertices(old,startmidpoint,endmidpoint);
+
+	dgr->weight*=weightratio;
+	
+	assert(almost_same_float(dgr->weight,diagram_weight_non_incremental(dgr)));
+
+	acceptance_ratio=weightratio;
+	acceptance_ratio*=diagram_m_weight(dgr,cfg->use_hashtable)/diagram_m_weight(old,cfg->use_hashtable);
 	acceptance_ratio/=3.0f*dgr->endtau;
 	acceptance_ratio*=nr_phonons;
 	acceptance_ratio*=doubly_truncated_exp_pdf(dgr->rng_ctx,omegaeff,tau1,dgr->endtau,tau2);
@@ -425,6 +487,68 @@ void show_update_statistics(FILE *out,int proposed,int accepted,int rejected)
 	}
 
 	fprintf(out,"proposed %d, accepted %d (%f%%), rejected %d (%f%%).\n",proposed,accepted,accepted_pct,rejected,rejected_pct);
+}
+
+double calculate_qpw(struct configuration_t *config,struct histogram_t *ht)
+{
+	struct linreg_ctx_t *lct;
+	double qpw;
+	int start,end,c,d;
+	
+	lct=init_linreg_ctx();
+	
+	c=0;
+	qpw=-1.0f;
+
+	start=6*config->bins/10;
+	end=9*config->bins/10;
+
+	for(d=start;d<end;d++)
+	{
+		if(histogram_get_bin_average(ht,d)>10e-7)
+		{
+			linreg_add_entry(lct,config->width*d+config->width/2.0f,log(histogram_get_bin_average(ht,d)));
+			c++;
+		}
+	}
+
+	if(c>0)
+		qpw=exp(intercept(lct));
+
+	fini_linreg_ctx(lct);
+	
+	return qpw;
+}
+
+double calculate_energy(struct configuration_t *config,struct histogram_t *ht)
+{
+	struct linreg_ctx_t *lct;
+	double energy;
+	int start,end,c,d;
+	
+	lct=init_linreg_ctx();
+	
+	c=0;
+	energy=-1.0f;
+	
+	start=6*config->bins/10;
+	end=9*config->bins/10;
+
+	for(d=start;d<end;d++)
+	{
+		if(histogram_get_bin_average(ht,d)>10e-7)
+		{
+			linreg_add_entry(lct,config->width*d+config->width/2.0f,log(histogram_get_bin_average(ht,d)));
+			c++;
+		}
+	}
+
+	if(c>0)
+		energy=config->chempot-slope(lct);
+
+	fini_linreg_ctx(lct);
+	
+	return energy;
 }
 
 int do_diagmc(char *configfile)
@@ -754,6 +878,8 @@ int do_diagmc(char *configfile)
 	fprintf(out,"# Total: ");
 	show_update_statistics(out,total_proposed,total_accepted,total_rejected);
 	fprintf(out,"#\n# Average order: %f\n",((double)(avgorder[0]))/((double)(avgorder[1])));
+	fprintf(out,"# Extrapolated quasiparticle weight: %f\n",calculate_qpw(&config,ht));
+	fprintf(out,"# Extrapolated energy: %f\n",calculate_energy(&config,ht));
 	fprintf(out,"#\n");
 	fprintf(out,"# Sampled quantity: Green's function (G)\n");
 	fprintf(out,"# Iterations: %d\n",config.iterations);

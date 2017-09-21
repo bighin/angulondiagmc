@@ -192,11 +192,14 @@ void diagram_add_end_midpoint(struct diagram_t *dgr,int c,double tau,struct arc_
 
 double calculate_arc_weight(struct diagram_t *dgr,struct arc_t *arc)
 {
+#if 0
 	int j1,j2,j3;
 	struct vertex_t *thisvertex;
+#endif
 	double timediff;
 	double ret=1.0f;
 
+#if 0
 	thisvertex=get_vertex(dgr,arc->startmidpoint);
 
 	j1=thisvertex->left->j;
@@ -214,26 +217,14 @@ double calculate_arc_weight(struct diagram_t *dgr,struct arc_t *arc)
 
 	ret*=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,0,0,0)*
 	     sqrtf((2.0f*j1+1)*(2.0f*j2+1)*(2.0f*j3+1)/(4.0f*M_PI));
+#endif
 
 	timediff=arc->endtau-arc->starttau;
 
 	assert(timediff>=0);
 
-	switch(arc->lambda)
-	{
-		case 0:
-		ret*=get_point(dgr->v0table,timediff);
-		break;
+	ret*=chi_lambda(dgr,arc->lambda,timediff);
 
-		case 1:
-		ret*=get_point(dgr->v1table,timediff);
-		break;
-		
-		default:
-		assert(false);
-	}
-
-	
 	return ret;
 }
 
@@ -305,8 +296,6 @@ void diagram_add_phonon_line(struct diagram_t *dgr,double tau1,double tau2,doubl
 
 	for(c=arc->startmidpoint;c<arc->endmidpoint;c++)
 		get_right_neighbour(dgr,c)->arcs_over_me++;
-
-	dgr->weight*=calculate_arc_weight(dgr,arc);
 
 	assert(hi>lo);
 }
@@ -418,9 +407,9 @@ void diagram_remove_end_midpoint(struct diagram_t *dgr,int c)
 
 bool diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 {
-	int c,startmidpoint,endmidpoint,middle1,middle2;
+	int c,startmidpoint,endmidpoint;
 	struct arc_t *arc;
-	bool result=true,asymmetric_bubble_flag=false;
+	bool result=true;
 
 #ifndef NDEBUG
 	double tau1,tau2,tau3,tau4;
@@ -439,74 +428,6 @@ bool diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 
 	for(c=arc->startmidpoint;c<arc->endmidpoint;c++)
 		get_right_neighbour(dgr,c)->arcs_over_me--;
-
-	/*
-		We update the diagram weight incrementally: now we remove the arc and the free
-		propagators stemming for each one of the two arc vertices. The new propagators
-		will be added to the weight at the end.
-	*/
-
-	dgr->weight/=calculate_arc_weight(dgr,arc);
-
-	dgr->weight/=calculate_free_propagator_weight(dgr,get_left_neighbour(dgr,startmidpoint));
-	dgr->weight/=calculate_free_propagator_weight(dgr,get_right_neighbour(dgr,startmidpoint));
-
-	/*
-		Tricky part: we must avoid overlaps between the propagators whose weight we remove!
-	*/
-
-	if(get_right_neighbour(dgr,startmidpoint)!=get_left_neighbour(dgr,endmidpoint))
-		dgr->weight/=calculate_free_propagator_weight(dgr,get_left_neighbour(dgr,endmidpoint));
-	
-	dgr->weight/=calculate_free_propagator_weight(dgr,get_right_neighbour(dgr,endmidpoint));
-
-	/*
-		Even trickier: given that a propagator inside the removed arc will be modified,
-		two vertices in the middle will change their value, as well, unless the removed
-		arc is so small that it does not contain vertices.
-	*/
-
-	middle1=startmidpoint+1;
-	middle2=endmidpoint-1;
-
-	if(middle1<=middle2)
-	{
-		dgr->weight/=calculate_vertex_weight(dgr,middle1);
-		
-		if(middle1!=middle2)
-			dgr->weight/=calculate_vertex_weight(dgr,middle2);
-	}
-	
-	/*
-		Trickier than trickier: it can happen that we remove a bubble with
-		different values of angular momenta of the preceding and following line,
-		something like:
-
-                        lambda=2
-                        _______
-	               |       |
-	               |       |
-	        x _____|_______|_____
-                   j=2    j=2     j=0
-	
-		This is not physically allowed, since the m-weight will go to zero, but it is still
-		a reachable configuration. When removing such a bubble, it will be replaced
-		by a j=0 line. In this case the vertex preciding the bubble -- if it exists,
-		denoted by an 'x' in the diagram above -- will have its weight modified,
-		since now will be connected, in the example, to a j=0 line rather than to a j=2 line.
-	*/
-
-	if((startmidpoint+1)==endmidpoint)
-	{
-		if(startmidpoint!=0)
-		{
-			if(get_left_neighbour(dgr,startmidpoint)->j!=get_right_neighbour(dgr,endmidpoint)->j)
-			{
-				dgr->weight/=calculate_vertex_weight(dgr,startmidpoint-1);
-				asymmetric_bubble_flag=true;
-			}
-		}
-	}
 
 	/*
 		These values are saved for debug purposes only
@@ -573,8 +494,6 @@ bool diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 	diagram_remove_start_midpoint(dgr,startmidpoint);
 
 	endmidpoint--;
-	middle1--;
-	middle2--;
 
 	for(c=0;c<get_nr_phonons(dgr);c++)
 	{
@@ -606,56 +525,6 @@ bool diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 	}
 
 	diagram_remove_end_midpoint(dgr,endmidpoint);
-
-	/*
-		Finally we fix the diagram weight, since we still have to add back the new free propagators.
-	*/
-
-	dgr->weight*=calculate_free_propagator_weight(dgr,get_free_propagator(dgr,startmidpoint));
-
-	/*
-		Again, one must pay attention not to take into account overlapping region,
-		i.e. -- in this case -- the same propagator.
-	*/
-
-	if(get_free_propagator(dgr,startmidpoint)!=get_free_propagator(dgr,endmidpoint))
-		dgr->weight*=calculate_free_propagator_weight(dgr,get_free_propagator(dgr,endmidpoint));
-
-	assert(tau1==get_free_propagator(dgr,startmidpoint)->starttau);
-	assert(tau4==get_free_propagator(dgr,endmidpoint)->endtau);
-
-	if(middle1<=middle2)
-	{
-		dgr->weight*=calculate_vertex_weight(dgr,middle1);
-
-		if(check_triangle_condition_and_parity(dgr,get_vertex(dgr,middle1))==false)
-		{
-			assert(fabs(calculate_vertex_weight(dgr,middle1))<10e-7);
-			result=false;
-		}
-
-		assert(tau2==get_free_propagator(dgr,startmidpoint)->endtau);
-		assert(tau3==get_free_propagator(dgr,endmidpoint)->starttau);
-
-		if(middle1==middle2)
-			assert(tau2==tau3);
-
-		if(middle1!=middle2)
-		{
-			dgr->weight*=calculate_vertex_weight(dgr,middle2);
-
-			if(check_triangle_condition_and_parity(dgr,get_vertex(dgr,middle2))==false)
-			{
-				assert(fabs(calculate_vertex_weight(dgr,middle2))<10e-7);
-				result=false;
-			}
-		}
-	}
-
-	if(asymmetric_bubble_flag==true)
-	{
-		dgr->weight*=calculate_vertex_weight(dgr,startmidpoint-1);
-	}
 
 	return result;
 }
@@ -705,12 +574,8 @@ void diagram_update_length(struct diagram_t *dgr,double newendtau)
 	assert(dgr->endtau==get_midpoint(dgr,nr_midpoints));
 	assert(newendtau>get_midpoint(dgr,nr_midpoints-1));
 
-	dgr->weight/=calculate_free_propagator_weight(dgr,get_free_propagator(dgr,nr_free_propagators-1));
-
 	dgr->endtau=newendtau;
 	get_free_propagator(dgr,nr_free_propagators-1)->endtau=newendtau;
-
-	dgr->weight*=calculate_free_propagator_weight(dgr,get_free_propagator(dgr,nr_free_propagators-1));
 }
 
 void save_free_propagators(struct diagram_t *dgr,struct free_propagators_ctx_t *fpc,int lo,int hi)
@@ -853,12 +718,13 @@ bool recouple(struct diagram_t *dgr,int lo,int hi)
 			Some of the delta values above would change the parity, resuling in an
 			odd total sum of angular momenta at a vertex.
 
-			The correct list is:
+			Thus, the correct list is:
 
 			lambda = 0 --> delta = 0
 			lambda = 1 --> delta = -1, 1
 			lambda = 2 --> delta = -2, 0, 2
-		
+			and so on...
+
 			and we select one random value among these deltas, for each vertex.
 		*/
 
@@ -901,7 +767,7 @@ bool recouple(struct diagram_t *dgr,int lo,int hi)
 
 	/*
 		We have tried to get a deltalist summing to 0 for MAX_TRIES times.
-	
+
 		If we didn't managed to do so, it is time to throw an error...
 	*/
 
@@ -912,31 +778,14 @@ bool recouple(struct diagram_t *dgr,int lo,int hi)
 	}
 
 	/*
-		We have a working deltalist, let's use it to rewrite the free propagators, while
-		also updating the diagram weight on the fly!
+		We have a working deltalist, let's use it to rewrite the free propagators.
 	*/
-
-	for(c=lo;c<=hi;c++)
-	{
-		dgr->weight/=calculate_vertex_weight(dgr,c);
-	
-		if(c!=hi)
-			dgr->weight/=calculate_free_propagator_weight(dgr,get_right_neighbour(dgr,c));
-	}
 
 	for(c=lo;c<hi;c++)
 	{
 		struct vertex_t *vtx=get_vertex(dgr,c);
 
 		vtx->right->j=vtx->left->j+deltalist[c-lo];
-	}
-
-	for(c=lo;c<=hi;c++)
-	{
-		dgr->weight*=calculate_vertex_weight(dgr,c);
-	
-		if(c!=hi)
-			dgr->weight*=calculate_free_propagator_weight(dgr,get_right_neighbour(dgr,c));
 	}
 
 	/*

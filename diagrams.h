@@ -168,5 +168,6 @@ bool check_triangle_condition_and_parity_from_js(int j1,int j2,int j3);
 
 bool init_vertex_tables(struct diagram_t *dgr,double maxtau,int steps);
 void fini_vertex_tables(struct diagram_t *dgr);
+double chi_lambda(struct diagram_t *dgr,int lambda,double timediff);
 
 #endif //__DIAGRAMS_H__

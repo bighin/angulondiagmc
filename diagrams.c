@@ -402,19 +402,7 @@ double diagram_weight_non_incremental(struct diagram_t *dgr)
 
 		assert(timediff>=0);
 
-		switch(arc->lambda)
-		{
-			case 0:
-			ret*=get_point(dgr->v0table,timediff);
-			break;
-
-			case 1:
-			ret*=get_point(dgr->v1table,timediff);
-			break;
-			
-			default:
-			assert(false);
-		}
+		ret*=chi_lambda(dgr,arc->lambda,timediff);
 	}
 
 	/*
@@ -434,7 +422,7 @@ double diagram_weight_non_incremental(struct diagram_t *dgr)
 
 		coupling=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,0,0,0)*
 		         sqrtf((2.0f*j1+1)*(2.0f*j2+1)*(2.0f*j3+1)/(4.0f*M_PI));
-	
+
 		ret*=coupling;
 	}
 
@@ -787,4 +775,32 @@ void fini_vertex_tables(struct diagram_t *dgr)
 {
 	fini_interpolation(dgr->v0table);
 	fini_interpolation(dgr->v1table);
+}
+
+/*
+	This function evaluates the function \chi_{\lambda}, as defined in my paper.
+
+	The values are from an interpolation, which is calculated at the creation of a new diagram,
+	i.e. by init_diagram().
+*/
+
+double chi_lambda(struct diagram_t *dgr,int lambda,double timediff)
+{
+	double ret;
+	
+	switch(lambda)
+	{
+		case 0:
+		ret=get_point(dgr->v0table,timediff);
+		break;
+
+		case 1:
+		ret=get_point(dgr->v1table,timediff);
+		break;
+		
+		default:
+		assert(false);
+	}
+	
+	return ret;
 }
