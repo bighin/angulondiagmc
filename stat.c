@@ -316,3 +316,70 @@ double doubly_truncated_exp_pdf(gsl_rng *rctx,double lambda,double tau1,double t
 {
 	return lambda*exp(-lambda*tau)/(exp(-lambda*tau1)-exp(-lambda*tau2));
 }
+
+/*
+	Given the sample histogram, we calculate the estimated energy and quasiparticle
+	weigth, by fitting to an expontial and extrapolation to 0.
+*/
+
+double calculate_qpw(struct configuration_t *config,struct histogram_t *ht)
+{
+	struct linreg_ctx_t *lct;
+	double qpw;
+	int start,end,c,d;
+	
+	lct=init_linreg_ctx();
+	
+	c=0;
+	qpw=-1.0f;
+
+	start=3*config->bins/10;
+	end=6*config->bins/10;
+
+	for(d=start;d<end;d++)
+	{
+		if(histogram_get_bin_average(ht,d)>10e-7)
+		{
+			linreg_add_entry(lct,config->width*d+config->width/2.0f,log(histogram_get_bin_average(ht,d)));
+			c++;
+		}
+	}
+
+	if(c>0)
+		qpw=exp(intercept(lct));
+
+	fini_linreg_ctx(lct);
+	
+	return qpw;
+}
+
+double calculate_energy(struct configuration_t *config,struct histogram_t *ht)
+{
+	struct linreg_ctx_t *lct;
+	double energy;
+	int start,end,c,d;
+	
+	lct=init_linreg_ctx();
+	
+	c=0;
+	energy=-1.0f;
+	
+	start=3*config->bins/10;
+	end=6*config->bins/10;
+
+	for(d=start;d<end;d++)
+	{
+		if(histogram_get_bin_average(ht,d)>10e-7)
+		{
+			linreg_add_entry(lct,config->width*d+config->width/2.0f,log(histogram_get_bin_average(ht,d)));
+			c++;
+		}
+	}
+
+	if(c>0)
+		energy=config->chempot-slope(lct);
+
+	fini_linreg_ctx(lct);
+	
+	return energy;
+}

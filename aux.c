@@ -201,12 +201,42 @@ struct interpolation_t *init_interpolation(double *x,double *y,int n)
 	if(!(ret=malloc(sizeof(struct interpolation_t))))
 		return NULL;
 
-	ret->x=malloc(sizeof(double)*n);
-	ret->y=malloc(sizeof(double)*n);
-	ret->y2=malloc(sizeof(double)*n);
-
-	if((!ret->x)||(!ret->y)||(!ret->y2))
+	if(!(ret->x=malloc(sizeof(double)*n)))
+	{
+		if(ret)
+			free(ret);
+	
 		return NULL;
+	}
+
+	if(!(ret->y=malloc(sizeof(double)*n)))
+	{
+		if(ret)
+		{
+			if(ret->x)
+				free(ret->x);
+
+			free(ret);
+		}
+		
+		return NULL;
+	}
+
+	if(!(ret->y2=malloc(sizeof(double)*n)))
+	{
+		if(ret)
+		{
+			if(ret->x)
+				free(ret->x);
+
+			if(ret->y)
+				free(ret->y);
+		
+			free(ret);
+		}
+
+		return NULL;
+	}
 
 	memcpy(ret->x,x,sizeof(double)*n);
 	memcpy(ret->y,y,sizeof(double)*n);

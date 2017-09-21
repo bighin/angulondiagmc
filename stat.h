@@ -1,6 +1,8 @@
 #ifndef __STAT_H__
 #define __STAT_H__
 
+#include "mc.h"
+
 struct samples_t
 {
 	int nalloced,next;
@@ -55,5 +57,8 @@ void fini_histogram(struct histogram_t *htt);
 
 double doubly_truncated_exp_dist(gsl_rng *rctx,double lambda,double tau1,double tau2);
 double doubly_truncated_exp_pdf(gsl_rng *rctx,double lambda,double tau1,double tau2,double tau);
+
+double calculate_qpw(struct configuration_t *config,struct histogram_t *ht);
+double calculate_energy(struct configuration_t *config,struct histogram_t *ht);
 
 #endif

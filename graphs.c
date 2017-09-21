@@ -739,8 +739,6 @@ double evaluate_graph(struct graph_t *gt,bool debugswap)
 		first=gt->delta[c][0];
 		second=gt->delta[c][1];
 		
-		verbose_printf("Found DELTA!\n");
-		
 		if(first==second)
 			continue;
 		
@@ -951,10 +949,12 @@ double diagram_m_weight(struct diagram_t *dgr,bool use_hashtable)
 	{
 		t=clock()-t;
 		double time_taken=((double)(t))/CLOCKS_PER_SEC;	
-		//printf("fun() took %f seconds to run\n",time_taken);
 	
 		if(time_taken>0.5f)
 		{
+			printf("Warning: diagram_m_weight() took %f seconds to evaluate.\n",time_taken);
+
+#if 0
 			print_diagram(dgr,1+2);
 			
 			verbose_output=true;
@@ -965,6 +965,7 @@ double diagram_m_weight(struct diagram_t *dgr,bool use_hashtable)
 			value=evaluate_graph(&gt,false);
 
 			exit(0);
+#endif
 		}
 	}
 

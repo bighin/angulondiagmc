@@ -108,14 +108,15 @@ void debug_weight(struct diagram_t *dgr)
 
 		assert(timediff>=0);
 
+		factor=1.0f;
 		switch(arc->lambda)
 		{
 			case 0:
-			factor=get_point(dgr->v0table,timediff);
+			factor*=get_point(dgr->v0table,timediff);
 			break;
 
 			case 1:
-			factor=get_point(dgr->v1table,timediff);
+			factor*=get_point(dgr->v1table,timediff);
 			break;
 
 			default:
@@ -132,19 +133,14 @@ void debug_weight(struct diagram_t *dgr)
 
 	for(c=0;c<get_nr_vertices(dgr);c++)
 	{
-		int j1,m1,j2,m2,j3,m3;
+		int j1,j2,j3;
 		double coupling;
 
 		struct vertex_t *thisvertex=get_vertex(dgr,c);
 
 		j1=thisvertex->left->j;
-		m1=thisvertex->left->m;
-
 		j2=thisvertex->right->j;
-		m2=thisvertex->right->m;
-
 		j3=thisvertex->phononline->lambda;
-		m3=thisvertex->phononline->mu;
 
 		coupling=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,0,0,0)*
 		         sqrtf((2.0f*j1+1)*(2.0f*j2+1)*(2.0f*j3+1)/(4.0f*M_PI));

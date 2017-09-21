@@ -717,10 +717,23 @@ bool init_vertex_tables(struct diagram_t *dgr,double maxtau,int steps)
 		return false;
 
 	if(!(y0=malloc(sizeof(double)*steps)))
+	{
+		if(x)
+			free(x);
+	
 		return false;
+	}
 
 	if(!(y1=malloc(sizeof(double)*steps)))
+	{
+		if(x)
+			free(x);
+
+		if(y0)
+			free(y0);
+
 		return false;
+	}
 
 	for(c=0;c<steps;c++)
 	{
@@ -786,16 +799,16 @@ void fini_vertex_tables(struct diagram_t *dgr)
 
 double chi_lambda(struct diagram_t *dgr,int lambda,double timediff)
 {
-	double ret;
+	double ret=1.0f;
 	
 	switch(lambda)
 	{
 		case 0:
-		ret=get_point(dgr->v0table,timediff);
+		ret*=get_point(dgr->v0table,timediff);
 		break;
 
 		case 1:
-		ret=get_point(dgr->v1table,timediff);
+		ret*=get_point(dgr->v1table,timediff);
 		break;
 		
 		default:

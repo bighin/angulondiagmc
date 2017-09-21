@@ -50,7 +50,7 @@ void init_terminal_data(void)
 }
 
 /*
-	Quick routines for double comparison
+	Quick routine for double comparison
 */
 
 bool almost_same_float(double a,double b)
@@ -60,6 +60,34 @@ bool almost_same_float(double a,double b)
 	
 	return false;
 }
+
+/*
+	This routines calculates the weight all the propagators between two midpoints,
+	including the propagators preceding the first midpoint, and the propagators following
+	the last midpoint.
+
+	The weight of all enclosed vertices is also calculated.
+*/
+
+double calculate_propagators_and_vertices(struct diagram_t *dgr,int startmidpoint,int endmidpoint)
+{
+	double ret=1.0f;
+	int c;
+
+	for(c=startmidpoint;c<=endmidpoint;c++)
+	{
+		ret*=calculate_free_propagator_weight(dgr,get_left_neighbour(dgr,c));
+		ret*=calculate_vertex_weight(dgr,c);
+	}
+
+	ret*=calculate_free_propagator_weight(dgr,get_right_neighbour(dgr,endmidpoint));
+
+	return ret;
+}
+
+/*
+	Now it's time to start with all the different updates!
+*/
 
 #define UPDATE_UNPHYSICAL	(0)
 #define UPDATE_REJECTED		(1)
@@ -122,22 +150,6 @@ int update_length(struct diagram_t *dgr,struct configuration_t *cfg)
 	}
 	
 	return UPDATE_ACCEPTED;
-}
-
-double calculate_propagators_and_vertices(struct diagram_t *dgr,int startmidpoint,int endmidpoint)
-{
-	double ret=1.0f;
-	int c;
-
-	for(c=startmidpoint;c<=endmidpoint;c++)
-	{
-		ret*=calculate_free_propagator_weight(dgr,get_left_neighbour(dgr,c));
-		ret*=calculate_vertex_weight(dgr,c);
-	}
-
-	ret*=calculate_free_propagator_weight(dgr,get_right_neighbour(dgr,endmidpoint));
-
-	return ret;
 }
 
 int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
@@ -216,6 +228,10 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	dgr->weight*=weightratio;
 	
 	assert(almost_same_float(dgr->weight,diagram_weight_non_incremental(dgr))==true);
+
+	/*
+		Finally we calculate the acceptance ratio for the update.
+	*/
 
 	acceptance_ratio=weightratio;
 	acceptance_ratio*=diagram_m_weight(dgr,cfg->use_hashtable)/diagram_m_weight(old,cfg->use_hashtable);
@@ -313,6 +329,10 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	dgr->weight*=weightratio;
 	
 	assert(almost_same_float(dgr->weight,diagram_weight_non_incremental(dgr)));
+
+	/*
+		Finally we calculate the acceptance ratio for the update.
+	*/
 
 	acceptance_ratio=weightratio;
 	acceptance_ratio*=diagram_m_weight(dgr,cfg->use_hashtable)/diagram_m_weight(old,cfg->use_hashtable);
@@ -487,68 +507,6 @@ void show_update_statistics(FILE *out,int proposed,int accepted,int rejected)
 	}
 
 	fprintf(out,"proposed %d, accepted %d (%f%%), rejected %d (%f%%).\n",proposed,accepted,accepted_pct,rejected,rejected_pct);
-}
-
-double calculate_qpw(struct configuration_t *config,struct histogram_t *ht)
-{
-	struct linreg_ctx_t *lct;
-	double qpw;
-	int start,end,c,d;
-	
-	lct=init_linreg_ctx();
-	
-	c=0;
-	qpw=-1.0f;
-
-	start=6*config->bins/10;
-	end=9*config->bins/10;
-
-	for(d=start;d<end;d++)
-	{
-		if(histogram_get_bin_average(ht,d)>10e-7)
-		{
-			linreg_add_entry(lct,config->width*d+config->width/2.0f,log(histogram_get_bin_average(ht,d)));
-			c++;
-		}
-	}
-
-	if(c>0)
-		qpw=exp(intercept(lct));
-
-	fini_linreg_ctx(lct);
-	
-	return qpw;
-}
-
-double calculate_energy(struct configuration_t *config,struct histogram_t *ht)
-{
-	struct linreg_ctx_t *lct;
-	double energy;
-	int start,end,c,d;
-	
-	lct=init_linreg_ctx();
-	
-	c=0;
-	energy=-1.0f;
-	
-	start=6*config->bins/10;
-	end=9*config->bins/10;
-
-	for(d=start;d<end;d++)
-	{
-		if(histogram_get_bin_average(ht,d)>10e-7)
-		{
-			linreg_add_entry(lct,config->width*d+config->width/2.0f,log(histogram_get_bin_average(ht,d)));
-			c++;
-		}
-	}
-
-	if(c>0)
-		energy=config->chempot-slope(lct);
-
-	fini_linreg_ctx(lct);
-	
-	return energy;
 }
 
 int do_diagmc(char *configfile)

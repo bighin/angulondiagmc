@@ -411,10 +411,6 @@ bool diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 	struct arc_t *arc;
 	bool result=true;
 
-#ifndef NDEBUG
-	double tau1,tau2,tau3,tau4;
-#endif
-
 	assert(position<get_nr_phonons(dgr));
 
 	/*
@@ -428,17 +424,6 @@ bool diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 
 	for(c=arc->startmidpoint;c<arc->endmidpoint;c++)
 		get_right_neighbour(dgr,c)->arcs_over_me--;
-
-	/*
-		These values are saved for debug purposes only
-	*/
-
-#ifndef NDEBUG
-	tau1=get_left_neighbour(dgr,startmidpoint)->starttau;
-	tau2=get_right_neighbour(dgr,startmidpoint)->endtau;
-	tau3=get_left_neighbour(dgr,endmidpoint)->starttau;
-	tau4=get_right_neighbour(dgr,endmidpoint)->endtau;
-#endif
 
 	/*
 		Now the hardcore part starts: we update all the field in a diagram_t struct.
