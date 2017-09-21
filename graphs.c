@@ -6,6 +6,7 @@
 #include <stdarg.h>
 #include <assert.h>
 #include <gsl/gsl_sf.h>
+#include <time.h>
 
 #include "diagrams.h"
 #include "graphs.h"
@@ -45,12 +46,17 @@ void reset_formula(FORMULA *f)
 	f->ordered=FALSE;
 }
 
+bool verbose_output=false;
+
 void verbose_printf(char *fmt,...)
 {
 	va_list ap;
 	
 	va_start(ap,fmt);
-	//vprintf(fmt,ap);
+
+	if(verbose_output==true)
+		vprintf(fmt,ap);
+
 	va_end(ap);
 }
 
@@ -517,6 +523,10 @@ void k_to_j(struct graph_t *gt,int kindex,int jindex)
 		{
 			if(gt->f.sixjs[c][d]==kindex)
 				gt->f.sixjs[c][d]=jindex;
+
+			if(gt->f.sixjs[c][d]<0)
+				if(abs(gt->f.sixjs[c][d])>abs(kindex))
+					gt->f.sixjs[c][d]++;
 		}
 	}
 
@@ -574,6 +584,16 @@ void k_to_k(struct graph_t *gt,int kindex1,int kindex2)
 		{
 			if(gt->f.sixjs[c][d]==kindex1)
 				gt->f.sixjs[c][d]=kindex2;
+		}
+	}
+
+	for(c=1;c<=gt->f.nrsixjs;c++)
+	{
+		for(d=1;d<=6;d++)
+		{
+			if(gt->f.sixjs[c][d]<0)
+				if(abs(gt->f.sixjs[c][d])>abs(kindex2))
+					gt->f.sixjs[c][d]++;
 		}
 	}
 
@@ -718,6 +738,8 @@ double evaluate_graph(struct graph_t *gt,bool debugswap)
 		
 		first=gt->delta[c][0];
 		second=gt->delta[c][1];
+		
+		verbose_printf("Found DELTA!\n");
 		
 		if(first==second)
 			continue;
@@ -888,8 +910,9 @@ double diagram_m_weight(struct diagram_t *dgr,bool use_hashtable)
 {
 	struct graph_t gt;
 	double value;
-
 	int hashindex;
+
+	clock_t t=clock();
 
 	/*
 		FIXME: are these memset() call needed? Would gt and gt.f be undefined otherwise?
@@ -923,6 +946,26 @@ double diagram_m_weight(struct diagram_t *dgr,bool use_hashtable)
 		memset(&gt.f,0,sizeof(FORMULA));
 
 		hashtable_insert(&gt,value,hashindex);
+	}
+
+	{
+		t=clock()-t;
+		double time_taken=((double)(t))/CLOCKS_PER_SEC;	
+		//printf("fun() took %f seconds to run\n",time_taken);
+	
+		if(time_taken>0.5f)
+		{
+			print_diagram(dgr,1+2);
+			
+			verbose_output=true;
+			formula_to_wolfram(gt.f);
+
+			diagram_to_graph(dgr,&gt);
+
+			value=evaluate_graph(&gt,false);
+
+			exit(0);
+		}
 	}
 
 	return value;
