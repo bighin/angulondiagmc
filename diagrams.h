@@ -102,7 +102,7 @@ struct diagram_t
 	struct vlist_t *vertices;
 
 	/*
-		The diagram weight is update incrementally
+		The diagram weight is updated incrementally
 	*/
 
 	double weight;
@@ -169,5 +169,8 @@ bool check_triangle_condition_and_parity_from_js(int j1,int j2,int j3);
 bool init_vertex_tables(struct diagram_t *dgr,double maxtau,int steps);
 void fini_vertex_tables(struct diagram_t *dgr);
 double chi_lambda(struct diagram_t *dgr,int lambda,double timediff);
+
+double get_alphaeff(struct diagram_t *dgr,int lambda);
+double get_omega0eff(struct diagram_t *dgr,int lambda);
 
 #endif //__DIAGRAMS_H__

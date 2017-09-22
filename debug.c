@@ -91,7 +91,7 @@ void debug_weight(struct diagram_t *dgr)
 
 		ret*=exp(-en*tau);
 		
-		printf("Adding exp(%f) = %f\n",-en*tau,exp(-en*tau));
+		printf("Adding free propagator (j=%d): exp(%f) = %f\n",j,-en*tau,exp(-en*tau));
 	}
 
 	/*

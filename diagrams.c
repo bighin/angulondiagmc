@@ -817,3 +817,46 @@ double chi_lambda(struct diagram_t *dgr,int lambda,double timediff)
 	
 	return ret;
 }
+
+/*
+	The weight of a phonon arc (i.e. chi_lambda as a function of t) does not
+	have a closed form, being the result of an integral.
+
+	However, we can approximate it as alphaeff*exp(-omega0eff*t)
+*/
+
+double get_alphaeff(struct diagram_t *dgr,int lambda)
+{
+	switch(lambda)
+	{
+		case 0:
+		return fabs(dgr->v0slope);
+		break;
+
+		case 1:
+		return fabs(dgr->v1slope);
+		break;
+	}
+	
+	assert(false);
+
+	return 0.0;
+}
+
+double get_omega0eff(struct diagram_t *dgr,int lambda)
+{
+	switch(lambda)
+	{
+		case 0:
+		return fabs(dgr->v0intercept);
+		break;
+
+		case 1:
+		return fabs(dgr->v1intercept);
+		break;
+	}
+
+	assert(false);
+
+	return 0.0;
+}

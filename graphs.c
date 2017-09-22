@@ -967,6 +967,22 @@ double diagram_m_weight(struct diagram_t *dgr,bool use_hashtable)
 			exit(0);
 #endif
 		}
+
+		if(value>1.10f)
+		{
+			printf("Warning: diagram_m_weight() evaluated to: %f\n",value);
+
+			print_diagram(dgr,1+2);
+			
+			verbose_output=true;
+			formula_to_wolfram(gt.f);
+
+			diagram_to_graph(dgr,&gt);
+
+			value=evaluate_graph(&gt,false);
+
+			exit(0);
+		}
 	}
 
 	return value;

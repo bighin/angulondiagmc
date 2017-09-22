@@ -319,7 +319,7 @@ double doubly_truncated_exp_pdf(gsl_rng *rctx,double lambda,double tau1,double t
 
 /*
 	Given the sample histogram, we calculate the estimated energy and quasiparticle
-	weigth, by fitting to an expontial and extrapolation to 0.
+	weigth, by fitting to an exponential and extrapolation to 0.
 */
 
 double calculate_qpw(struct configuration_t *config,struct histogram_t *ht)
