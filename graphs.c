@@ -592,7 +592,7 @@ void k_to_k(struct graph_t *gt,int kindex1,int kindex2)
 		for(d=1;d<=6;d++)
 		{
 			if(gt->f.sixjs[c][d]<0)
-				if(abs(gt->f.sixjs[c][d])>abs(kindex2))
+				if(abs(gt->f.sixjs[c][d])>abs(kindex1))
 					gt->f.sixjs[c][d]++;
 		}
 	}
@@ -968,10 +968,11 @@ double diagram_m_weight(struct diagram_t *dgr,bool use_hashtable)
 #endif
 		}
 
-		if(value>1.10f)
+		if(value>1.05f)
 		{
 			printf("Warning: diagram_m_weight() evaluated to: %f\n",value);
 
+#if 0
 			print_diagram(dgr,1+2);
 			
 			verbose_output=true;
@@ -982,6 +983,7 @@ double diagram_m_weight(struct diagram_t *dgr,bool use_hashtable)
 			value=evaluate_graph(&gt,false);
 
 			exit(0);
+#endif
 		}
 	}
 
@@ -1103,7 +1105,7 @@ double diagram_m_weight_reference(struct diagram_t *dgr)
 		}
 		
 		/*
-			...and the is summed to the total result.
+			...and then is summed to the total result.
 		*/
 
 		total+=coupling;

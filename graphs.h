@@ -101,7 +101,7 @@ struct hashentry_t
 	double value;
 };
 
-#define HASHTABLE_ENTRIES	(1024)
+#define HASHTABLE_ENTRIES	(4096)
 
 #define HASHTABLE_VALID_ENTRY	(101)
 #define HASHTABLE_INVALID_ENTRY	(102)
