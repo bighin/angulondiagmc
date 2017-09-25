@@ -21,6 +21,7 @@
 
 #include "inih/ini.h"
 #include "libprogressbar/progressbar.h"
+#include "gnuplot_i/gnuplot_i.h"
 
 /*
 	The following headers need to be included after graphs.h, becuase it defines a 'lines' macro
@@ -152,6 +153,8 @@ int update_length(struct diagram_t *dgr,struct configuration_t *cfg)
 	return UPDATE_ACCEPTED;
 }
 
+#define MAXLAMBDA	(1)
+
 int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 {
 	int lambda,mu;
@@ -176,7 +179,7 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 		when evaluating the weight of a diagram.
 	*/
 
-	lambda=gsl_rng_uniform_int(dgr->rng_ctx,2);
+	lambda=gsl_rng_uniform_int(dgr->rng_ctx,1+MAXLAMBDA);
 	mu=0;
 
 	/*
@@ -238,12 +241,20 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	acceptance_ratio=weightratio;
 	acceptance_ratio*=diagram_m_weight(dgr,cfg->use_hashtable)/diagram_m_weight(old,cfg->use_hashtable);
-	acceptance_ratio*=3.0f*(endtau-starttau);
-	acceptance_ratio/=get_nr_phonons(dgr)+1;
+	acceptance_ratio*=MAXLAMBDA*(endtau-starttau);
+	acceptance_ratio/=1+get_nr_phonons(dgr);
 	acceptance_ratio/=doubly_truncated_exp_pdf(dgr->rng_ctx,get_omega0eff(dgr,lambda),tau1,dgr->endtau,tau2);
-	acceptance_ratio/=get_alphaeff(dgr,lambda);
 
 	is_accepted=(gsl_rng_uniform(dgr->rng_ctx)<acceptance_ratio)?(true):(false);
+
+#if 0
+	printf("Update statistics:\n");
+	printf("Weight ratio: %f\n",weightratio);
+	printf("Mweight ratio: %f\n",diagram_m_weight(dgr,cfg->use_hashtable)/diagram_m_weight(old,cfg->use_hashtable));
+	printf("Time: %f\n",3.0f*(endtau-starttau));
+	printf("Alphaeff^{-1}: %f\n",1.0/get_alphaeff(dgr,lambda));
+	printf("Update is: %saccepted\n\n",(is_accepted==true)?(""):("NOT "));
+#endif
 
 	if(is_accepted==false)
 	{
@@ -362,10 +373,9 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	acceptance_ratio=weightratio;
 	acceptance_ratio*=diagram_m_weight(dgr,cfg->use_hashtable)/diagram_m_weight(old,cfg->use_hashtable);
-	acceptance_ratio/=3.0f*(endtau-starttau);
+	acceptance_ratio/=MAXLAMBDA*(endtau-starttau);
 	acceptance_ratio*=nr_phonons;
 	acceptance_ratio*=doubly_truncated_exp_pdf(dgr->rng_ctx,get_omega0eff(dgr,lambda),tau1,dgr->endtau,tau2);
-	acceptance_ratio*=get_alphaeff(dgr,lambda);
 
 	is_accepted=(gsl_rng_uniform(dgr->rng_ctx)<acceptance_ratio)?(true):(false);
 
@@ -535,6 +545,69 @@ void show_update_statistics(FILE *out,int proposed,int accepted,int rejected)
 	fprintf(out,"proposed %d, accepted %d (%f%%), rejected %d (%f%%).\n",proposed,accepted,accepted_pct,rejected,rejected_pct);
 }
 
+void send_to_gnuplot(gnuplot_ctrl *h1,struct histogram_t *ht,struct configuration_t *config)
+{
+	double *x,*y1,*y2;
+	char desc1[1024],desc2[1024];
+	int c;
+	
+	gnuplot_resetplot(h1);
+	gnuplot_setstyle(h1,"points");
+
+	if(!(x=malloc(sizeof(double)*config->bins)))
+		return;
+
+	if(!(y1=malloc(sizeof(double)*config->bins)))
+	{
+		if(x)	free(x);
+		
+		return;
+	}
+
+	if(!(y2=malloc(sizeof(double)*config->bins)))
+	{
+		if(x)	free(x);
+		if(y1)	free(y1);
+
+		return;
+	}
+
+	for(c=0;c<config->bins;c++)
+	{
+		double tau,Ej;
+	
+		tau=config->width*c+config->width/2.0f;
+		Ej=config->j*(config->j+1);
+
+		x[c]=tau;
+		y1[c]=histogram_get_bin_average(ht,c);
+		y2[c]=exp(-(Ej-config->chempot)*tau);
+	}
+
+	for(c=0;c<config->bins;c++)
+	{
+		y1[c]=log(y1[c]);
+		y2[c]=log(y2[c]);
+	}
+
+	snprintf(desc1,1024,"Angulon (j=%d, logn=%f)",config->j,log(config->n));
+	snprintf(desc2,1024,"Free rotor (j=%d)",config->j);
+
+	gnuplot_plot_xy(h1,x,y2,config->bins,desc2);
+	gnuplot_plot_xy(h1,x,y1,config->bins,desc1);
+
+	if(x)	free(x);
+	if(y1)	free(y1);
+	if(y2)	free(y2);
+}
+
+static volatile int keep_running=1;
+
+void interrupt_handler(int dummy)
+{
+	keep_running=0;
+}
+
 int do_diagmc(char *configfile)
 {
 	struct diagram_t *dgr;
@@ -545,7 +618,9 @@ int do_diagmc(char *configfile)
 	int c,d;
 	FILE *out;
 	char fname[1024];
+
 	progressbar *progress;
+	gnuplot_ctrl *h1;
 
 #define DIAGRAM_NR_UPDATES	(3)
 
@@ -628,12 +703,16 @@ int do_diagmc(char *configfile)
 
 	dcfg.n=config.n;
 
+	signal(SIGINT,interrupt_handler);
+
         init_terminal_data();
 
 	if(config.progressbar)
 		progress=progressbar_new("Progress",config.iterations/16384);
 	else
 		progress=NULL;
+
+	h1=gnuplot_init();
 
 	ht=init_histogram(config.bins,config.width);
 
@@ -654,7 +733,7 @@ int do_diagmc(char *configfile)
 		This is the main DiagMC loop
 	*/
 
-	for(c=0;c<config.iterations;c++)
+	for(c=0;(c<config.iterations)&&(keep_running==1);c++)
 	{
 		int update_type,status;
 		double totalweight;
@@ -722,9 +801,19 @@ int do_diagmc(char *configfile)
 		avgorder[0]+=get_nr_phonons(dgr);
 		avgorder[1]++;
 
-		if((config.progressbar)&&((c%16384)==0))
-			progressbar_inc(progress);
+		if((c%16384)==0)
+		{
+			if(config.progressbar)
+				progressbar_inc(progress);
 
+			send_to_gnuplot(h1,ht,&config);	
+		}			
+	}
+
+	if(keep_running==0)
+	{
+		printf("Caught SIGINT, exiting earlier.\n");
+		config.iterations=c;
 	}
 
 	if(config.progressbar)
@@ -778,16 +867,23 @@ int do_diagmc(char *configfile)
 	fprintf(out,"# (last bin is overflow)\n");
 	fprintf(out,"#\n");
 
-	fprintf(out,"# <Bin center> <Average> <Stddev>\n");
+	fprintf(out,"# <Bin center> <Average> <Stddev> <Free rotor>\n");
 
 	for(d=0;d<=config.bins;d++)
 	{
-		fprintf(out,"%f %f ",config.width*d+config.width/2.0f,histogram_get_bin_average(ht,d));
+		double tau,Ej;
+		
+		tau=config.width*d+config.width/2.0f;
+		Ej=config.j*(config.j+1);
+		
+		fprintf(out,"%f %f ",tau,histogram_get_bin_average(ht,d));
 		
 		if(ht->sctx->smpls[d]->next>1)
-			fprintf(out,"%f\n",sqrtf(histogram_get_bin_variance(ht,d)/(ht->sctx->smpls[d]->next)));
+			fprintf(out,"%f ",sqrtf(histogram_get_bin_variance(ht,d)/(ht->sctx->smpls[d]->next)));
 		else
-			fprintf(out,"%f\n",0.0f);
+			fprintf(out,"%f ",0.0f);
+
+		fprintf(out,"%f\n",exp(-(Ej-config.chempot)*tau));
 	}
 
 	/*
@@ -799,8 +895,17 @@ int do_diagmc(char *configfile)
 
 	fini_histogram(ht);
 
+        gnuplot_close(h1);
+
 	return 0;
 }
+
+/*
+	Things to add here:
+
+	- CTRL-c handler
+	- gnuplot interface
+*/
 
 int do_diagmc_parallel(char *configfile)
 {
@@ -1145,16 +1250,23 @@ int do_diagmc_parallel(char *configfile)
 	fprintf(out,"# (last bin is overflow)\n");
 	fprintf(out,"#\n");
 
-	fprintf(out,"# <Bin center> <Average> <Stddev>\n");
+	fprintf(out,"# <Bin center> <Average> <Stddev> <Free rotor>\n");
 
 	for(d=0;d<=config.bins;d++)
 	{
-		fprintf(out,"%f %f ",config.width*d+config.width/2.0f,histogram_get_bin_average(ht,d));
+		double tau,Ej;
+		
+		tau=config.width*d+config.width/2.0f;
+		Ej=config.j*(config.j+1);
+		
+		fprintf(out,"%f %f ",tau,histogram_get_bin_average(ht,d));
 		
 		if(ht->sctx->smpls[d]->next>1)
-			fprintf(out,"%f\n",sqrtf(histogram_get_bin_variance(ht,d)/(ht->sctx->smpls[d]->next)));
+			fprintf(out,"%f ",sqrtf(histogram_get_bin_variance(ht,d)/(ht->sctx->smpls[d]->next)));
 		else
-			fprintf(out,"%f\n",0.0f);
+			fprintf(out,"%f ",0.0f);
+
+		fprintf(out,"%f\n",exp(-(Ej-config.chempot)*tau));
 	}
 
 	/*

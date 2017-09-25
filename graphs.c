@@ -18,6 +18,8 @@
 /*
 	FIXME: it would be nice to have everywhere a check, to see if we are hitting the maximum
 	number of lines, arcs or deltas.
+
+	In general more consistency checks would be great.
 */
 
 void reset_formula(FORMULA *f)

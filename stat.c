@@ -333,8 +333,8 @@ double calculate_qpw(struct configuration_t *config,struct histogram_t *ht)
 	c=0;
 	qpw=-1.0f;
 
-	start=3*config->bins/10;
-	end=6*config->bins/10;
+	start=65*config->bins/100;
+	end=95*config->bins/100;
 
 	for(d=start;d<end;d++)
 	{
@@ -364,8 +364,8 @@ double calculate_energy(struct configuration_t *config,struct histogram_t *ht)
 	c=0;
 	energy=-1.0f;
 	
-	start=3*config->bins/10;
-	end=6*config->bins/10;
+	start=65*config->bins/100;
+	end=95*config->bins/100;
 
 	for(d=start;d<end;d++)
 	{
