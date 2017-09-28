@@ -1,6 +1,7 @@
 #ifndef __AUX_H__
 #define __AUX_H__
 
+#include <stdbool.h>
 #include <gsl/gsl_rng.h>
 
 #define MIN(a,b)	(((a)<(b))?(a):(b))
@@ -46,5 +47,7 @@ void copy_interpolation(struct interpolation_t *dst,struct interpolation_t *src)
 double get_point(struct interpolation_t *it,double x);
 
 void seed_rng(gsl_rng *rng);
+
+bool almost_same_float(double a,double b);
 
 #endif //__AUX_H__

@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
@@ -302,4 +303,19 @@ void seed_rng(gsl_rng *rng)
 	{
 		printf("Warning: couldn't read from %s to seed the RNG.\n",devname);
 	}
+}
+
+/*
+	Quick routine for double comparison
+*/
+
+bool almost_same_float(double a,double b)
+{
+	if((fabs(a)<10e-7)&&(fabs(b)<10e-7))
+		return true;
+
+	if((fabs(a-b)/fabs(a))<10e-7)
+		return true;
+
+	return false;
 }

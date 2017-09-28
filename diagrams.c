@@ -326,14 +326,14 @@ void diagram_check_consistency(struct diagram_t *dgr)
 		w1=diagram_weight(dgr);
 		w2=diagram_weight_non_incremental(dgr);
 	
-		if(!(fabs(w1-w2)<10e-7*w1))
+		if(!almost_same_float(w1,w2))
 		{
 			printf("Consistency check for the incremental weight failed! (%f, %f)\n",w1,w2);
 			debug_weight(dgr);
 			exit(0);
 		}
 	
-		assert(fabs(w1-w2)<10e-7*w1);
+		assert(almost_same_float(w1,w2));
 	}
 	
 	/*
@@ -386,6 +386,9 @@ double diagram_weight_non_incremental(struct diagram_t *dgr)
 		tau=g0->endtau-g0->starttau;
 
 		ret*=exp(-en*tau);
+		
+		if(c!=get_nr_free_propagators(dgr)-1)
+			ret*=pow(-1.0f,j);
 	}
 
 	/*
@@ -403,6 +406,7 @@ double diagram_weight_non_incremental(struct diagram_t *dgr)
 		assert(timediff>=0);
 
 		ret*=chi_lambda(dgr,arc->lambda,timediff);
+		ret*=pow(-1.0f,arc->lambda);
 	}
 
 	/*

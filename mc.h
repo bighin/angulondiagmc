@@ -13,6 +13,7 @@ struct configuration_t
 	bool seedrng;
 	bool progressbar;
 	bool animate;
+	bool liveplot;
 	bool use_hashtable;
 
 	/* "parameters" section */

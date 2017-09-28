@@ -51,19 +51,7 @@ void init_terminal_data(void)
 }
 
 /*
-	Quick routine for double comparison
-*/
-
-bool almost_same_float(double a,double b)
-{
-	if((fabs(a-b)/fabs(a))<10e-7)
-		return true;
-	
-	return false;
-}
-
-/*
-	This routines calculates the weight all the propagators between two midpoints,
+	This routine calculates the weight all the propagators between two midpoints,
 	including the propagators preceding the first midpoint, and the propagators following
 	the last midpoint.
 
@@ -398,6 +386,7 @@ void load_config_defaults(struct configuration_t *config)
 	config->seedrng=false;
 	config->progressbar=true;
 	config->animate=false;
+	config->liveplot=false;
 
 	config->j=1;
 	config->endtau=1.0f;
@@ -449,6 +438,15 @@ static int configuration_handler(void *user,const char *section,const char *name
 			pconfig->animate=true;
 		else if(!strcmp(value,"false"))
 			pconfig->animate=false;
+		else
+			return 0;
+	}
+	else if(MATCH("general","liveplot"))
+	{
+		if(!strcmp(value,"true"))
+			pconfig->liveplot=true;
+		else if(!strcmp(value,"false"))
+			pconfig->liveplot=false;
 		else
 			return 0;
 	}
@@ -593,8 +591,14 @@ void send_to_gnuplot(gnuplot_ctrl *h1,struct histogram_t *ht,struct configuratio
 	snprintf(desc1,1024,"Angulon (j=%d, logn=%f)",config->j,log(config->n));
 	snprintf(desc2,1024,"Free rotor (j=%d)",config->j);
 
-	gnuplot_plot_xy(h1,x,y2,config->bins,desc2);
-	gnuplot_plot_xy(h1,x,y1,config->bins,desc1);
+	gnuplot_cmd(h1,"set xlabel \"{/Symbol t}\" font \" ,30\"");
+	gnuplot_cmd(h1,"set ylabel \"log(G({/Symbol t}))\" font \" ,30\"");
+	gnuplot_cmd(h1,"set xtics font \" ,22\"");
+	gnuplot_cmd(h1,"set ytics font \" ,22\"");
+	gnuplot_cmd(h1,"set key font \" ,22\"");
+	gnuplot_cmd(h1,"set pointsize 1.5");
+
+	gnuplot_plot_xyy(h1,x,y1,y2,config->bins,desc1,desc2);
 
 	if(x)	free(x);
 	if(y1)	free(y1);
@@ -712,7 +716,7 @@ int do_diagmc(char *configfile)
 	else
 		progress=NULL;
 
-	h1=gnuplot_init();
+	h1=((config.liveplot==true)?(gnuplot_init()):(NULL));
 
 	ht=init_histogram(config.bins,config.width);
 
@@ -785,16 +789,22 @@ int do_diagmc(char *configfile)
 			assert(false);
 		}
 
-		assert(fabs(diagram_weight(dgr)-diagram_weight_non_incremental(dgr))<10e-7*diagram_weight(dgr));
+		assert(almost_same_float(diagram_weight(dgr),diagram_weight_non_incremental(dgr))==true);
 		diagram_check_consistency(dgr);
 
-		/*
-			Note that by using diagram_m_weight() we are effectively summing over
-			all values of m, so that we have to divide the weight by (2j + 1).
-		*/
-
-		totalweight=diagram_weight(dgr)*diagram_m_weight(dgr,config.use_hashtable)/(2.0f*dcfg.j+1.0f);
+		totalweight=diagram_weight(dgr)*diagram_m_weight(dgr,config.use_hashtable);
 		assert(totalweight>=0.0f);
+
+#if 0
+		if(totalweight>100.0f)
+		{
+			print_diagram(dgr,1+2);
+			
+			debug_weight(dgr);
+			
+			exit(0);
+		}
+#endif
 
 		histogram_add_sample(ht,totalweight,dgr->endtau);
 
@@ -806,7 +816,8 @@ int do_diagmc(char *configfile)
 			if(config.progressbar)
 				progressbar_inc(progress);
 
-			send_to_gnuplot(h1,ht,&config);	
+			if(config.liveplot)
+				send_to_gnuplot(h1,ht,&config);	
 		}			
 	}
 
@@ -895,7 +906,8 @@ int do_diagmc(char *configfile)
 
 	fini_histogram(ht);
 
-        gnuplot_close(h1);
+	if(config.liveplot)
+		gnuplot_close(h1);
 
 	return 0;
 }
@@ -1127,12 +1139,7 @@ int do_diagmc_parallel(char *configfile)
 			assert(fabs(diagram_weight(dgr)-diagram_weight_non_incremental(dgr))<10e-7*diagram_weight(dgr));
 			diagram_check_consistency(dgr);
 
-			/*
-				Note that by using diagram_m_weight() we are effectively summing over
-				all values of m, so that we have to divide the weight by (2j + 1).
-			*/
-
-			totalweight=diagram_weight(dgr)*diagram_m_weight(dgr,config.use_hashtable)/(2.0f*dcfg.j+1.0f);
+			totalweight=diagram_weight(dgr)*diagram_m_weight(dgr,config.use_hashtable);
 			assert(totalweight>=0.0f);
 
 			if(totalweight>10e4)

@@ -723,12 +723,6 @@ double evaluate_graph(struct graph_t *gt,bool debugswap)
 	}
 
 	assert(gt->nr_arcs==0);
-	
-	/*
-		Finally we have a closed loop, whose value is (2j + 1).
-	*/
-	
-	emit_jhat(gt,gt->lines[0],2);
 
 	/*
 		We are done simplifying, let's carry out the sums, starting from the deltas!
@@ -765,7 +759,7 @@ double evaluate_graph(struct graph_t *gt,bool debugswap)
 			k_to_k(gt,first,second);
 		}
 	}
-	
+
 	/*
 		After taking care of the deltas, we are just left with a sums
 		over a number of 6j symbol, will will give the desidred coefficient,
@@ -999,11 +993,28 @@ double diagram_m_weight_reference(struct diagram_t *dgr)
 	
 	double total=0.0f;
 
-	for(c=i=0;c<get_nr_free_propagators(dgr);c++)
+	/*
+		Note: a sum is not carried out over the quantum numbers of the first
+		and of the last propagators. It can be demonostrated the the expression
+	
+		F(j_1, m_1, j_N, m_N) = sum_{m_2, ..., m_{N-1}} [...]
+	
+		has the structure:
+
+		F(j_1, m_1, j_N, m_N) = F(j_1) delta_{j_1, j_N} delta_{m_1, m_N}
+	
+		and so we can just calculate it for m_1 = 0 and m_N = 0
+	*/
+
+	i=0;
+	for(c=1;c<get_nr_free_propagators(dgr)-1;c++)
 	{
 		pjs[i]=&(get_free_propagator(dgr,c)->j);
 		pms[i++]=&(get_free_propagator(dgr,c)->m);
 	}
+
+	get_free_propagator(dgr,0)->m=0;
+	get_free_propagator(dgr,get_nr_free_propagators(dgr)-1)->m=0;
 
 	for(c=0;c<get_nr_phonons(dgr);c++)
 	{
@@ -1014,7 +1025,7 @@ double diagram_m_weight_reference(struct diagram_t *dgr)
 	for(c=0;c<i;c++)
 		*pms[c]=-*pjs[c];
 
-	printf("Doing the full evaluation with %d momenta\n",i);
+	printf("Doing the full evaluation with %d momenta (initial and final are not summed over)\n",i+2);
 
 	while(true)
 	{		
@@ -1046,10 +1057,6 @@ double diagram_m_weight_reference(struct diagram_t *dgr)
 #ifdef DEBUG8
 			printf("ThreeJSymbol[{%d,%d},{%d,%d},{%d,%d}] = %f\n",j1,m1,j2,m2,j3,m3,gsl_sf_coupling_3j(2*j1,2*j2,2*j3,2*m1,2*m2,2*m3));
 #endif
-
-			/*
-				Note the sign convention!
-			*/
 
 			assert((c==thisvertex->phononline->startmidpoint)||(c==thisvertex->phononline->endmidpoint));
 
@@ -1087,7 +1094,8 @@ double diagram_m_weight_reference(struct diagram_t *dgr)
 	
 			coupling*=pow(-1.0f,arc->lambda-arc->mu);
 		}
-		
+
+#if 0
 		/*
 			Finally the Kronecker delta between the first and last free propagator momenta,
 			since they must be the same...
@@ -1105,7 +1113,8 @@ double diagram_m_weight_reference(struct diagram_t *dgr)
 			if(first->m!=last->m)
 				coupling=0.0f;
 		}
-		
+#endif
+
 		/*
 			...and then is summed to the total result.
 		*/
@@ -1153,7 +1162,7 @@ double diagram_m_weight_reference(struct diagram_t *dgr)
 			break;
 	}
 
-	printf("Completed a full evaluation with %d momenta, total: %f\n",i,total);
+	printf("Completed a full evaluation with %d momenta, total: %f\n",i+2,total);
 
 	return total;
 }

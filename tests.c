@@ -1,29 +1,19 @@
 #include <stdio.h>
 #include <math.h>
 #include <stdbool.h>
-#include <assert.h>
 #include <string.h>
 
 #include "diagrams.h"
 #include "updates.h"
 #include "graphs.h"
 #include "tests.h"
+#include "aux.h"
 
-double relative_distance(double w1,double w2)
-{
-	return fabs(fabs(w1)-fabs(w2))/fabs(w1);
-}
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
 
-int sign(double x)
-{
-	if(fabs(x)<10e-6)
-		return 0;
-
-	if(x>0.0f)
-		return 1;
-
-	return -1;
-}
+#include <assert.h>
 
 /*
 	The same function as double diagram_m_weight(struct diagram_t *dgr)
@@ -61,7 +51,7 @@ int test_one_diagram(int index,int j1,int j2,int j3,int j4,int flags)
 	double w1,w2,w3;
 	int mode;
 	
-	dcfg.j=2;
+	dcfg.j=1;
 
 	dcfg.endtau=1.0f;
 	dcfg.chempot=5.75f;
@@ -212,8 +202,7 @@ int test_one_diagram(int index,int j1,int j2,int j3,int j4,int flags)
 		if(!(flags&TEST_SWAPPED_GRAPHS))
 			printf("<mWeight (using graphs, reference)>: %f %f\n",w1,w2);
 
-		assert(relative_distance(w1,w2)<10e-6);
-		assert(sign(w1)==sign(w2));
+		assert(almost_same_float(w1,w2));
 	}
 
 	if((flags&TEST_GRAPHS)&&(flags&TEST_SWAPPED_GRAPHS))
@@ -221,8 +210,7 @@ int test_one_diagram(int index,int j1,int j2,int j3,int j4,int flags)
 		if(!(flags&TEST_REFERENCE_ALGO))
 			printf("<mWeight (using graphs, additional swap)>: %f %f\n",w1,w3);
 
-		assert(relative_distance(w1,w3)<10e-6);
-		assert(sign(w1)==sign(w3));
+		assert(almost_same_float(w1,w3));
 	}
 
 	if((flags&TEST_SWAPPED_GRAPHS)&&(flags&TEST_REFERENCE_ALGO))
@@ -230,8 +218,7 @@ int test_one_diagram(int index,int j1,int j2,int j3,int j4,int flags)
 		if(!(flags&TEST_GRAPHS))
 			printf("<mWeight (reference, additional swap)>: %f %f\n",w2,w3);
 
-		assert(relative_distance(w2,w3)<10e-6);
-		assert(sign(w2)==sign(w3));
+		assert(almost_same_float(w2,w3));
 	}
 
 	if(dgr->rng_ctx)
@@ -249,13 +236,12 @@ int test_graphical_machinery(void)
 	flags=TEST_GRAPHS|TEST_REFERENCE_ALGO|TEST_SWAPPED_GRAPHS;
 
 	for(c=0;c<=9;c++)
+	{
 		test_one_diagram(c,1,2,1,2,flags);
-
-	for(c=0;c<=9;c++)
 		test_one_diagram(c,2,2,2,2,flags);
-
-	for(c=0;c<=9;c++)
 		test_one_diagram(c,1,1,1,1,flags);
+		test_one_diagram(c,0,1,2,0,flags);
+	}
 
 	return 0;
 }
