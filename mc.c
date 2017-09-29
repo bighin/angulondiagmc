@@ -11,13 +11,14 @@
 #include <omp.h>
 #endif
 
+#include "mc.h"
 #include "diagrams.h"
 #include "updates.h"
 #include "stat.h"
 #include "aux.h"
 #include "graphs.h"
+#include "phonon.h"
 #include "debug.h"
-#include "mc.h"
 
 #include "inih/ini.h"
 #include "libprogressbar/progressbar.h"
@@ -181,7 +182,12 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	k=0.0f;
 	tau1=starttau+(endtau-starttau)*gsl_rng_uniform(dgr->rng_ctx);
-	tau2=doubly_truncated_exp_dist(dgr->rng_ctx,get_omega0eff(dgr,lambda),tau1,dgr->endtau);
+	tau2=cfg->maxtau;
+	
+	assert(cfg->maxtau>endtau);
+	
+	while(tau2>=endtau)
+		tau2=tau1+phonon_dist(dgr->rng_ctx,dgr->phonon_ctx,lambda);
 
 	/*
 		We save the current diagram and the line is added...
@@ -231,18 +237,9 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	acceptance_ratio*=diagram_m_weight(dgr,cfg->use_hashtable)/diagram_m_weight(old,cfg->use_hashtable);
 	acceptance_ratio*=MAXLAMBDA*(endtau-starttau);
 	acceptance_ratio/=1+get_nr_phonons(dgr);
-	acceptance_ratio/=doubly_truncated_exp_pdf(dgr->rng_ctx,get_omega0eff(dgr,lambda),tau1,dgr->endtau,tau2);
+	acceptance_ratio/=phonon_pdf(dgr->phonon_ctx,lambda,tau2-tau1);
 
 	is_accepted=(gsl_rng_uniform(dgr->rng_ctx)<acceptance_ratio)?(true):(false);
-
-#if 0
-	printf("Update statistics:\n");
-	printf("Weight ratio: %f\n",weightratio);
-	printf("Mweight ratio: %f\n",diagram_m_weight(dgr,cfg->use_hashtable)/diagram_m_weight(old,cfg->use_hashtable));
-	printf("Time: %f\n",3.0f*(endtau-starttau));
-	printf("Alphaeff^{-1}: %f\n",1.0/get_alphaeff(dgr,lambda));
-	printf("Update is: %saccepted\n\n",(is_accepted==true)?(""):("NOT "));
-#endif
 
 	if(is_accepted==false)
 	{
@@ -363,7 +360,7 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	acceptance_ratio*=diagram_m_weight(dgr,cfg->use_hashtable)/diagram_m_weight(old,cfg->use_hashtable);
 	acceptance_ratio/=MAXLAMBDA*(endtau-starttau);
 	acceptance_ratio*=nr_phonons;
-	acceptance_ratio*=doubly_truncated_exp_pdf(dgr->rng_ctx,get_omega0eff(dgr,lambda),tau1,dgr->endtau,tau2);
+	acceptance_ratio*=phonon_pdf(dgr->phonon_ctx,lambda,tau2-tau1);
 
 	is_accepted=(gsl_rng_uniform(dgr->rng_ctx)<acceptance_ratio)?(true):(false);
 
@@ -634,6 +631,7 @@ int do_diagmc(char *configfile)
 	int proposed[DIAGRAM_NR_UPDATES],accepted[DIAGRAM_NR_UPDATES],rejected[DIAGRAM_NR_UPDATES];
 	int total_proposed,total_accepted,total_rejected;
 	int avgorder[2];
+	double avglength[2];
 
 	updates[0]=update_length;
 	updates[1]=update_add_phonon_line;
@@ -647,6 +645,7 @@ int do_diagmc(char *configfile)
 		proposed[d]=accepted[d]=rejected[d]=0;
 	
 	avgorder[0]=avgorder[1]=0;
+	avglength[0]=avglength[1]=0;
 
 	/*
 		We load some sensible defaults in case they are not in the .ini file, the we try
@@ -795,7 +794,7 @@ int do_diagmc(char *configfile)
 		totalweight=diagram_weight(dgr)*diagram_m_weight(dgr,config.use_hashtable);
 		assert(totalweight>=0.0f);
 
-#if 0
+#if 1
 		if(totalweight>100.0f)
 		{
 			print_diagram(dgr,1+2);
@@ -810,6 +809,23 @@ int do_diagmc(char *configfile)
 
 		avgorder[0]+=get_nr_phonons(dgr);
 		avgorder[1]++;
+
+		avglength[0]+=dgr->endtau;
+		avglength[1]++;
+
+#if 0
+		if(((c-1)%50000)==0)
+		{
+			printf("Average length: %f\nChemical potential: %f\n\n",avglength[0]/avglength[1],config.chempot);
+
+			avglength[0]=avglength[1]=0.0f;
+		
+			config.chempot+=0.1;
+		
+			fini_histogram(ht);
+			ht=init_histogram(config.bins,config.width);
+		}
+#endif
 
 		if((c%16384)==0)
 		{

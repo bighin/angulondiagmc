@@ -819,7 +819,7 @@ int fchi(unsigned ndim,const double *x,void *fdata,unsigned fdim,double *fval)
 	return 0;
 }
 
-double chi(short lambda,double deltat,double n)
+double calculate_chi_lambda(short lambda,double deltat,double n)
 {
 	double xmin[1]={0.0f};
 	double xmax[1]={1.0f};

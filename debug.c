@@ -9,6 +9,7 @@
 #include "updates.h"
 #include "debug.h"
 #include "aux.h"
+#include "phonon.h"
 
 void debug_propagators(struct diagram_t *dgr)
 {
@@ -108,20 +109,7 @@ void debug_weight(struct diagram_t *dgr)
 
 		assert(timediff>=0);
 
-		factor=1.0f;
-		switch(arc->lambda)
-		{
-			case 0:
-			factor*=get_point(dgr->v0table,timediff);
-			break;
-
-			case 1:
-			factor*=get_point(dgr->v1table,timediff);
-			break;
-
-			default:
-			assert(false);
-		}
+		factor=chi_lambda(dgr->phonon_ctx,arc->lambda,timediff);
 
 		ret*=factor;
 		printf("Adding %f (vertex from precalculated tables, lambda=%d)\n",factor,arc->lambda);

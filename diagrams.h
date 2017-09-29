@@ -60,10 +60,6 @@ int vertex_get_m2(struct vertex_t *vif);
 int vertex_get_lambda(struct vertex_t *vif);
 int vertex_get_mu(struct vertex_t *vif);
 
-/*
-	This structure defines a diagram
-*/
-
 struct diagram_cfg_t
 {
 	/*
@@ -92,6 +88,10 @@ struct diagram_cfg_t
 	double maxtau;
 };
 
+/*
+	This structure defines a diagram
+*/
+
 struct diagram_t
 {
 	double mintau,endtau,chempot;
@@ -108,24 +108,24 @@ struct diagram_t
 	double weight;
 
 	/*
-		Parameters defining the interaction potential.
-	
-		n is the adimensional density
-		v0table and v1table contain the tables for the \chi_{\lambda}(\Delta t) function
-		
-		Finally I have a short-time estimate of the behaviour of \chi_{\lambda}(\Delta t),
-		used when adding or removing a phonon. The fit is of the form intercept*exp(-slope*x).
+		Parameters defining the interaction potential:
+
+		- n is the adimensional density
 	*/
 
 	double n;
-	struct interpolation_t *v0table,*v1table;
-	double v0intercept,v0slope,v1intercept,v1slope;
 
 	/*
 		A GSL random number generator context
 	*/
 
 	gsl_rng *rng_ctx;
+	
+	/*
+		The context defining the phonon PDFs
+	*/
+
+	struct phonon_ctx_t *phonon_ctx;
 };
 
 struct diagram_t *init_diagram(struct diagram_cfg_t *cfg);
@@ -165,12 +165,5 @@ int print_diagram(struct diagram_t *dgr,int flags);
 
 bool check_triangle_condition_and_parity(struct diagram_t *dgr,struct vertex_t *thisvertex);
 bool check_triangle_condition_and_parity_from_js(int j1,int j2,int j3);
-
-bool init_vertex_tables(struct diagram_t *dgr,double maxtau,int steps);
-void fini_vertex_tables(struct diagram_t *dgr);
-double chi_lambda(struct diagram_t *dgr,int lambda,double timediff);
-
-double get_alphaeff(struct diagram_t *dgr,int lambda);
-double get_omega0eff(struct diagram_t *dgr,int lambda);
 
 #endif //__DIAGRAMS_H__

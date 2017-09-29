@@ -12,6 +12,7 @@
 #include "debug.h"
 #include "selfenergies.h"
 #include "stat.h"
+#include "phonon.h"
 
 int vertex_get_j1(struct vertex_t *vif)
 {
@@ -62,8 +63,6 @@ struct diagram_t *init_diagram(struct diagram_cfg_t *cfg)
 	ret->free_propagators=init_vlist(sizeof(struct g0_t),1+32*1024);
 	ret->vertices=init_vlist(sizeof(struct vertex_t),32*1024);
 
-	init_vertex_tables(ret,cfg->maxtau,1024);
-
 	/*
 		We add the initial, lone propagator.
 	*/
@@ -87,6 +86,12 @@ struct diagram_t *init_diagram(struct diagram_cfg_t *cfg)
 
 	ret->weight=diagram_weight_non_incremental(ret);
 
+	/*
+		Finally we initialize the phonon context
+	*/
+	
+	ret->phonon_ctx=init_phonon_ctx(30.0f,32*1024,cfg->n);
+
 	return ret;
 }
 
@@ -98,9 +103,12 @@ void fini_diagram(struct diagram_t *dgr)
 		fini_vlist(dgr->midpoints);
 		fini_vlist(dgr->free_propagators);
 		fini_vlist(dgr->vertices);
+		
+		dgr->phonon_ctx->refs--;
 
-		fini_vertex_tables(dgr);
-	
+		if(dgr->phonon_ctx->refs<0)
+			fini_phonon_ctx(dgr->phonon_ctx);
+
 		free(dgr);
 	}
 }
@@ -405,7 +413,7 @@ double diagram_weight_non_incremental(struct diagram_t *dgr)
 
 		assert(timediff>=0);
 
-		ret*=chi_lambda(dgr,arc->lambda,timediff);
+		ret*=chi_lambda(dgr->phonon_ctx,arc->lambda,timediff);
 		ret*=pow(-1.0f,arc->lambda);
 	}
 
@@ -584,14 +592,6 @@ void diagram_copy(struct diagram_t *src,struct diagram_t *dst)
 
 	dst->n=src->n;
 
-	dst->v0intercept=src->v0intercept;
-	dst->v0slope=src->v0slope;
-	dst->v1intercept=src->v1intercept;
-	dst->v1slope=src->v1slope;
-
-	copy_interpolation(dst->v0table,src->v0table);
-	copy_interpolation(dst->v1table,src->v1table);
-
 	dst->weight=src->weight;
 	dst->rng_ctx=src->rng_ctx;
 
@@ -615,6 +615,9 @@ void diagram_copy(struct diagram_t *src,struct diagram_t *dst)
 		get_vertex(dst,arc->startmidpoint)->phononline=arc;
 		get_vertex(dst,arc->endmidpoint)->phononline=arc;
 	}
+
+	dst->phonon_ctx=src->phonon_ctx;
+	dst->phonon_ctx->refs++;
 }
 
 struct diagram_t *diagram_clone(struct diagram_t *src)
@@ -628,17 +631,6 @@ struct diagram_t *diagram_clone(struct diagram_t *src)
 	ret->midpoints=init_vlist(sizeof(double),16*1024);
 	ret->free_propagators=init_vlist(sizeof(struct g0_t),1+32*1024);
 	ret->vertices=init_vlist(sizeof(struct vertex_t),32*1024);
-
-	ret->v0table=malloc(sizeof(struct interpolation_t));
-	ret->v1table=malloc(sizeof(struct interpolation_t));
-
-	ret->v0table->x=malloc(sizeof(double)*src->v0table->n);
-	ret->v0table->y=malloc(sizeof(double)*src->v0table->n);
-	ret->v0table->y2=malloc(sizeof(double)*src->v0table->n);
-
-	ret->v1table->x=malloc(sizeof(double)*src->v1table->n);
-	ret->v1table->y=malloc(sizeof(double)*src->v1table->n);
-	ret->v1table->y2=malloc(sizeof(double)*src->v1table->n);
 
 	diagram_copy(src,ret);
 
@@ -700,167 +692,4 @@ bool check_triangle_condition_and_parity_from_js(int j1,int j2,int j3)
 		result=false;
 
 	return result;
-}
-
-/*
-	The values of corresponding to the k integral for each line
-	joining two vertices are precalculated and an interpolation is
-	created.
-*/
-
-bool init_vertex_tables(struct diagram_t *dgr,double maxtau,int steps)
-{
-	int c;
-	double n,step;
-	double *x,*y0,*y1;
-
-	n=dgr->n;
-	step=maxtau/steps;
-
-	if(!(x=malloc(sizeof(double)*steps)))
-		return false;
-
-	if(!(y0=malloc(sizeof(double)*steps)))
-	{
-		if(x)
-			free(x);
-	
-		return false;
-	}
-
-	if(!(y1=malloc(sizeof(double)*steps)))
-	{
-		if(x)
-			free(x);
-
-		if(y0)
-			free(y0);
-
-		return false;
-	}
-
-	for(c=0;c<steps;c++)
-	{
-		double deltatau=step*c;
-
-		x[c]=deltatau;
-		y0[c]=chi(0,deltatau,n);
-		y1[c]=chi(1,deltatau,n);
-	}
-
-	dgr->v0table=init_interpolation(x,y0,steps);
-	dgr->v1table=init_interpolation(x,y1,steps);
-
-	/*
-		Now we use the same data to get an exponential fit of the function,
-		which will be used when adding/removing a phonon line...
-	*/
-
-	{
-		struct linreg_ctx_t *lct0,*lct1;
-		
-		lct0=init_linreg_ctx();
-		lct1=init_linreg_ctx();
-
-		for(c=0;c<steps;c++)
-		{
-			if((step*c)>3.5f)
-				break;
-			
-			linreg_add_entry(lct0,x[c],log(y0[c]));
-			linreg_add_entry(lct1,x[c],log(y1[c]));
-		}
-
-		dgr->v0slope=y0[0];
-		dgr->v0intercept=slope(lct0);
-
-		dgr->v1slope=y1[0];
-		dgr->v1intercept=slope(lct1);
-	
-		fini_linreg_ctx(lct0);
-		fini_linreg_ctx(lct1);
-	}
-
-	if(x) free(x);
-	if(y0) free(y0);
-	if(y1) free(y1);
-	
-	return true;
-}
-
-void fini_vertex_tables(struct diagram_t *dgr)
-{
-	fini_interpolation(dgr->v0table);
-	fini_interpolation(dgr->v1table);
-}
-
-/*
-	This function evaluates the function \chi_{\lambda}, as defined in my paper.
-
-	The values are from an interpolation, which is calculated at the creation of a new diagram,
-	i.e. by init_diagram().
-*/
-
-double chi_lambda(struct diagram_t *dgr,int lambda,double timediff)
-{
-	double ret=1.0f;
-	
-	switch(lambda)
-	{
-		case 0:
-		ret*=get_point(dgr->v0table,timediff);
-		break;
-
-		case 1:
-		ret*=get_point(dgr->v1table,timediff);
-		break;
-		
-		default:
-		assert(false);
-	}
-	
-	return ret;
-}
-
-/*
-	The weight of a phonon arc (i.e. chi_lambda as a function of t) does not
-	have a closed form, being the result of an integral.
-
-	However, we can approximate it as alphaeff*exp(-omega0eff*t)
-*/
-
-double get_alphaeff(struct diagram_t *dgr,int lambda)
-{
-	switch(lambda)
-	{
-		case 0:
-		return fabs(dgr->v0slope);
-		break;
-
-		case 1:
-		return fabs(dgr->v1slope);
-		break;
-	}
-	
-	assert(false);
-
-	return 0.0;
-}
-
-double get_omega0eff(struct diagram_t *dgr,int lambda)
-{
-	switch(lambda)
-	{
-		case 0:
-		return fabs(dgr->v0intercept);
-		break;
-
-		case 1:
-		return fabs(dgr->v1intercept);
-		break;
-	}
-
-	assert(false);
-
-	return 0.0;
 }

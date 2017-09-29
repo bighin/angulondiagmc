@@ -9,6 +9,7 @@
 #include "aux.h"
 #include "debug.h"
 #include "updates.h"
+#include "phonon.h"
 
 /*
 	This function updates all the cross-referencing inside a diagram,
@@ -199,7 +200,7 @@ double calculate_arc_weight(struct diagram_t *dgr,struct arc_t *arc)
 
 	assert(timediff>=0);
 
-	ret*=chi_lambda(dgr,arc->lambda,timediff);
+	ret*=chi_lambda(dgr->phonon_ctx,arc->lambda,timediff);
 	ret*=pow(-1.0f,arc->lambda);
 
 	return ret;
