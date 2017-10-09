@@ -34,7 +34,7 @@ struct graph_t
 	
 		lines[1]=7
 	
-		The momentum j0 is not used.
+		Note that the momentum j0 is not used.
 
 		arcs[j] is an array of three ints, indicating, respectively,
 		the starting vertex, the ending vertex and the momentum
