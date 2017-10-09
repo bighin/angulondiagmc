@@ -75,8 +75,8 @@ struct phonon_ctx_t *init_phonon_ctx(double maxtau,int nsteps,double n)
 
 	for(c=1;c<nsteps;c++)
 	{
-		ret->ncy0[c]+=ret->ncy0[c-1]+step*ret->y0[c-1];
-		ret->ncy1[c]+=ret->ncy1[c-1]+step*ret->y1[c-1];
+		ret->ncy0[c]+=ret->ncy0[c-1]+0.5f*step*(ret->y0[c-1]+ret->y0[c]);
+		ret->ncy1[c]+=ret->ncy1[c-1]+0.5f*step*(ret->y1[c-1]+ret->y1[c]);
 	}
 
 	/*
