@@ -75,6 +75,93 @@ double calculate_propagators_and_vertices(struct diagram_t *dgr,int startmidpoin
 	return ret;
 }
 
+int deltaj(struct diagram_t *dgr,int index)
+{
+	struct g0_t *left,*right;
+	
+	left=get_left_neighbour(dgr,index);
+	right=get_right_neighbour(dgr,index);	
+
+	return right->j-left->j;
+}
+
+void change_deltaj(struct diagram_t *dgr,int index,int newdeltaj)
+{
+	int c,nr_free_propagators,olddeltaj;
+	
+	nr_free_propagators=get_nr_free_propagators(dgr);
+	olddeltaj=deltaj(dgr,index);
+
+	for(c=index+1;c<nr_free_propagators;c++)
+		get_free_propagator(dgr,c)->j+=newdeltaj-olddeltaj;
+}
+
+int get_nr_available_phonons(struct diagram_t *dgr)
+{
+	int c,available;
+
+	for(c=available=0;c<get_nr_phonons(dgr);c++)
+	{
+		int startmidpoint,endmidpoint;
+		
+		startmidpoint=get_phonon_line(dgr,c)->startmidpoint;
+		endmidpoint=get_phonon_line(dgr,c)->endmidpoint;
+		
+		if((deltaj(dgr,startmidpoint)==0)&&(deltaj(dgr,endmidpoint)==0))
+			available++;
+	}
+	
+	return available;
+}
+
+int get_random_available_phonon(struct diagram_t *dgr)
+{
+	int c,available,target;
+
+	available=0;
+	target=gsl_rng_uniform_int(dgr->rng_ctx,get_nr_available_phonons(dgr));
+
+	for(c=0;c<get_nr_phonons(dgr);c++)
+	{
+		int startmidpoint,endmidpoint;
+		
+		startmidpoint=get_phonon_line(dgr,c)->startmidpoint;
+		endmidpoint=get_phonon_line(dgr,c)->endmidpoint;
+		
+		if((deltaj(dgr,startmidpoint)==0)&&(deltaj(dgr,endmidpoint)==0))
+		{
+			if(available==target)
+				return c;
+			
+			available++;
+		}
+	}
+
+	assert(false);
+	
+	return -1;
+}
+
+struct g0_t *find_propagator_containing_time(struct diagram_t *dgr,double tau)
+{
+	int c;
+	
+	assert(tau>=dgr->mintau);
+	assert(tau<=dgr->endtau);
+
+	for(c=0;c<get_nr_free_propagators(dgr);c++)
+	{
+		struct g0_t *thisg0=get_free_propagator(dgr,c);
+		
+		if((tau>=thisg0->starttau)&&(tau<=thisg0->endtau))
+			return thisg0;
+	}
+
+	assert(false);
+
+	return NULL;
+}
+
 /*
 	Now it's time to start with all the different updates!
 */
@@ -205,8 +292,6 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	v1=get_vertex(dgr,thisline->startmidpoint);
 	v2=get_vertex(dgr,thisline->endmidpoint);
 
-	recouple(dgr,thisline->startmidpoint,thisline->endmidpoint);
-
 	if((check_triangle_condition_and_parity(dgr,v1)==false)||(check_triangle_condition_and_parity(dgr,v2)==false))
 	{
 		diagram_copy(old,dgr);
@@ -221,9 +306,8 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	*/
 
 	weightratio=calculate_arc_weight(dgr,thisline);
-
-	weightratio*=calculate_propagators_and_vertices(dgr,thisline->startmidpoint,thisline->endmidpoint);
-	weightratio/=calculate_propagators_and_vertices(old,thisline->startmidpoint,thisline->endmidpoint-2);
+	weightratio*=calculate_vertex_weight(dgr,thisline->startmidpoint);
+	weightratio*=calculate_vertex_weight(dgr,thisline->endmidpoint);
 
 	dgr->weight*=weightratio;
 	
@@ -236,8 +320,15 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	acceptance_ratio=weightratio;
 	acceptance_ratio*=diagram_m_weight(dgr,cfg->use_hashtable)/diagram_m_weight(old,cfg->use_hashtable);
 	acceptance_ratio*=MAXLAMBDA*(endtau-starttau);
-	acceptance_ratio/=1+get_nr_phonons(dgr);
+	acceptance_ratio/=get_nr_available_phonons(dgr);
 	acceptance_ratio/=phonon_pdf(dgr->phonon_ctx,lambda,tau2-tau1);
+
+	if(lambda==0)
+		assert(almost_same_float(dgr->phonon_ctx->c0*phonon_pdf(dgr->phonon_ctx,lambda,tau2-tau1),calculate_arc_weight(dgr,thisline)));
+	else if(lambda==1)
+		assert(almost_same_float(dgr->phonon_ctx->c1*phonon_pdf(dgr->phonon_ctx,lambda,tau2-tau1),calculate_arc_weight(dgr,thisline)));
+	else
+		assert(false);
 
 	is_accepted=(gsl_rng_uniform(dgr->rng_ctx)<acceptance_ratio)?(true):(false);
 
@@ -254,42 +345,22 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	return UPDATE_ACCEPTED;
 }
 
-struct g0_t *find_propagator_with_time(struct diagram_t *dgr,double tau)
-{
-	int c;
-	
-	assert(tau>=dgr->mintau);
-	assert(tau<=dgr->endtau);
-
-	for(c=0;c<get_nr_free_propagators(dgr);c++)
-	{
-		struct g0_t *thisg0=get_free_propagator(dgr,c);
-		
-		if((tau>=thisg0->starttau)&&(tau<=thisg0->endtau))
-			return thisg0;
-	}
-	
-	assert(false);
-
-	return NULL;
-}
-
 int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 {
 	struct arc_t *arc;
 	struct diagram_t *old;
 	struct g0_t *target_propagator;
 
-	int target,lambda,nr_phonons,startmidpoint,endmidpoint;
+	int target,lambda,nr_available_phonons,startmidpoint,endmidpoint;
 	double weightratio,targetweight,acceptance_ratio,tau1,tau2,starttau,endtau;
 	bool is_accepted;
 
-	nr_phonons=get_nr_phonons(dgr);
+	nr_available_phonons=get_nr_available_phonons(dgr);
 
-	if(nr_phonons<=0)
+	if(nr_available_phonons<=0)
 		return UPDATE_UNPHYSICAL;
 
-	target=gsl_rng_uniform_int(dgr->rng_ctx,nr_phonons);
+	target=get_random_available_phonon(dgr);
 	arc=get_phonon_line(dgr,target);
 	targetweight=calculate_arc_weight(dgr,arc);
 
@@ -300,55 +371,18 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	endmidpoint=arc->endmidpoint;
 
 	old=diagram_clone(dgr);
-
-	/*
-		A line removal can fail, since it may leave the remaining
-		lines in a unphysical state.
-	*/
 	
-	if(diagram_remove_phonon_line(dgr,target)==false)
-	{	
-		diagram_copy(old,dgr);
-		fini_diagram(old);
-	
-		return UPDATE_UNPHYSICAL;
-	}
-
-	/*
-		This is a bit tricky: if we just removed a bubble,
-		then there are no free propagators to recouple.
-	*/
-
-	if((startmidpoint+1)!=endmidpoint)
-	{
-		recouple(dgr,startmidpoint,endmidpoint-2);
-	}
-	else
-	{
-		/*
-			...however the bubble may be 'asymmetric': that would be an error!
-		*/
-	
-		if(get_left_neighbour(old,startmidpoint)->j!=get_right_neighbour(old,endmidpoint)->j)
-		{
-			print_diagram(old,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
-
-			printf("%d %d %d %d\n",startmidpoint,endmidpoint,get_left_neighbour(old,startmidpoint)->j,get_right_neighbour(old,endmidpoint)->j);		
-			printf("%f\n",diagram_weight(old)*diagram_m_weight(old,cfg->use_hashtable));
-
-			exit(0);
-		}
-	}
+	diagram_remove_phonon_line(dgr,target);
 
 	weightratio=1.0f/targetweight;
-	weightratio*=calculate_propagators_and_vertices(dgr,startmidpoint,endmidpoint-2);
-	weightratio/=calculate_propagators_and_vertices(old,startmidpoint,endmidpoint);
+	weightratio/=calculate_vertex_weight(old,startmidpoint);
+	weightratio/=calculate_vertex_weight(old,endmidpoint);
 
 	dgr->weight*=weightratio;
-	
+
 	assert(almost_same_float(dgr->weight,diagram_weight_non_incremental(dgr)));
 
-	target_propagator=find_propagator_with_time(dgr,tau1);
+	target_propagator=find_propagator_containing_time(dgr,tau1);
 	starttau=target_propagator->starttau;
 	endtau=target_propagator->endtau;
 
@@ -359,8 +393,100 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	acceptance_ratio=weightratio;
 	acceptance_ratio*=diagram_m_weight(dgr,cfg->use_hashtable)/diagram_m_weight(old,cfg->use_hashtable);
 	acceptance_ratio/=MAXLAMBDA*(endtau-starttau);
-	acceptance_ratio*=nr_phonons;
+	acceptance_ratio*=nr_available_phonons;
 	acceptance_ratio*=phonon_pdf(dgr->phonon_ctx,lambda,tau2-tau1);
+
+	is_accepted=(gsl_rng_uniform(dgr->rng_ctx)<acceptance_ratio)?(true):(false);
+
+	if(is_accepted==false)
+	{
+		diagram_copy(old,dgr);
+		fini_diagram(old);
+
+		return UPDATE_REJECTED;
+	}
+
+	fini_diagram(old);
+
+	return UPDATE_ACCEPTED;
+}
+
+int update_swap_deltaj(struct diagram_t *dgr,struct configuration_t *cfg)
+{
+	int c,nr_vertices,target1,target2,sign,offset;
+	double acceptance_ratio;
+	bool is_accepted;
+
+	struct diagram_t *old;
+
+	assert(MAXLAMBDA==1);
+
+	nr_vertices=get_nr_vertices(dgr);
+	
+	if(nr_vertices<2)
+		return UPDATE_UNPHYSICAL;
+
+	/*
+		Save a backup copy of the diagram.
+	*/
+
+	old=diagram_clone(dgr);
+
+	/*
+		Choose the targets and the change in Delta_j (offset)
+	*/
+
+	target1=gsl_rng_uniform_int(dgr->rng_ctx,nr_vertices);		
+	target2=gsl_rng_uniform_int(dgr->rng_ctx,nr_vertices-1);
+
+	if(target2>=target1)
+		target2++;
+
+	offset=1+gsl_rng_uniform_int(dgr->rng_ctx,2*MAXLAMBDA);
+	sign=((gsl_rng_uniform_int(dgr->rng_ctx,2)==0)?(+1):(-1));
+
+	offset*=sign;
+
+	/*
+		Let's swap the Delta_j's at the vertices...
+	*/
+	
+	change_deltaj(dgr,target1,offset);
+	assert(get_free_propagator(dgr,get_nr_free_propagators(dgr)-1)->j!=get_free_propagator(dgr,0)->j);
+	change_deltaj(dgr,target2,-offset);
+	assert(get_free_propagator(dgr,get_nr_free_propagators(dgr)-1)->j==get_free_propagator(dgr,0)->j);
+
+	/*
+		The update may have generated an unphysical diagram,
+		in which case we exit
+	*/
+
+	for(c=MIN(target1,target2);c<=MAX(target1,target2);c++)
+	{
+		if(get_free_propagator(dgr,c)->j<0)
+		{
+			diagram_copy(old,dgr);
+			fini_diagram(old);
+
+			return UPDATE_UNPHYSICAL;
+		}
+	}
+
+	/*
+		It's time to recalculate the weight!
+	*/
+	
+	dgr->weight*=calculate_propagators_and_vertices(dgr,MIN(target1,target2),MAX(target1,target2));
+	dgr->weight/=calculate_propagators_and_vertices(old,MIN(target1,target2),MAX(target1,target2));
+
+	/*
+		This automatically takes into account the case where the new j values
+		do not satisfy angular momentum conservation. The new weight goes to zero,
+		along with the acceptance ration, so that the update will never be accepted.
+	*/
+
+	acceptance_ratio=dgr->weight/old->weight;
+	acceptance_ratio*=diagram_m_weight(dgr,cfg->use_hashtable)/diagram_m_weight(old,cfg->use_hashtable);
 
 	is_accepted=(gsl_rng_uniform(dgr->rng_ctx)<acceptance_ratio)?(true):(false);
 
@@ -623,7 +749,7 @@ int do_diagmc(char *configfile)
 	progressbar *progress;
 	gnuplot_ctrl *h1;
 
-#define DIAGRAM_NR_UPDATES	(3)
+#define DIAGRAM_NR_UPDATES	(4)
 
 	int (*updates[DIAGRAM_NR_UPDATES])(struct diagram_t *,struct configuration_t *);
 	char *update_names[DIAGRAM_NR_UPDATES];
@@ -636,10 +762,12 @@ int do_diagmc(char *configfile)
 	updates[0]=update_length;
 	updates[1]=update_add_phonon_line;
 	updates[2]=update_remove_phonon_line;
+	updates[3]=update_swap_deltaj;
 
 	update_names[0]="UpdateLength";
 	update_names[1]="AddPhononLine";
 	update_names[2]="RemovePhononLine";
+	update_names[3]="SwapDeltaJ";
 
 	for(d=0;d<DIAGRAM_NR_UPDATES;d++)
 		proposed[d]=accepted[d]=rejected[d]=0;
@@ -794,7 +922,7 @@ int do_diagmc(char *configfile)
 		totalweight=diagram_weight(dgr)*diagram_m_weight(dgr,config.use_hashtable);
 		assert(totalweight>=0.0f);
 
-#if 1
+#if 0
 		if(totalweight>100.0f)
 		{
 			print_diagram(dgr,1+2);
@@ -933,8 +1061,10 @@ int do_diagmc(char *configfile)
 
 	- CTRL-c handler
 	- gnuplot interface
+	- Number of updates
 */
 
+#if 0
 int do_diagmc_parallel(char *configfile)
 {
 	struct diagram_cfg_t dcfg;
@@ -945,8 +1075,6 @@ int do_diagmc_parallel(char *configfile)
 	FILE *out;
 	char fname[1024];
 	progressbar *progress;
-
-#define DIAGRAM_NR_UPDATES	(3)
 
 	int (*updates[DIAGRAM_NR_UPDATES])(struct diagram_t *,struct configuration_t *);
 	char *update_names[DIAGRAM_NR_UPDATES];
@@ -1303,3 +1431,4 @@ int do_diagmc_parallel(char *configfile)
 
 	return 0;
 }
+#endif

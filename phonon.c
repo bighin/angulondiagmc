@@ -105,6 +105,8 @@ struct phonon_ctx_t *init_phonon_ctx(double maxtau,int nsteps,double n)
 		Since most of datapoints will be 1.0f, we can use a smaller number of steps, saving memory and time.
 	*/
 
+	nsteps0=nsteps1=c;
+
 	for(c=0;c<nsteps;c++)
 	{
 		if(ret->ncy0[c]>=1.0f)
@@ -128,7 +130,7 @@ struct phonon_ctx_t *init_phonon_ctx(double maxtau,int nsteps,double n)
 
 	ret->refs=0;
 
-	printf(" OK!\n");
+	printf(" Done!\n");
 
 	return ret;
 }
