@@ -17,10 +17,12 @@ void test_phonon_ctx(struct phonon_ctx_t *ctx);
 
 struct phonon_ctx_t *init_phonon_ctx(double maxtau,int nsteps,double n)
 {
-	struct phonon_ctx_t*ret;
+	struct phonon_ctx_t *ret;
 
 	int c,nsteps0,nsteps1;;
 	double step;
+
+	assert(nsteps>0);
 
 	if(!(ret=malloc(sizeof(struct phonon_ctx_t))))
 		return NULL;
@@ -75,8 +77,8 @@ struct phonon_ctx_t *init_phonon_ctx(double maxtau,int nsteps,double n)
 
 	for(c=1;c<nsteps;c++)
 	{
-		ret->ncy0[c]+=ret->ncy0[c-1]+0.5f*step*(ret->y0[c-1]+ret->y0[c]);
-		ret->ncy1[c]+=ret->ncy1[c-1]+0.5f*step*(ret->y1[c-1]+ret->y1[c]);
+		ret->ncy0[c]=ret->ncy0[c-1]+0.5f*step*(ret->y0[c-1]+ret->y0[c]);
+		ret->ncy1[c]=ret->ncy1[c-1]+0.5f*step*(ret->y1[c-1]+ret->y1[c]);
 	}
 
 	/*
@@ -184,7 +186,7 @@ double chi_lambda(struct phonon_ctx_t *ctx,int lambda,double deltatau)
 
 double phonon_dist(gsl_rng *rctx,struct phonon_ctx_t *ctx,int lambda)
 {
-        double x=gsl_rng_uniform(rctx);
+        double x=gsl_rng_uniform_pos(rctx);
 	struct interpolation_t *it;
 
 	assert((lambda==0)||(lambda==1));

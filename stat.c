@@ -94,6 +94,14 @@ double samples_get_variance(struct samples_t *smpls)
 	return variance;
 }
 
+int samples_get_number(struct samples_t *smpls)
+{
+	assert(!(smpls->next>smpls->nalloced));
+	assert(smpls->next>=0);
+	
+	return smpls->next;
+}
+
 /*
 	Sampling context, basic a bunch of samples_t: they can be updated
 	one by one, their averages and standard deviations can be dumped
@@ -285,6 +293,27 @@ double histogram_get_bin_variance(struct histogram_t *htt,int bin)
 	return samples_get_variance(htt->sctx->smpls[bin]);
 }
 
+double histogram_get_average(struct histogram_t *htt)
+{
+	double result,weight;
+	int d;
+
+	result=weight=0.0f;
+
+	for(d=0;d<htt->nbins;d++)
+	{
+		if(histogram_get_bin_average(htt,d)>0)
+		{
+			double bincenter=htt->width*d+htt->width/2.0f;
+	
+			result+=bincenter*samples_get_number(htt->sctx->smpls[d]);
+			weight+=samples_get_number(htt->sctx->smpls[d]);
+		}
+	}
+
+	return result/weight;
+}
+
 void fini_histogram(struct histogram_t *htt)
 {
 	if(htt)
@@ -307,9 +336,9 @@ void fini_histogram(struct histogram_t *htt)
 double doubly_truncated_exp_dist(gsl_rng *rctx,double lambda,double tau1,double tau2)
 {
 	double x=gsl_rng_uniform(rctx);
-	double delta=-x+x*exp((tau1-tau2)*lambda);
+	double delta=-x*(1.0f-exp(-(tau2-tau1)*lambda));
 
-	return (lambda*tau1-log1p(delta))/lambda;
+	return tau1-log1p(delta)/lambda;
 }
 
 double doubly_truncated_exp_pdf(gsl_rng *rctx,double lambda,double tau1,double tau2,double tau)
@@ -326,21 +355,24 @@ double calculate_qpw(struct configuration_t *config,struct histogram_t *ht)
 {
 	struct linreg_ctx_t *lct;
 	double qpw;
-	int start,end,c,d;
+	int start,end,c,d,validbins;
 	
 	lct=init_linreg_ctx();
 	
 	c=0;
 	qpw=-1.0f;
 
-	start=65*config->bins/100;
-	end=95*config->bins/100;
+	validbins=((int)(config->maxtau/ht->width));
+
+	start=65*validbins/100;
+	end=85*validbins/100;
 
 	for(d=start;d<end;d++)
 	{
 		if(histogram_get_bin_average(ht,d)>10e-7)
 		{
 			linreg_add_entry(lct,config->width*d+config->width/2.0f,log(histogram_get_bin_average(ht,d)));
+						
 			c++;
 		}
 	}
@@ -357,15 +389,17 @@ double calculate_energy(struct configuration_t *config,struct histogram_t *ht)
 {
 	struct linreg_ctx_t *lct;
 	double energy;
-	int start,end,c,d;
+	int start,end,c,d,validbins;
 	
 	lct=init_linreg_ctx();
 	
 	c=0;
 	energy=-1.0f;
 	
-	start=65*config->bins/100;
-	end=95*config->bins/100;
+	validbins=((int)(config->maxtau/ht->width));
+
+	start=65*validbins/100;
+	end=85*validbins/100;
 
 	for(d=start;d<end;d++)
 	{

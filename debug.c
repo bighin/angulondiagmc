@@ -112,7 +112,7 @@ void debug_weight(struct diagram_t *dgr)
 		factor=chi_lambda(dgr->phonon_ctx,arc->lambda,timediff);
 
 		ret*=factor;
-		printf("Adding %f (vertex from precalculated tables, lambda=%d)\n",factor,arc->lambda);
+		printf("Adding %f (vertex from precalculated tables, lambda=%d, length=%f)\n",factor,arc->lambda,timediff);
 	}
 
 	/*

@@ -18,4 +18,6 @@ void diagram_update_length(struct diagram_t *dgr,double newendtau);
 bool diagram_add_worm(struct diagram_t *dgr,int target1,int target2,int deltalambda);
 bool diagram_remove_worm(struct diagram_t *dgr,int index);
 
+bool recouple(struct diagram_t *dgr,int lo,int hi);
+
 #endif //__UPDATES_H__

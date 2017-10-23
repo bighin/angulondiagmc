@@ -53,7 +53,7 @@ bool verbose_output=false;
 void verbose_printf(char *fmt,...)
 {
 	va_list ap;
-	
+
 	va_start(ap,fmt);
 
 	if(verbose_output==true)
@@ -860,7 +860,7 @@ bool hashtable_probe(struct graph_t *gt,double *value,int *hashindex)
 {
 	unsigned int h;
 
-	h=0xCAFEBABE;
+	h=0xBADC0FFE;
 	h^=murmur3_hash((void *)(gt->lines),sizeof(int)*gt->nr_lines);	
 	h^=murmur3_hash((void *)(gt->arcs),3*sizeof(int)*gt->nr_arcs);
 	h^=murmur3_hash((void *)(gt->js),sizeof(int)*(gt->nr_lines+gt->nr_arcs));

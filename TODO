@@ -1,8 +1,9 @@
-Re-run cppcheck, use Coverity Scan
+update_add_phonon() and update_remove_phonon() could avoid using diagram_clone() -- which is quite expensive --
+by calculating the weightratio without creating a new diagram. Then we add add/remove a line only if the update
+has been accepted.
 
-Check when is appropriate to replace gsl_rng_uniform() with gsl_rng_uniform_pos()
+Support in Makefile for cppcheck and clang-analyzer, and maybe try getting access to Coverity Scan
 
 There is a memory leak in njsummat/njformul.c. This is not serious, but in a typical run a ~25MB per minute are leaked.
 
 Variable-size grid!
-

@@ -555,3 +555,154 @@ void diagram_update_length(struct diagram_t *dgr,double newendtau)
 	dgr->endtau=newendtau;
 	get_free_propagator(dgr,nr_free_propagators-1)->endtau=newendtau;
 }
+
+/*
+	Given a diagram and a starting and ending vertex (lo and hi),
+	this function recouples momenta on free propagators between lo and hi included.
+
+	Great care must be taken in extracting *fairly* one possible coupling
+	among all of them.
+*/
+
+bool recouple(struct diagram_t *dgr,int lo,int hi)
+{
+	int c,d,length,targettotal;
+	int *deltalist,*jlist;
+	
+	assert(hi>=lo);
+	
+	length=hi-lo+1;
+	deltalist=malloc(sizeof(int)*length);
+	jlist=malloc(sizeof(int)*length);
+
+#define MAX_TRIES	(1024)
+
+	targettotal=get_right_neighbour(dgr,hi)->j-get_left_neighbour(dgr,lo)->j;
+
+	for(d=0;d<=MAX_TRIES;d++)
+	{
+		int total=0;
+		bool failedtc;
+		
+		/*
+			This is just to silence CLang's static analyzer. Actually deltalist[0]
+			is correctly inizitialed in the subsequent 'for' loop.
+		
+			Probably... I should check this better!
+		*/
+
+		deltalist[0]=0;
+
+		/*
+			At each vertex one can define a delta value, defined as the difference
+			in angular momenta between the left propagator and the right propagator.
+
+			Clearly, instead of choosing one configuration between all angular
+			momentum values, one can equivalently choose a delta configuration.
+
+			Which values can delta take at each vertex? Given lambda, the phonon
+			propagator's angular momentum, the triangular condition at each vertex
+			dictates that the following delta values are allowed:
+		
+			lambda = 0 --> delta = 0
+			lambda = 1 --> delta = -1, 0, 1
+			lambda = 2 --> delta = -2, -1, 0, 1, 2
+		
+			However, it turns out that a more restrictive condition holds and that
+			some of this integer values are not allowed: at every vertex,
+			according to the diagrammatic rules, one has a 3j symbol with all m's
+			set to zero. This vertex imposes that the sums of angular momenta at a
+			vertex should be an even integer.
+		
+			Some of the delta values above would change the parity, resuling in an
+			odd total sum of angular momenta at a vertex.
+
+			Thus, the correct list is:
+
+			lambda = 0 --> delta = 0
+			lambda = 1 --> delta = -1, 1
+			lambda = 2 --> delta = -2, 0, 2
+			and so on...
+
+			and we select one random value among these deltas, for each vertex.
+		*/
+
+		for(c=lo;c<=hi;c++)
+		{
+			struct vertex_t *vtx;
+			int lambda;
+			
+			vtx=get_vertex(dgr,c);
+			lambda=vtx->phononline->lambda;
+
+			deltalist[c-lo]=2*gsl_rng_uniform_int(dgr->rng_ctx,1+lambda)-lambda;
+		}
+
+		for(c=lo;c<=hi;c++)
+		{
+			total+=deltalist[c-lo];
+		}
+
+		/*
+			jlist[i] referes to the propagator *after* the i-th vertex
+		*/
+
+		jlist[0]=get_left_neighbour(dgr,lo)->j+deltalist[0];
+		
+		failedtc=false;
+		for(c=lo+1;c<=hi;c++)
+		{
+			int lambda=get_vertex(dgr,c)->phononline->lambda;
+			
+			jlist[c-lo]=jlist[c-lo-1]+deltalist[c-lo];
+	
+			if(check_triangle_condition_and_parity_from_js(jlist[c-lo],jlist[c-lo-1],lambda)==false)
+				failedtc=true;
+		}
+
+		if((total==targettotal)&&(failedtc==false))
+			break;
+	}
+
+	/*
+		We have tried to get a deltalist summing to 0 for MAX_TRIES times.
+
+		If we didn't managed to do so, it is time to throw an error...
+	*/
+
+	if(d==MAX_TRIES)
+	{
+		printf("Failed to find an acceptable recoupling after %d tries, shamefully exiting. Please debug this.\n",MAX_TRIES);
+		exit(0);
+	}
+
+	/*
+		We have a working deltalist, let's use it to rewrite the free propagators.
+	*/
+
+	for(c=lo;c<hi;c++)
+	{
+		struct vertex_t *vtx=get_vertex(dgr,c);
+
+		vtx->right->j=vtx->left->j+deltalist[c-lo];
+	}
+
+	/*
+		As a final check, we verify the consistency of the last coupling.
+	*/
+
+#ifndef NDEBUG
+	{
+		struct vertex_t *vtx=get_vertex(dgr,hi);
+		assert(vtx->right->j==vtx->left->j+deltalist[hi-lo]);
+	}
+#endif
+
+	if(jlist)
+		free(jlist);
+
+	if(deltalist)
+		free(deltalist);
+	
+	return true;
+}

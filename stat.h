@@ -15,6 +15,7 @@ void samples_fini(struct samples_t *smpls);
 void samples_add_entry(struct samples_t *smpls,double x);
 double samples_get_average(struct samples_t *smpls);
 double samples_get_variance(struct samples_t *smpls);
+int samples_get_number(struct samples_t *smpls);
 
 struct sampling_ctx_t
 {
@@ -53,6 +54,7 @@ struct histogram_t *init_histogram(int nbins,double width);
 void histogram_add_sample(struct histogram_t *htt,double sample,double time);
 double histogram_get_bin_average(struct histogram_t *htt,int bin);
 double histogram_get_bin_variance(struct histogram_t *htt,int bin);
+double histogram_get_average(struct histogram_t *htt);
 void fini_histogram(struct histogram_t *htt);
 
 double doubly_truncated_exp_dist(gsl_rng *rctx,double lambda,double tau1,double tau2);
