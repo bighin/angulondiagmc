@@ -5,6 +5,7 @@
 #include <string.h>
 #include <assert.h>
 #include <gsl/gsl_rng.h>
+#include <gsl/gsl_histogram.h>
 #include <unistd.h>
 
 #if defined(_OPENMP)
@@ -196,8 +197,6 @@ int update_length(struct diagram_t *dgr,struct configuration_t *cfg)
 	oldendtau=dgr->endtau;
 	rate=lastg0->j*(lastg0->j+1.0f)-dgr->chempot;
 
-#warning ChangeMe!
-
 	newendtau=doubly_truncated_exp_dist(dgr->rng_ctx,rate,lasttau,cfg->maxtau);
 
 	/*
@@ -232,19 +231,17 @@ int update_length(struct diagram_t *dgr,struct configuration_t *cfg)
 	return UPDATE_ACCEPTED;
 }
 
-#warning Change me!
 #define MAXLAMBDA	(0)
 
 int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 {
 	int lambda,mu;
-	double k,starttau,endtau,tau1,tau2,weightratio,acceptance_ratio;
+	double k,tau1,tau2,weightratio,acceptance_ratio;
 	bool is_accepted;
 
 	struct arc_t *thisline;
 	struct vertex_t *v1,*v2;
 	struct diagram_t *old;
-	struct g0_t *target_propagator;
 
 	/*
 		Do we want to limit the simulation only to first order diagrams (or at a certain maximum order)?
@@ -267,25 +264,13 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 		whereas tau2 is sampled from a truncated exponential distribution.
 	*/
 
-	target_propagator=get_free_propagator(dgr,gsl_rng_uniform_int(dgr->rng_ctx,get_nr_free_propagators(dgr)));
-	starttau=target_propagator->starttau;
-	endtau=target_propagator->endtau;
-
 	k=0.0f;
-	tau1=starttau+(endtau-starttau)*gsl_rng_uniform_pos(dgr->rng_ctx);
+	tau1=dgr->endtau*gsl_rng_uniform_pos(dgr->rng_ctx);
 	tau2=cfg->maxtau;
 
-	assert(tau1>starttau);
-	assert(tau1<endtau);
-	assert(cfg->maxtau>endtau);
-
-#warning Check here this while() Probably we should just consider the update as unphysical.
-
-	//while(tau2>=endtau)
-	//	tau2=tau1+phonon_dist(dgr->rng_ctx,dgr->phonon_ctx,lambda);
-
 	tau2=tau1+phonon_dist(dgr->rng_ctx,dgr->phonon_ctx,lambda);
-	if(tau2>=endtau)
+
+	if(tau2>=dgr->endtau)
 		return UPDATE_UNPHYSICAL;
 
 	/*
@@ -334,8 +319,7 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	acceptance_ratio*=diagram_m_weight(dgr,cfg->use_hashtable)/diagram_m_weight(old,cfg->use_hashtable);
 
 	acceptance_ratio/=1.0f/(1+MAXLAMBDA);
-	acceptance_ratio/=1.0f/get_nr_free_propagators(old);
-	acceptance_ratio/=1.0f/(endtau-starttau);
+	acceptance_ratio/=1.0f/dgr->endtau;
 	acceptance_ratio/=phonon_pdf(dgr->phonon_ctx,lambda,tau2-tau1);
 	acceptance_ratio*=1.0f/get_nr_available_phonons(dgr);
 
@@ -365,10 +349,9 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 {
 	struct arc_t *arc;
 	struct diagram_t *old;
-	struct g0_t *target_propagator;
 
 	int target,lambda,nr_available_phonons,startmidpoint,endmidpoint;
-	double weightratio,targetweight,acceptance_ratio,tau1,tau2,starttau,endtau;
+	double weightratio,targetweight,acceptance_ratio,tau1,tau2;
 	bool is_accepted;
 
 	nr_available_phonons=get_nr_available_phonons(dgr);
@@ -399,10 +382,6 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	assert(almost_same_float(dgr->weight,diagram_weight_non_incremental(dgr)));
 	assert(almost_same_float(weightratio,diagram_weight_non_incremental(dgr)/diagram_weight_non_incremental(old)));
 
-	target_propagator=find_propagator_containing_time(dgr,tau1);
-	starttau=target_propagator->starttau;
-	endtau=target_propagator->endtau;
-
 	/*
 		Finally we calculate the acceptance ratio for the update.
 	*/
@@ -411,8 +390,7 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	acceptance_ratio*=diagram_m_weight(dgr,cfg->use_hashtable)/diagram_m_weight(old,cfg->use_hashtable);
 
 	acceptance_ratio*=1.0f/(1+MAXLAMBDA);
-	acceptance_ratio*=1.0f/get_nr_free_propagators(dgr);
-	acceptance_ratio*=1.0f/(endtau-starttau);
+	acceptance_ratio*=1.0f/dgr->endtau;
 	acceptance_ratio*=phonon_pdf(dgr->phonon_ctx,lambda,tau2-tau1);
 	acceptance_ratio/=1.0f/nr_available_phonons;
 
@@ -634,14 +612,14 @@ void show_update_statistics(FILE *out,int proposed,int accepted,int rejected)
 	fprintf(out,"proposed %d, accepted %d (%f%%), rejected %d (%f%%).\n",proposed,accepted,accepted_pct,rejected,rejected_pct);
 }
 
-void send_to_gnuplot(gnuplot_ctrl *h1,struct histogram_t *ht,struct configuration_t *config)
+void send_to_gnuplot(gnuplot_ctrl *gp,gsl_histogram *g,struct configuration_t *config)
 {
 	double *x,*y1,*y2;
 	char desc1[1024],desc2[1024];
 	int c;
 	
-	gnuplot_resetplot(h1);
-	gnuplot_setstyle(h1,"points");
+	gnuplot_resetplot(gp);
+	gnuplot_setstyle(gp,"points");
 
 	if(!(x=malloc(sizeof(double)*config->bins)))
 		return;
@@ -669,27 +647,27 @@ void send_to_gnuplot(gnuplot_ctrl *h1,struct histogram_t *ht,struct configuratio
 		Ej=config->j*(config->j+1);
 
 		x[c]=tau;
-		y1[c]=histogram_get_bin_average(ht,c);
+		y1[c]=gsl_histogram_get(g,c)/gsl_histogram_get(g,0)*exp(-(Ej-config->chempot)*config->width/2.0f);
 		y2[c]=exp(-(Ej-config->chempot)*tau);
 	}
 
 	for(c=0;c<config->bins;c++)
 	{
-		//y1[c]=log(y1[c]);
-		//y2[c]=log(y2[c]);
+		y1[c]=log(y1[c]);
+		y2[c]=log(y2[c]);
 	}
 
 	snprintf(desc1,1024,"Angulon (j=%d, logn=%f)",config->j,log(config->n));
 	snprintf(desc2,1024,"Free rotor (j=%d)",config->j);
 
-	gnuplot_cmd(h1,"set xlabel \"{/Symbol t}\" font \" ,30\"");
-	gnuplot_cmd(h1,"set ylabel \"log(G({/Symbol t}))\" font \" ,30\"");
-	gnuplot_cmd(h1,"set xtics font \" ,22\"");
-	gnuplot_cmd(h1,"set ytics font \" ,22\"");
-	gnuplot_cmd(h1,"set key font \" ,22\"");
-	gnuplot_cmd(h1,"set pointsize 1.5");
+	gnuplot_cmd(gp,"set xlabel \"{/Symbol t}\" font \" ,30\"");
+	gnuplot_cmd(gp,"set ylabel \"log(G({/Symbol t}))\" font \" ,30\"");
+	gnuplot_cmd(gp,"set xtics font \" ,22\"");
+	gnuplot_cmd(gp,"set ytics font \" ,22\"");
+	gnuplot_cmd(gp,"set key font \" ,22\"");
+	gnuplot_cmd(gp,"set pointsize 1.5");
 
-	gnuplot_plot_xyy(h1,x,y1,y2,config->bins,desc1,desc2);
+	gnuplot_plot_xyy(gp,x,y1,y2,config->bins,desc1,desc2);
 
 	if(x)	free(x);
 	if(y1)	free(y1);
@@ -708,16 +686,17 @@ int do_diagmc(char *configfile)
 	struct diagram_t *dgr;
 	struct diagram_cfg_t dcfg;
 	struct configuration_t config;
-	struct histogram_t *ht0,*ht1;
+
+	gsl_histogram *g,*g0,*g1,*g2;
 
 	int c,d;
 	FILE *out;
 	char fname[1024],progressbar_text[1024];
 
 	progressbar *progress;
-	gnuplot_ctrl *h1;
+	gnuplot_ctrl *gp;
 
-#define DIAGRAM_NR_UPDATES	(4)
+#define DIAGRAM_NR_UPDATES	(3)
 
 	int (*updates[DIAGRAM_NR_UPDATES])(struct diagram_t *,struct configuration_t *);
 	char *update_names[DIAGRAM_NR_UPDATES];
@@ -730,18 +709,16 @@ int do_diagmc(char *configfile)
 	updates[0]=update_length;
 	updates[1]=update_add_phonon_line;
 	updates[2]=update_remove_phonon_line;
-	updates[3]=update_recouple;
 
 	update_names[0]="UpdateLength";
 	update_names[1]="AddPhononLine";
 	update_names[2]="RemovePhononLine";
-	update_names[3]="Recouple";
 
 	for(d=0;d<DIAGRAM_NR_UPDATES;d++)
 		proposed[d]=accepted[d]=rejected[d]=0;
 	
 	avgorder[0]=avgorder[1]=0;
-	avglength[0]=avglength[1]=0;
+	avglength[0]=avglength[1]=0.0f;
 
 	/*
 		We load some sensible defaults in case they are not in the .ini file, the we try
@@ -811,10 +788,17 @@ int do_diagmc(char *configfile)
 	else
 		progress=NULL;
 
-	h1=((config.liveplot==true)?(gnuplot_init()):(NULL));
+	gp=((config.liveplot==true)?(gnuplot_init()):(NULL));
 
-	ht0=init_histogram(config.bins,config.width);
-	ht1=init_histogram(config.bins,config.width);
+	g=gsl_histogram_alloc(config.bins);
+	g0=gsl_histogram_alloc(config.bins);
+	g1=gsl_histogram_alloc(config.bins);
+	g2=gsl_histogram_alloc(config.bins);
+
+	gsl_histogram_set_ranges_uniform(g,0.0f,config.bins*config.width);
+	gsl_histogram_set_ranges_uniform(g0,0.0f,config.bins*config.width);
+	gsl_histogram_set_ranges_uniform(g1,0.0f,config.bins*config.width);
+	gsl_histogram_set_ranges_uniform(g2,0.0f,config.bins*config.width);
 
 	/*
 		We initialize some basic data structures and various other stuff, as well as the
@@ -838,9 +822,7 @@ int do_diagmc(char *configfile)
 		int update_type,status;
 		double totalweight;
 
-#warning Change me!
-
-		update_type=gsl_rng_uniform_int(dgr->rng_ctx,DIAGRAM_NR_UPDATES-1);
+		update_type=gsl_rng_uniform_int(dgr->rng_ctx,DIAGRAM_NR_UPDATES);
 		status=updates[update_type](dgr,&config);
 
 		if((config.nthreads==1)&&(config.animate)&&(status==UPDATE_ACCEPTED)&&((update_type==1)||(update_type==2)))
@@ -894,86 +876,22 @@ int do_diagmc(char *configfile)
 		totalweight=diagram_weight(dgr)*diagram_m_weight(dgr,config.use_hashtable);
 		assert(totalweight>=0.0f);
 
-#warning Delme!
+		gsl_histogram_increment(g,dgr->endtau);
 
-		{
-			int nr_phonons=get_nr_phonons(dgr);
-			
-			assert(almost_same_float(diagram_m_weight(dgr,config.use_hashtable),1.0f));
-
-			assert(nr_phonons<=1);
-
-			if(nr_phonons==1)
-			{
-				struct arc_t *onlyarc=get_phonon_line(dgr,0);
-				
-				double cg2=1.0f/(4.0f*M_PI);
-
-				if(almost_same_float(diagram_weight(dgr),cg2*exp(config.chempot*dgr->endtau)*calculate_arc_weight(dgr,onlyarc))!=true)
-				{
-					printf("\n\nweight: %f\n",diagram_weight(dgr));
-					printf("chempot: %f\n",exp(config.chempot*dgr->endtau));
-					printf("arc: %f\n",calculate_arc_weight(dgr,onlyarc));
-					
-					debug_weight(dgr);
-					
-					exit(0);
-				}
-			}
-		}
-
-#warning Delme!
-
-		assert(get_nr_phonons(dgr)==get_nr_available_phonons(dgr));
-
-#warning Delme!
-
-#if 0
-		if(get_nr_phonons(dgr)>15)
-		{
-			print_diagram(dgr,PRINT_TOPOLOGY|PRINT_INFO0);
-			debug_weight(dgr);
-			exit(0);
-		}
-#endif
-
-#if 0
-		if(totalweight>100.0f)
-		{
-			print_diagram(dgr,1+2);
-			
-			debug_weight(dgr);
-			
-			exit(0);
-		}
-#endif
-
-#warning Delete only the IF here!
+		if(get_nr_phonons(dgr)==0)
+			gsl_histogram_increment(g0,dgr->endtau);
 
 		if(get_nr_phonons(dgr)==1)
-		histogram_add_sample(ht0,totalweight,dgr->endtau);
-		
-		histogram_add_sample(ht1,1.0f,dgr->endtau);
+			gsl_histogram_increment(g1,dgr->endtau);
+
+		if(get_nr_phonons(dgr)==2)
+			gsl_histogram_increment(g2,dgr->endtau);
 
 		avgorder[0]+=get_nr_phonons(dgr);
 		avgorder[1]++;
 
 		avglength[0]+=dgr->endtau;
 		avglength[1]++;
-
-#if 0
-		if(((c-1)%50000)==0)
-		{
-			printf("Average length: %f\nChemical potential: %f\n\n",avglength[0]/avglength[1],config.chempot);
-
-			avglength[0]=avglength[1]=0.0f;
-		
-			config.chempot+=0.1;
-		
-			fini_histogram(ht);
-			ht=init_histogram(config.bins,config.width);
-		}
-#endif
 
 		if((c%16384)==0)
 		{
@@ -982,8 +900,8 @@ int do_diagmc(char *configfile)
 				double avg1,avg2;
 
 				avg1=((double)(avgorder[0]))/((double)(avgorder[1]));
-				avg2=histogram_get_average(ht1);
-				
+				avg2=((double)(avglength[0]))/((double)(avglength[1]));
+
 				snprintf(progressbar_text,1024,"Progress (avg. order: %f, avg. length: %f)",avg1,avg2);
 
 				progressbar_update_label(progress,progressbar_text);
@@ -991,8 +909,8 @@ int do_diagmc(char *configfile)
 			}
 
 			if(config.liveplot)
-				send_to_gnuplot(h1,ht0,&config);	
-		}			
+				send_to_gnuplot(gp,g,&config);	
+		}
 	}
 
 	if(keep_running==0)
@@ -1042,9 +960,9 @@ int do_diagmc(char *configfile)
 	fprintf(out,"# Total: ");
 	show_update_statistics(out,total_proposed,total_accepted,total_rejected);
 	fprintf(out,"#\n# Average order: %f\n",((double)(avgorder[0]))/((double)(avgorder[1])));
-	fprintf(out,"# Average length: %f\n",histogram_get_average(ht1));
-	fprintf(out,"# Extrapolated quasiparticle weight: %f\n",calculate_qpw(&config,ht0));
-	fprintf(out,"# Extrapolated energy: %f\n",calculate_energy(&config,ht0));
+	fprintf(out,"# Average length: %f\n",99.9f);
+	fprintf(out,"# Extrapolated quasiparticle weight: %f\n",calculate_qpw(&config,g));
+	fprintf(out,"# Extrapolated energy: %f\n",calculate_energy(&config,g));
 	fprintf(out,"#\n");
 	fprintf(out,"# Sampled quantity: Green's function (G)\n");
 	fprintf(out,"# Iterations: %d\n",config.iterations);
@@ -1055,21 +973,42 @@ int do_diagmc(char *configfile)
 
 	fprintf(out,"# <Bin center> <Average> <Stddev> <Free rotor>\n");
 
-	for(d=0;d<=config.bins;d++)
+	/*
+		We normalize the histogram...
+	*/
+	
 	{
-		double tau,Ej;
-		
-		tau=config.width*d+config.width/2.0f;
-		Ej=config.j*(config.j+1);
-		
-		fprintf(out,"%f %f ",tau,histogram_get_bin_average(ht0,d));
-		
-		if(ht0->sctx->smpls[d]->next>1)
-			fprintf(out,"%f ",sqrtf(histogram_get_bin_variance(ht0,d)/(ht0->sctx->smpls[d]->next)));
-		else
-			fprintf(out,"%f ",0.0f);
+		double lower,upper,bin0center,Ej,scalefactor;
+	
+		gsl_histogram_get_range(g,0,&lower,&upper);
+	
+		bin0center=(lower+upper)/2.0f;
+		Ej=config.j*(config.j+1)-config.chempot;
+		scalefactor=exp(-Ej*bin0center)/gsl_histogram_get(g,0);
+	
+		gsl_histogram_scale(g,scalefactor);
+		gsl_histogram_scale(g0,scalefactor);
+		gsl_histogram_scale(g1,scalefactor);
+		gsl_histogram_scale(g2,scalefactor);
+	}
 
-		fprintf(out,"%f\n",exp(-(Ej-config.chempot)*tau));
+	/*
+		...and then we print it
+	*/
+
+	for(d=0;d<config.bins;d++)
+	{
+		double lower,upper,bincenter,Ej;
+
+		gsl_histogram_get_range(g,d,&lower,&upper);
+		bincenter=(lower+upper)/2.0f;
+
+		assert(almost_same_float(bincenter,config.width*d+config.width/2.0f)==true);
+
+		Ej=config.j*(config.j+1)-config.chempot;
+
+		fprintf(out,"%f %f %f ",bincenter,gsl_histogram_get(g,d),exp(-Ej*bincenter));
+		fprintf(out,"%f %f %f\n",gsl_histogram_get(g0,d),gsl_histogram_get(g1,d),gsl_histogram_get(g2,d));
 	}
 
 	/*
@@ -1079,12 +1018,13 @@ int do_diagmc(char *configfile)
 	if(out)
 		fclose(out);
 
-	fini_histogram(ht0);
-	fini_histogram(ht1);
-
+	gsl_histogram_free(g);
+	gsl_histogram_free(g0);
+	gsl_histogram_free(g1);
+	gsl_histogram_free(g2);
 
 	if(config.liveplot)
-		gnuplot_close(h1);
+		gnuplot_close(gp);
 
 	return 0;
 }

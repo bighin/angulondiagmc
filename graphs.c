@@ -930,6 +930,7 @@ double diagram_m_weight(struct diagram_t *dgr,bool use_hashtable)
 	{
 		printf("The current diagram translates to a formula exceeding the limits of NJSUMMAT.");
 		printf(" Please tune the limits in njformul.h\n");
+		printf("(nrjs=%d, nrks=%d, nrsixjs=%d)\n",gt.f.nrjs,gt.f.nrks,gt.f.nrsixjs);
 		exit(0);
 	}
 
