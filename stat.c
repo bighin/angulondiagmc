@@ -106,9 +106,8 @@ double doubly_truncated_exp_pdf(gsl_rng *rctx,double lambda,double tau1,double t
 	weigth, by fitting to an exponential and extrapolation to 0.
 */
 
-double calculate_qpw(struct configuration_t *config,void *ht)
+double calculate_qpw(struct configuration_t *config,gsl_histogram *g)
 {
-#if 0
 	struct linreg_ctx_t *lct;
 	double qpw;
 	int start,end,c,d,validbins;
@@ -118,17 +117,22 @@ double calculate_qpw(struct configuration_t *config,void *ht)
 	c=0;
 	qpw=-1.0f;
 
-	validbins=((int)(config->maxtau/ht->width));
+	validbins=((int)(config->maxtau/config->width));
 
 	start=65*validbins/100;
 	end=85*validbins/100;
 
 	for(d=start;d<end;d++)
 	{
-		if(histogram_get_bin_average(ht,d)>10e-7)
+		if(gsl_histogram_get(g,d)>10e-7)
 		{
-			linreg_add_entry(lct,config->width*d+config->width/2.0f,log(histogram_get_bin_average(ht,d)));
-						
+			double lower,upper,bincenter;
+
+			gsl_histogram_get_range(g,d,&lower,&upper);
+	                bincenter=(lower+upper)/2.0f;
+
+			linreg_add_entry(lct,bincenter,log(gsl_histogram_get(g,d)));
+					
 			c++;
 		}
 	}
@@ -139,14 +143,10 @@ double calculate_qpw(struct configuration_t *config,void *ht)
 	fini_linreg_ctx(lct);
 	
 	return qpw;
-#else
-	return 0.0f;
-#endif
 }
 
-double calculate_energy(struct configuration_t *config,void *ht)
+double calculate_energy(struct configuration_t *config,gsl_histogram *g)
 {
-#if 0
 	struct linreg_ctx_t *lct;
 	double energy;
 	int start,end,c,d,validbins;
@@ -155,17 +155,23 @@ double calculate_energy(struct configuration_t *config,void *ht)
 	
 	c=0;
 	energy=-1.0f;
-	
-	validbins=((int)(config->maxtau/ht->width));
+
+	validbins=((int)(config->maxtau/config->width));
 
 	start=65*validbins/100;
 	end=85*validbins/100;
 
 	for(d=start;d<end;d++)
 	{
-		if(histogram_get_bin_average(ht,d)>10e-7)
+		if(gsl_histogram_get(g,d)>10e-7)
 		{
-			linreg_add_entry(lct,config->width*d+config->width/2.0f,log(histogram_get_bin_average(ht,d)));
+			double lower,upper,bincenter;
+
+			gsl_histogram_get_range(g,d,&lower,&upper);
+	                bincenter=(lower+upper)/2.0f;
+
+			linreg_add_entry(lct,bincenter,log(gsl_histogram_get(g,d)));
+					
 			c++;
 		}
 	}
@@ -176,7 +182,4 @@ double calculate_energy(struct configuration_t *config,void *ht)
 	fini_linreg_ctx(lct);
 	
 	return energy;
-#else
-	return 0.0f;
-#endif
 }
