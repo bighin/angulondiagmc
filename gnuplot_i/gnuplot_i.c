@@ -684,12 +684,18 @@ char const * gnuplot_tmpfile(gnuplot_ctrl * handle)
 #ifdef WIN32
     if (_mktemp(tmp_filename) == NULL)
     {
+	if(tmp_filename)
+		free(tmp_filename);
+	
         return NULL;
     }
 #else // #ifdef WIN32
     unx_fd = mkstemp(tmp_filename);
     if (unx_fd == -1)
     {
+    	if(tmp_filename)
+    		free(tmp_filename);
+
         return NULL;
     }
     close(unx_fd);

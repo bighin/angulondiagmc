@@ -266,8 +266,6 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	k=0.0f;
 	tau1=dgr->endtau*gsl_rng_uniform_pos(dgr->rng_ctx);
-	tau2=cfg->maxtau;
-
 	tau2=tau1+phonon_dist(dgr->rng_ctx,dgr->phonon_ctx,lambda);
 
 	if(tau2>=dgr->endtau)
