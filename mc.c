@@ -7,6 +7,7 @@
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_histogram.h>
 #include <unistd.h>
+#include <signal.h>
 
 #if defined(_OPENMP)
 #include <omp.h>

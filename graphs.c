@@ -823,7 +823,7 @@ void hashtable_init(void)
 	for(c=0;c<HASHTABLE_ENTRIES;c++)
 		hashtable[c].valid=HASHTABLE_INVALID_ENTRY;
 	
-	printf("Initalized graph hashtable, with %d entries, %ld KB\n",HASHTABLE_ENTRIES,HASHTABLE_ENTRIES*sizeof(struct graph_t)/1024);
+	printf("Initialized graph hashtable, with %d entries, %ld KB\n",HASHTABLE_ENTRIES,HASHTABLE_ENTRIES*sizeof(struct graph_t)/1024);
 
 	hashtable_lookups=hashtable_matches=0;
 }
