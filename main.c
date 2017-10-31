@@ -102,6 +102,11 @@ int main(int argc,char *argv[])
 				}
 			}	
 
+			printf("Performing final run with full time control\n");
+
+			load_configuration(argv[c],&config);
+			do_diagmc(&config,&output);
+
 			continue;
 		}
 
