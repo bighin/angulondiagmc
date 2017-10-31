@@ -46,20 +46,20 @@ double diagram_m_weight_with_swap(struct diagram_t *dgr)
 
 int test_one_diagram(int index,int j1,int j2,int j3,int j4,int flags)
 {
-	struct diagram_cfg_t dcfg;
+	struct diagram_parameters_t dpars;
 	struct diagram_t *dgr;
 	double w1,w2,w3;
 	int mode;
 	
-	dcfg.j=1;
+	dpars.j=1;
 
-	dcfg.endtau=1.0f;
-	dcfg.chempot=5.75f;
+	dpars.endtau=1.0f;
+	dpars.chempot=5.75f;
 
-	dcfg.n=1.0f;
+	dpars.n=1.0f;
 
 	mode=PRINT_TOPOLOGY;//|PRINT_PROPAGATORS;
-	dgr=init_diagram(&dcfg,true);
+	dgr=init_diagram(&dpars,true);
 
 	dgr->rng_ctx=gsl_rng_alloc(gsl_rng_mt19937);
 	assert(dgr->rng_ctx!=NULL);

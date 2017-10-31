@@ -21,37 +21,11 @@
 #include "graphs.h"
 #include "phonon.h"
 #include "debug.h"
+#include "config.h"
 
 #include "inih/ini.h"
 #include "libprogressbar/progressbar.h"
 #include "gnuplot_i/gnuplot_i.h"
-
-/*
-	The following headers need to be included after graphs.h, becuase it defines a 'lines' macro
-	conflicting with a field in struct graph_t
-*/
-
-#include <curses.h>
-#include <term.h>
-
-static char term_buffer[2048];
-
-void init_terminal_data(void)
-{
-	char *termtype=getenv("TERM");
-	int success;
-
-	if(termtype==NULL)
-		fprintf(stderr,"Please specify a terminal type with 'setenv TERM <yourtype>'.\n");
-
-	success=tgetent(term_buffer,termtype);
-	
-	if(success<0)
-		fprintf(stderr, "Could not access the termcap database.\n");
-
-	if(success==0)
-		fprintf(stderr, "Terminal type `%s' is not defined.\n",termtype);
-}
 
 /*
 	This routine calculates the weight all the propagators between two midpoints,
@@ -448,152 +422,6 @@ int update_recouple(struct diagram_t *dgr,struct configuration_t *cfg)
 	return UPDATE_ACCEPTED;
 }
 
-void load_config_defaults(struct configuration_t *config)
-{
-	config->prefix=strdup("default");
-	config->seedrng=false;
-	config->progressbar=true;
-	config->animate=false;
-	config->liveplot=false;
-
-	config->j=1;
-	config->endtau=1.0f;
-	config->chempot=0.95f;
-	config->maxtau=100.0f;
-	config->maxorder=1024;
-	
-	config->n=exp(-10.0f);
-
-	config->iterations=10000000;
-	config->bins=50;
-	config->width=0.25;
-
-	config->parallel=false;
-	config->nthreads=1;
-}
-
-static int configuration_handler(void *user,const char *section,const char *name,const char *value)
-{
-	struct configuration_t *pconfig=(struct configuration_t *)(user);
-
-#define MATCH(s,n) ((strcmp(section,s)==0)&&(strcmp(name,n)==0))
-
-	if(MATCH("general","prefix"))
-	{
-		pconfig->prefix=strdup(value);
-	}
-	else if(MATCH("general","seedrng"))
-	{
-		if(!strcmp(value,"true"))
-			pconfig->seedrng=true;
-		else if(!strcmp(value,"false"))
-			pconfig->seedrng=false;
-		else
-			return 0;
-	}
-	else if(MATCH("general","progressbar"))
-	{
-		if(!strcmp(value,"true"))
-			pconfig->progressbar=true;
-		else if(!strcmp(value,"false"))
-			pconfig->progressbar=false;
-		else
-			return 0;
-	}
-	else if(MATCH("general","animate"))
-	{
-		if(!strcmp(value,"true"))
-			pconfig->animate=true;
-		else if(!strcmp(value,"false"))
-			pconfig->animate=false;
-		else
-			return 0;
-	}
-	else if(MATCH("general","liveplot"))
-	{
-		if(!strcmp(value,"true"))
-			pconfig->liveplot=true;
-		else if(!strcmp(value,"false"))
-			pconfig->liveplot=false;
-		else
-			return 0;
-	}
-	else if(MATCH("general","hashtable"))
-	{
-		if(!strcmp(value,"true"))
-			pconfig->use_hashtable=true;
-		else if(!strcmp(value,"false"))
-			pconfig->use_hashtable=false;
-		else
-			return 0;
-	}
-	else if(MATCH("parameters","j"))
-	{
-		pconfig->j=atoi(value);
-	}
-	else if(MATCH("parameters","endtau"))
-	{
-		pconfig->endtau=atof(value);
-	}
-	else if(MATCH("parameters","chempot"))
-	{
-		pconfig->chempot=atof(value);
-	}
-	else if(MATCH("parameters","maxtau"))
-	{
-		pconfig->maxtau=atof(value);
-	}
-	else if(MATCH("parameters","maxorder"))
-	{
-		pconfig->maxorder=atoi(value);
-	}
-	else if(MATCH("potential","logn"))
-	{
-		pconfig->n=exp(atof(value));
-	}
-	else if(MATCH("sampling","bins"))
-	{
-		pconfig->bins=atoi(value);
-	}
-	else if(MATCH("sampling","iterations"))
-	{
-		pconfig->iterations=atoi(value);
-	}
-	else if(MATCH("sampling","width"))
-	{	
-		pconfig->width=atof(value);
-	}
-	else if(MATCH("parallel","parallel"))
-	{
-		if(!strcmp(value,"true"))
-			pconfig->parallel=true;
-		else if(!strcmp(value,"false"))
-			pconfig->parallel=false;
-		else
-			return 0;
-	}
-	else if(MATCH("parallel","nthreads"))
-	{		
-		if(!strcmp(value,"auto"))
-		{
-#if defined(_OPENMP)
-			pconfig->nthreads=omp_get_max_threads();
-#else
-			pconfig->nthreads=1;
-#endif
-		}
-		else
-			pconfig->nthreads=atoi(value);
-	}
-	else
-	{
-		/* Unknown section/name, error */
-		return 0;
-	}
-
-	return 1;
-}
-
 void show_update_statistics(FILE *out,int proposed,int accepted,int rejected)
 {
 	double accepted_pct,rejected_pct;
@@ -680,11 +508,10 @@ void interrupt_handler(int dummy)
 	keep_running=0;
 }
 
-int do_diagmc(char *configfile)
+int do_diagmc(struct configuration_t *config)
 {
 	struct diagram_t *dgr;
-	struct diagram_cfg_t dcfg;
-	struct configuration_t config;
+	struct diagram_parameters_t dpars;
 
 	gsl_histogram *g,*g0,*g1,*g2;
 
@@ -705,6 +532,10 @@ int do_diagmc(char *configfile)
 	int avgorder[2];
 	double avglength[2];
 
+	/*
+		We set up the updates we will be using
+	*/
+
 	updates[0]=update_length;
 	updates[1]=update_add_phonon_line;
 	updates[2]=update_remove_phonon_line;
@@ -713,6 +544,10 @@ int do_diagmc(char *configfile)
 	update_names[1]="AddPhononLine";
 	update_names[2]="RemovePhononLine";
 
+	/*
+		We reset the update statistics
+	*/
+
 	for(d=0;d<DIAGRAM_NR_UPDATES;d++)
 		proposed[d]=accepted[d]=rejected[d]=0;
 	
@@ -720,49 +555,12 @@ int do_diagmc(char *configfile)
 	avglength[0]=avglength[1]=0.0f;
 
 	/*
-		We load some sensible defaults in case they are not in the .ini file, the we try
-		loading a .ini file.
+		We print some informative message, and then we open the log file
 	*/
 
-	load_config_defaults(&config);
+	fprintf(stderr,"Performing %d iterations, using %d thread(s)\n",config->iterations,config->nthreads);
 
-	if(ini_parse(configfile,configuration_handler,&config)<0)
-	{
-		fprintf(stderr,"Couldn't read or parse '%s'\n",configfile);
-		return 1;
-	}
-
-	if((config.animate==true)&&(config.progressbar==true))
-	{
-		fprintf(stderr,"The options 'animate' and 'progressbar' cannot be set at the same time!\n");
-		exit(0);
-	}
-
-	if((config.animate==true)&&(config.parallel==true))
-	{
-		fprintf(stderr,"The options 'animate' and 'parallel' cannot be set at the same time!\n");
-		exit(0);
-	}
-
-	if(config.j*(config.j+1)<=config.chempot)
-	{
-		fprintf(stderr,"Warning: the chemical potential should be set below j(j+1).\n");
-	}
-
-	if((config.parallel==true)&&(config.use_hashtable==true))
-	{
-		fprintf(stderr,"Warning: the hashtable is incompatible with the 'parallel' option. The hashtable will be switched off.\n");
-		config.use_hashtable=false;
-	}
-
-	if(config.parallel==false)
-		config.nthreads=1;
-
-	fprintf(stderr,"Loaded '%s'\n",configfile);
-	fprintf(stderr,"Performing %d iterations, using %d thread(s)\n",config.iterations,config.nthreads);
-
-	snprintf(fname,1024,"%s.dat",config.prefix);
-	
+	snprintf(fname,1024,"%s.dat",config->prefix);
 	if(!(out=fopen(fname,"w+")))
 	{
 		fprintf(stderr,"Error: couldn't open %s for writing\n",fname);
@@ -771,59 +569,72 @@ int do_diagmc(char *configfile)
 
 	fprintf(stderr,"Writing results to '%s'\n",fname);
 
-	dcfg.j=config.j;
-	dcfg.endtau=config.endtau;
-	dcfg.maxtau=config.maxtau;
-	dcfg.chempot=config.chempot;
+	/*
+		The diagram parameters are loaded from the configuration, and then a new diagram is created
+	*/
 
-	dcfg.n=config.n;
+	dpars.j=config->j;
+	dpars.endtau=config->endtau;
+	dpars.maxtau=config->maxtau;
+	dpars.chempot=config->chempot;
+	dpars.n=config->n;
+
+	dgr=init_diagram(&dpars,true);
+
+	/*
+		We setup an interript handler to gracefully handle a CTRL-C, and initialize a structure needed
+		by the ncurses library to return info about the current terminal.
+	*/
 
 	signal(SIGINT,interrupt_handler);
-
         init_terminal_data();
 
-	if(config.progressbar)
-		progress=progressbar_new("Progress",config.iterations/16384);
+	if(config->progressbar==true)
+		progress=progressbar_new("Progress",config->iterations/16384);
 	else
 		progress=NULL;
 
-	gp=((config.liveplot==true)?(gnuplot_init()):(NULL));
-
-	g=gsl_histogram_alloc(config.bins);
-	g0=gsl_histogram_alloc(config.bins);
-	g1=gsl_histogram_alloc(config.bins);
-	g2=gsl_histogram_alloc(config.bins);
-
-	gsl_histogram_set_ranges_uniform(g,0.0f,config.bins*config.width);
-	gsl_histogram_set_ranges_uniform(g0,0.0f,config.bins*config.width);
-	gsl_histogram_set_ranges_uniform(g1,0.0f,config.bins*config.width);
-	gsl_histogram_set_ranges_uniform(g2,0.0f,config.bins*config.width);
+	if(config->liveplot==true)
+		gp=gnuplot_init();
+	else
+		gp=NULL;
 
 	/*
-		We initialize some basic data structures and various other stuff, as well as the
-		random number generator, in case a NON deterministic seed is requested.
+		We initialize the histograms
 	*/
 
-	dgr=init_diagram(&dcfg,true);
+	g=gsl_histogram_alloc(config->bins);
+	g0=gsl_histogram_alloc(config->bins);
+	g1=gsl_histogram_alloc(config->bins);
+	g2=gsl_histogram_alloc(config->bins);
+
+	gsl_histogram_set_ranges_uniform(g,0.0f,config->bins*config->width);
+	gsl_histogram_set_ranges_uniform(g0,0.0f,config->bins*config->width);
+	gsl_histogram_set_ranges_uniform(g1,0.0f,config->bins*config->width);
+	gsl_histogram_set_ranges_uniform(g2,0.0f,config->bins*config->width);
+
+	/*
+		We initialize the random number generator, and we seed it in case a NON deterministic seed is requested.
+	*/
 
 	dgr->rng_ctx=gsl_rng_alloc(gsl_rng_mt19937);
 	assert(dgr->rng_ctx!=NULL);
 
-	if(config.seedrng)
+	if(config->seedrng)
 		seed_rng(dgr->rng_ctx);
 
 	/*
 		This is the main DiagMC loop
 	*/
 
-	for(c=0;(c<config.iterations)&&(keep_running==1);c++)
+	for(c=0;(c<config->iterations)&&(keep_running==1);c++)
 	{
 		int update_type,status;
 
 		update_type=gsl_rng_uniform_int(dgr->rng_ctx,DIAGRAM_NR_UPDATES);
-		status=updates[update_type](dgr,&config);
+		status=updates[update_type](dgr,config);
 
-		if((config.nthreads==1)&&(config.animate)&&(status==UPDATE_ACCEPTED)&&((update_type==1)||(update_type==2)))
+		if((config->nthreads==1)&&(config->animate)&&(status==UPDATE_ACCEPTED)&&((update_type==1)||(update_type==2)))
 		{
 			if((c%16)==0)
 			{
@@ -832,7 +643,7 @@ int do_diagmc(char *configfile)
 				flags=PRINT_TOPOLOGY|PRINT_INFO0;
 				plines=print_diagram(dgr,flags|PRINT_DRYRUN);
 	
-				for(d=plines;d<tgetnum("li");d++)
+				for(d=plines;d<get_terminal_nr_lines();d++)
 						printf("\n");
 
 				print_diagram(dgr,flags);
@@ -871,7 +682,7 @@ int do_diagmc(char *configfile)
 		assert(almost_same_float(diagram_weight(dgr),diagram_weight_non_incremental(dgr))==true);
 		diagram_check_consistency(dgr);
 
-		assert(diagram_weight(dgr)*diagram_m_weight(dgr,config.use_hashtable)>=0.0f);
+		assert(diagram_weight(dgr)*diagram_m_weight(dgr,config->use_hashtable)>=0.0f);
 
 		gsl_histogram_increment(g,dgr->endtau);
 
@@ -892,7 +703,7 @@ int do_diagmc(char *configfile)
 
 		if((c%16384)==0)
 		{
-			if(config.progressbar)
+			if(config->progressbar)
 			{
 				double avg1,avg2;
 
@@ -905,18 +716,18 @@ int do_diagmc(char *configfile)
 				progressbar_inc(progress);
 			}
 
-			if(config.liveplot)
-				send_to_gnuplot(gp,g,&config);	
+			if(config->liveplot)
+				send_to_gnuplot(gp,g,config);	
 		}
 	}
 
 	if(keep_running==0)
 	{
 		printf("Caught SIGINT, exiting earlier.\n");
-		config.iterations=c;
+		config->iterations=c;
 	}
 
-	if(config.progressbar)
+	if(config->progressbar)
 		progressbar_finish(progress);
 
 	if(dgr->rng_ctx)
@@ -930,14 +741,14 @@ int do_diagmc(char *configfile)
 
 	fprintf(out,"# Diagrammatic Monte Carlo for the angulon\n");
 	fprintf(out,"#\n");
-	fprintf(out,"# Configuration loaded from '%s'\n",configfile);
+	fprintf(out,"# Configuration loaded from '%s'\n",config->ininame);
 	fprintf(out,"# Output file is '%s'\n",fname);
 	fprintf(out,"#\n");
-	fprintf(out,"# Initial and final state: (j=%d, sampling over all possible m values)\n",config.j);
-	fprintf(out,"# Chemical potential: %f\n",config.chempot);
-	fprintf(out,"# Initial diagram length: %f\n",config.endtau);
-	fprintf(out,"# Max diagram length: %f\n",config.maxtau);
-	fprintf(out,"# Potential parameters: (logn) = (%f)\n",log(config.n));
+	fprintf(out,"# Initial and final state: (j=%d, sampling over all possible m values)\n",config->j);
+	fprintf(out,"# Chemical potential: %f\n",config->chempot);
+	fprintf(out,"# Initial diagram length: %f\n",config->endtau);
+	fprintf(out,"# Max diagram length: %f\n",config->maxtau);
+	fprintf(out,"# Potential parameters: (logn) = (%f)\n",log(config->n));
 	fprintf(out,"#\n");
 
 	total_proposed=total_accepted=total_rejected=0;
@@ -958,13 +769,13 @@ int do_diagmc(char *configfile)
 	show_update_statistics(out,total_proposed,total_accepted,total_rejected);
 	fprintf(out,"#\n# Average order: %f\n",((double)(avgorder[0]))/((double)(avgorder[1])));
 	fprintf(out,"# Average length: %f\n",99.9f);
-	fprintf(out,"# Extrapolated quasiparticle weight: %f\n",calculate_qpw(&config,g));
-	fprintf(out,"# Extrapolated energy: %f\n",calculate_energy(&config,g));
+	fprintf(out,"# Extrapolated quasiparticle weight: %f\n",calculate_qpw(config,g));
+	fprintf(out,"# Extrapolated energy: %f\n",calculate_energy(config,g));
 	fprintf(out,"#\n");
 	fprintf(out,"# Sampled quantity: Green's function (G)\n");
-	fprintf(out,"# Iterations: %d\n",config.iterations);
-	fprintf(out,"# Nr of bins: %d\n",config.bins);
-	fprintf(out,"# Bin width: %f\n",config.width);
+	fprintf(out,"# Iterations: %d\n",config->iterations);
+	fprintf(out,"# Nr of bins: %d\n",config->bins);
+	fprintf(out,"# Bin width: %f\n",config->width);
 	fprintf(out,"# (last bin is overflow)\n");
 	fprintf(out,"#\n");
 
@@ -980,7 +791,7 @@ int do_diagmc(char *configfile)
 		gsl_histogram_get_range(g,0,&lower,&upper);
 	
 		bin0center=(lower+upper)/2.0f;
-		Ej=config.j*(config.j+1)-config.chempot;
+		Ej=config->j*(config->j+1)-config->chempot;
 		scalefactor=exp(-Ej*bin0center)/gsl_histogram_get(g,0);
 	
 		gsl_histogram_scale(g,scalefactor);
@@ -993,16 +804,16 @@ int do_diagmc(char *configfile)
 		...and then we print it
 	*/
 
-	for(d=0;d<config.bins;d++)
+	for(d=0;d<config->bins;d++)
 	{
 		double lower,upper,bincenter,Ej;
 
 		gsl_histogram_get_range(g,d,&lower,&upper);
 		bincenter=(lower+upper)/2.0f;
 
-		assert(almost_same_float(bincenter,config.width*d+config.width/2.0f)==true);
+		assert(almost_same_float(bincenter,config->width*d+config->width/2.0f)==true);
 
-		Ej=config.j*(config.j+1)-config.chempot;
+		Ej=config->j*(config->j+1)-config->chempot;
 
 		fprintf(out,"%f %f %f ",bincenter,gsl_histogram_get(g,d),exp(-Ej*bincenter));
 		fprintf(out,"%f %f %f\n",gsl_histogram_get(g0,d),gsl_histogram_get(g1,d),gsl_histogram_get(g2,d));
@@ -1020,11 +831,13 @@ int do_diagmc(char *configfile)
 	gsl_histogram_free(g1);
 	gsl_histogram_free(g2);
 
-	if(config.liveplot)
+	if(config->liveplot)
 		gnuplot_close(gp);
 
 	return 0;
 }
+
+#ifdef EXPERIMENTAL_PARALLEL
 
 int do_diagmc_parallel(char *configfile)
 {
@@ -1209,7 +1022,7 @@ int do_diagmc_parallel(char *configfile)
 					flags=PRINT_TOPOLOGY|PRINT_INFO0;
 					plines=print_diagram(dgr,flags|PRINT_DRYRUN);
 	
-					for(d=plines;d<tgetnum("li");d++)
+					for(d=plines;d<get_terminal_nr_lines();d++)
 							printf("\n");
 
 					print_diagram(dgr,flags);
@@ -1452,6 +1265,8 @@ int do_diagmc_parallel(char *configfile)
 
 	return 0;
 }
+
+#endif
 
 /*
 	Things to add here:

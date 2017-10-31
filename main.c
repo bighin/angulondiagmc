@@ -16,6 +16,7 @@
 #include "graphs.h"
 #include "tests.h"
 #include "selfenergies.h"
+#include "config.h"
 
 void usage(char *argv0)
 {
@@ -38,6 +39,8 @@ int main(int argc,char *argv[])
 
 	for(c=1;c<argc;c++)
 	{
+		struct configuration_t config;
+		
 		if(strcmp(argv[c],"--testgraphs")==0)
 		{
 			test_graphical_machinery();
@@ -47,7 +50,8 @@ int main(int argc,char *argv[])
 		if(first==true)
 			fprintf(stderr,"Diagrammatic Monte Carlo for the angulon\n");
 
-		do_diagmc_parallel(argv[c]);
+		load_configuration(argv[c],&config);
+		do_diagmc(&config);
 		first=false;
 		
 		if((c+1)!=argc)

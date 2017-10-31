@@ -61,7 +61,7 @@ int vertex_get_m2(struct vertex_t *vif);
 int vertex_get_lambda(struct vertex_t *vif);
 int vertex_get_mu(struct vertex_t *vif);
 
-struct diagram_cfg_t
+struct diagram_parameters_t
 {
 	/*
 		General configuration parameters, to be specified
@@ -129,7 +129,7 @@ struct diagram_t
 	struct phonon_ctx_t *phonon_ctx;
 };
 
-struct diagram_t *init_diagram(struct diagram_cfg_t *cfg,bool verbose);
+struct diagram_t *init_diagram(struct diagram_parameters_t *dpars,bool verbose);
 void fini_diagram(struct diagram_t *dgr);
 
 struct arc_t *get_phonon_line(struct diagram_t *dgr,int c);

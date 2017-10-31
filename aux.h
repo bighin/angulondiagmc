@@ -50,4 +50,7 @@ void seed_rng(gsl_rng *rng);
 
 bool almost_same_float(double a,double b);
 
+void init_terminal_data(void);
+int get_terminal_nr_lines(void);
+
 #endif //__AUX_H__

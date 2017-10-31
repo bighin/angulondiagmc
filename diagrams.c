@@ -44,7 +44,7 @@ int vertex_get_mu(struct vertex_t *vif)
 	return vif->phononline->mu;
 }
 
-struct diagram_t *init_diagram(struct diagram_cfg_t *cfg,bool verbose)
+struct diagram_t *init_diagram(struct diagram_parameters_t *dpars,bool verbose)
 {
 	struct diagram_t *ret;
 	struct g0_t *g0;
@@ -53,10 +53,10 @@ struct diagram_t *init_diagram(struct diagram_cfg_t *cfg,bool verbose)
 		return NULL;
 
 	ret->mintau=0.0f;
-	ret->endtau=cfg->endtau;
-	ret->chempot=cfg->chempot;
+	ret->endtau=dpars->endtau;
+	ret->chempot=dpars->chempot;
 
-	ret->n=cfg->n;
+	ret->n=dpars->n;
 
 	ret->phonons=init_vlist(sizeof(struct arc_t),16*1024);
 	ret->midpoints=init_vlist(sizeof(double),16*1024);
@@ -69,13 +69,13 @@ struct diagram_t *init_diagram(struct diagram_cfg_t *cfg,bool verbose)
 
 	g0=vlist_append_empty(ret->free_propagators);
 
-	g0->j=cfg->j;
+	g0->j=dpars->j;
 
 	g0->startmidpoint=-1;
 	g0->endmidpoint=0;
 
 	g0->starttau=0.0f;
-	g0->endtau=cfg->endtau;
+	g0->endtau=dpars->endtau;
 	
 	g0->arcs_over_me=0;
 
@@ -89,8 +89,8 @@ struct diagram_t *init_diagram(struct diagram_cfg_t *cfg,bool verbose)
 	/*
 		Finally we initialize the phonon context
 	*/
-	
-	ret->phonon_ctx=init_phonon_ctx(30.0f,32*1024,cfg->n,verbose);
+
+	ret->phonon_ctx=init_phonon_ctx(30.0f,32*1024,dpars->n,verbose);
 
 	return ret;
 }

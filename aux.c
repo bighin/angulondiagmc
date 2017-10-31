@@ -4,6 +4,8 @@
 #include <string.h>
 #include <assert.h>
 #include <gsl/gsl_rng.h>
+#include <curses.h>
+#include <term.h>
 
 #include "aux.h"
 #include "spline.h"
@@ -286,6 +288,10 @@ double get_point(struct interpolation_t *it,double x)
 	return y;
 }
 
+/*
+	Routine to seed GSL's random number generator
+*/
+
 void seed_rng(gsl_rng *rng)
 {
 	char *devname="/dev/random";
@@ -319,3 +325,28 @@ bool almost_same_float(double a,double b)
 
 	return false;
 }
+
+static char term_buffer[2048];
+
+void init_terminal_data(void)
+{
+	char *termtype=getenv("TERM");
+	int success;
+
+	if(termtype==NULL)
+		fprintf(stderr,"Please specify a terminal type with 'setenv TERM <yourtype>'.\n");
+
+	success=tgetent(term_buffer,termtype);
+	
+	if(success<0)
+		fprintf(stderr, "Could not access the termcap database.\n");
+
+	if(success==0)
+		fprintf(stderr, "Terminal type `%s' is not defined.\n",termtype);
+}
+
+int get_terminal_nr_lines(void)
+{
+	return tgetnum("li");
+}
+
