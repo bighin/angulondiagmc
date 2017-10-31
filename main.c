@@ -29,6 +29,8 @@ double try_diagmc_and_get_length(struct configuration_t *config,double chempot)
 
 	do_diagmc(config,&output);
 	
+	printf("Result: (chempot, avglength) = (%f %f)\n\n",config->chempot,output.avglength);
+	
 	return output.avglength;
 }
 
@@ -105,7 +107,10 @@ int main(int argc,char *argv[])
 			printf("Performing final run with full time control\n");
 
 			load_configuration(argv[c],&config);
+			config.chempot=(lo+hi)/2.0f;
 			do_diagmc(&config,&output);
+
+			printf("Final result: (chempot, avglength) = (%f %f)\n\n",config.chempot,output.avglength);
 
 			continue;
 		}
