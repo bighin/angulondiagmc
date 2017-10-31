@@ -8,6 +8,7 @@
 #include <gsl/gsl_histogram.h>
 #include <unistd.h>
 #include <signal.h>
+#include <sys/time.h>
 
 #if defined(_OPENMP)
 #include <omp.h>
@@ -508,7 +509,7 @@ void interrupt_handler(int dummy)
 	keep_running=0;
 }
 
-int do_diagmc(struct configuration_t *config)
+int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 {
 	struct diagram_t *dgr;
 	struct diagram_parameters_t dpars;
@@ -521,6 +522,8 @@ int do_diagmc(struct configuration_t *config)
 
 	progressbar *progress;
 	gnuplot_ctrl *gp;
+
+	struct timeval starttime;
 
 #define DIAGRAM_NR_UPDATES	(3)
 
@@ -586,6 +589,7 @@ int do_diagmc(struct configuration_t *config)
 		by the ncurses library to return info about the current terminal.
 	*/
 
+	keep_running=1;
 	signal(SIGINT,interrupt_handler);
         init_terminal_data();
 
@@ -598,6 +602,13 @@ int do_diagmc(struct configuration_t *config)
 		gp=gnuplot_init();
 	else
 		gp=NULL;
+
+	/*
+		We save the start time
+	*/
+
+	gettimeofday(&starttime,NULL);
+
 
 	/*
 		We initialize the histograms
@@ -703,6 +714,9 @@ int do_diagmc(struct configuration_t *config)
 
 		if((c%16384)==0)
 		{
+			struct timeval now;
+			double elapsedtime;
+			
 			if(config->progressbar)
 			{
 				double avg1,avg2;
@@ -718,6 +732,15 @@ int do_diagmc(struct configuration_t *config)
 
 			if(config->liveplot)
 				send_to_gnuplot(gp,g,config);	
+		
+			gettimeofday(&now,NULL);
+
+			elapsedtime=(now.tv_sec-starttime.tv_sec)*1000.0;
+			elapsedtime+=(now.tv_usec-starttime.tv_usec)/1000.0;
+			elapsedtime/=1000;
+		
+			if((config->timelimit>0.0f)&&(elapsedtime>config->timelimit))
+				keep_running=0;
 		}
 	}
 
@@ -768,7 +791,7 @@ int do_diagmc(struct configuration_t *config)
 	fprintf(out,"# Total: ");
 	show_update_statistics(out,total_proposed,total_accepted,total_rejected);
 	fprintf(out,"#\n# Average order: %f\n",((double)(avgorder[0]))/((double)(avgorder[1])));
-	fprintf(out,"# Average length: %f\n",99.9f);
+	fprintf(out,"# Average length: %f\n",((double)(avglength[0]))/((double)(avglength[1])));
 	fprintf(out,"# Extrapolated quasiparticle weight: %f\n",calculate_qpw(config,g));
 	fprintf(out,"# Extrapolated energy: %f\n",calculate_energy(config,g));
 	fprintf(out,"#\n");
@@ -818,6 +841,13 @@ int do_diagmc(struct configuration_t *config)
 		fprintf(out,"%f %f %f ",bincenter,gsl_histogram_get(g,d),exp(-Ej*bincenter));
 		fprintf(out,"%f %f %f\n",gsl_histogram_get(g0,d),gsl_histogram_get(g1,d),gsl_histogram_get(g2,d));
 	}
+
+	/*
+		Finally we fill the structure output
+	*/
+
+	output->avglength=((double)(avglength[0]))/((double)(avglength[1]));
+	output->avgorder=((double)(avgorder[0]))/((double)(avgorder[1]));
 
 	/*
 		That's all folks. Cleaning up.

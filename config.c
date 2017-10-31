@@ -97,6 +97,10 @@ int configuration_handler(void *user,const char *section,const char *name,const 
 	{
 		pconfig->iterations=atoi(value);
 	}
+	else if(MATCH("sampling","timelimit"))
+	{
+		pconfig->timelimit=atof(value);
+	}
 	else if(MATCH("sampling","width"))
 	{	
 		pconfig->width=atof(value);
@@ -149,6 +153,7 @@ void load_config_defaults(struct configuration_t *config)
 	config->n=exp(-10.0f);
 
 	config->iterations=10000000;
+	config->timelimit=0.0f;
 	config->bins=50;
 	config->width=0.25;
 

@@ -18,9 +18,24 @@
 #include "selfenergies.h"
 #include "config.h"
 
+double try_diagmc_and_get_length(struct configuration_t *config,double chempot)
+{
+	struct mc_output_data_t output;
+
+	config->timelimit=60.0f;
+	config->chempot=chempot;
+
+	printf("Trying DiagMC run for %f seconds, with chemical potential %f\n",config->timelimit,config->chempot);
+
+	do_diagmc(config,&output);
+	
+	return output.avglength;
+}
+
 void usage(char *argv0)
 {
 	printf("Usage: %s <inifile>\n",argv0);
+	printf("       %s --tuning <inifile>\n",argv0);
 	printf("       %s --testgraphs\n",argv0);
 
 	exit(0);
@@ -40,18 +55,63 @@ int main(int argc,char *argv[])
 	for(c=1;c<argc;c++)
 	{
 		struct configuration_t config;
-		
+		struct mc_output_data_t output;
+
 		if(strcmp(argv[c],"--testgraphs")==0)
 		{
 			test_graphical_machinery();
 			continue;
 		}
 
+		if(strcmp(argv[c],"--tuning")==0)
+		{
+			double targetlength;
+			double lo,hi,mid;
+			int d;
+			
+			if((c+1)>=argc)
+				usage(argv[0]);
+
+			c++;
+
+			if(load_configuration(argv[c],&config)==false)
+				exit(0);
+
+			fprintf(stderr,"Diagrammatic Monte Carlo for the angulon (automatic chemical potential tuning)\n");
+
+			targetlength=5.0f;
+
+			lo=-10.0f;
+			hi=0.0f;
+
+			for(d=0;d<=10;d++)
+			{
+				double fmid;
+				
+				mid=(lo+hi)/2.0f;
+				load_configuration(argv[c],&config);
+				fmid=try_diagmc_and_get_length(&config,mid);
+
+				if(fmid<targetlength)
+				{
+					lo=mid;
+				}
+				else
+				{
+					hi=mid;
+				}
+			}	
+
+			continue;
+		}
+
 		if(first==true)
 			fprintf(stderr,"Diagrammatic Monte Carlo for the angulon\n");
 
-		load_configuration(argv[c],&config);
-		do_diagmc(&config);
+		if(load_configuration(argv[c],&config)==false)
+			continue;
+
+		do_diagmc(&config,&output);
 		first=false;
 		
 		if((c+1)!=argc)
