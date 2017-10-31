@@ -22,7 +22,7 @@ double try_diagmc_and_get_length(struct configuration_t *config,double chempot)
 {
 	struct mc_output_data_t output;
 
-	config->timelimit=60.0f;
+	config->timelimit=5*60.0f;
 	config->chempot=chempot;
 
 	printf("Trying DiagMC run for %f seconds, with chemical potential %f\n",config->timelimit,config->chempot);
