@@ -49,5 +49,6 @@ int update_remove_worm(struct diagram_t *dgr,struct configuration_t *cfg);
 void load_config_defaults(struct configuration_t *config);
 
 int do_diagmc(char *configfile);
+int do_diagmc_parallel(char *configfile);
 
 #endif //__MC_H__

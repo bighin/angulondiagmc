@@ -50,7 +50,7 @@ struct phonon_ctx_t
 	int refs;
 };
 
-struct phonon_ctx_t *init_phonon_ctx(double maxtau,int nsteps,double n);
+struct phonon_ctx_t *init_phonon_ctx(double maxtau,int nsteps,double n,bool verbose);
 void fini_phonon_ctx(struct phonon_ctx_t *ctx);
 
 double chi_lambda(struct phonon_ctx_t *ctx,int lambda,double deltatau);

@@ -15,7 +15,7 @@ void test_phonon_ctx(struct phonon_ctx_t *ctx);
 	created.
 */
 
-struct phonon_ctx_t *init_phonon_ctx(double maxtau,int nsteps,double n)
+struct phonon_ctx_t *init_phonon_ctx(double maxtau,int nsteps,double n,bool verbose)
 {
 	struct phonon_ctx_t *ret;
 
@@ -31,8 +31,11 @@ struct phonon_ctx_t *init_phonon_ctx(double maxtau,int nsteps,double n)
 	ret->nsteps=nsteps;
 	step=maxtau/nsteps;
 
-	printf("Precalculating phonon distributions...");
-	fflush(stdout);
+	if(verbose)
+	{
+		printf("Precalculating phonon distributions...");
+		fflush(stdout);
+	}
 
 	ret->x=malloc(sizeof(double)*nsteps);
 	ret->y0=malloc(sizeof(double)*nsteps);
@@ -132,7 +135,8 @@ struct phonon_ctx_t *init_phonon_ctx(double maxtau,int nsteps,double n)
 
 	ret->refs=0;
 
-	printf(" Done!\n");
+	if(verbose)
+		printf(" Done!\n");
 
 	return ret;
 }

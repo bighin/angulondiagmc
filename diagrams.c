@@ -44,7 +44,7 @@ int vertex_get_mu(struct vertex_t *vif)
 	return vif->phononline->mu;
 }
 
-struct diagram_t *init_diagram(struct diagram_cfg_t *cfg)
+struct diagram_t *init_diagram(struct diagram_cfg_t *cfg,bool verbose)
 {
 	struct diagram_t *ret;
 	struct g0_t *g0;
@@ -90,7 +90,7 @@ struct diagram_t *init_diagram(struct diagram_cfg_t *cfg)
 		Finally we initialize the phonon context
 	*/
 	
-	ret->phonon_ctx=init_phonon_ctx(30.0f,32*1024,cfg->n);
+	ret->phonon_ctx=init_phonon_ctx(30.0f,32*1024,cfg->n,verbose);
 
 	return ret;
 }

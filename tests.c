@@ -59,7 +59,7 @@ int test_one_diagram(int index,int j1,int j2,int j3,int j4,int flags)
 	dcfg.n=1.0f;
 
 	mode=PRINT_TOPOLOGY;//|PRINT_PROPAGATORS;
-	dgr=init_diagram(&dcfg);
+	dgr=init_diagram(&dcfg,true);
 
 	dgr->rng_ctx=gsl_rng_alloc(gsl_rng_mt19937);
 	assert(dgr->rng_ctx!=NULL);

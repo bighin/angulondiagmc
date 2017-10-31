@@ -804,7 +804,7 @@ int do_diagmc(char *configfile)
 		random number generator, in case a NON deterministic seed is requested.
 	*/
 
-	dgr=init_diagram(&dcfg);
+	dgr=init_diagram(&dcfg,true);
 
 	dgr->rng_ctx=gsl_rng_alloc(gsl_rng_mt19937);
 	assert(dgr->rng_ctx!=NULL);
@@ -819,7 +819,6 @@ int do_diagmc(char *configfile)
 	for(c=0;(c<config.iterations)&&(keep_running==1);c++)
 	{
 		int update_type,status;
-		double totalweight;
 
 		update_type=gsl_rng_uniform_int(dgr->rng_ctx,DIAGRAM_NR_UPDATES);
 		status=updates[update_type](dgr,&config);
@@ -872,8 +871,7 @@ int do_diagmc(char *configfile)
 		assert(almost_same_float(diagram_weight(dgr),diagram_weight_non_incremental(dgr))==true);
 		diagram_check_consistency(dgr);
 
-		totalweight=diagram_weight(dgr)*diagram_m_weight(dgr,config.use_hashtable);
-		assert(totalweight>=0.0f);
+		assert(diagram_weight(dgr)*diagram_m_weight(dgr,config.use_hashtable)>=0.0f);
 
 		gsl_histogram_increment(g,dgr->endtau);
 
@@ -1021,6 +1019,433 @@ int do_diagmc(char *configfile)
 	gsl_histogram_free(g0);
 	gsl_histogram_free(g1);
 	gsl_histogram_free(g2);
+
+	if(config.liveplot)
+		gnuplot_close(gp);
+
+	return 0;
+}
+
+int do_diagmc_parallel(char *configfile)
+{
+	struct diagram_cfg_t dcfg;
+	struct configuration_t config;
+
+	gsl_histogram **g,**g0,**g1,**g2;
+	gnuplot_ctrl *gp;
+
+	int d;
+	FILE *out;
+	char fname[1024],progressbar_text[1024];
+
+	progressbar *progress;
+	int progressbar_ticks=0;
+	
+#define DIAGRAM_NR_UPDATES	(3)
+
+	int (*updates[DIAGRAM_NR_UPDATES])(struct diagram_t *,struct configuration_t *);
+	char *update_names[DIAGRAM_NR_UPDATES];
+
+	int proposed[DIAGRAM_NR_UPDATES],accepted[DIAGRAM_NR_UPDATES],rejected[DIAGRAM_NR_UPDATES];
+	int total_proposed,total_accepted,total_rejected;
+	int avgorder[2];
+	double avglength[2];
+
+	updates[0]=update_length;
+	updates[1]=update_add_phonon_line;
+	updates[2]=update_remove_phonon_line;
+
+	update_names[0]="UpdateLength";
+	update_names[1]="AddPhononLine";
+	update_names[2]="RemovePhononLine";
+
+	for(d=0;d<DIAGRAM_NR_UPDATES;d++)
+		proposed[d]=accepted[d]=rejected[d]=0;
+	
+	avgorder[0]=avgorder[1]=0;
+	avglength[0]=avglength[1]=0.0f;
+
+	/*
+		We load some sensible defaults in case they are not in the .ini file, the we try
+		loading a .ini file.
+	*/
+
+	load_config_defaults(&config);
+
+	if(ini_parse(configfile,configuration_handler,&config)<0)
+	{
+		fprintf(stderr,"Couldn't read or parse '%s'\n",configfile);
+		return 1;
+	}
+
+	if((config.animate==true)&&(config.progressbar==true))
+	{
+		fprintf(stderr,"The options 'animate' and 'progressbar' cannot be set at the same time!\n");
+		exit(0);
+	}
+
+	if((config.animate==true)&&(config.parallel==true))
+	{
+		fprintf(stderr,"The options 'animate' and 'parallel' cannot be set at the same time!\n");
+		exit(0);
+	}
+
+	if(config.j*(config.j+1)<=config.chempot)
+	{
+		fprintf(stderr,"Warning: the chemical potential should be set below j(j+1).\n");
+	}
+
+	if((config.parallel==true)&&(config.use_hashtable==true))
+	{
+		fprintf(stderr,"Warning: the hashtable is incompatible with the 'parallel' option. The hashtable will be switched off.\n");
+		config.use_hashtable=false;
+	}
+
+	if(config.parallel==false)
+		config.nthreads=1;
+
+	fprintf(stderr,"Loaded '%s'\n",configfile);
+	fprintf(stderr,"Performing %d iterations, using %d thread(s)\n",config.iterations,config.nthreads);
+
+	snprintf(fname,1024,"%s.dat",config.prefix);
+	
+	if(!(out=fopen(fname,"w+")))
+	{
+		fprintf(stderr,"Error: couldn't open %s for writing\n",fname);
+		return 0;
+	}
+
+	fprintf(stderr,"Writing results to '%s'\n",fname);
+
+	dcfg.j=config.j;
+	dcfg.endtau=config.endtau;
+	dcfg.maxtau=config.maxtau;
+	dcfg.chempot=config.chempot;
+
+	dcfg.n=config.n;
+
+	signal(SIGINT,interrupt_handler);
+
+        init_terminal_data();
+
+	if(config.progressbar)
+		progress=progressbar_new("Progress",config.iterations/16384);
+	else
+		progress=NULL;
+
+	gp=((config.liveplot==true)?(gnuplot_init()):(NULL));
+
+	g=malloc(config.nthreads*sizeof(gsl_histogram *));
+	g0=malloc(config.nthreads*sizeof(gsl_histogram *));
+	g1=malloc(config.nthreads*sizeof(gsl_histogram *));
+	g2=malloc(config.nthreads*sizeof(gsl_histogram *));
+
+	assert((g!=NULL)&&(g0!=NULL)&&(g1!=NULL)&&(g2!=NULL));
+
+	for(d=0;d<config.nthreads;d++)
+	{
+		g[d]=gsl_histogram_alloc(config.bins);
+		g0[d]=gsl_histogram_alloc(config.bins);
+		g1[d]=gsl_histogram_alloc(config.bins);
+		g2[d]=gsl_histogram_alloc(config.bins);
+
+		gsl_histogram_set_ranges_uniform(g[d],0.0f,config.bins*config.width);
+		gsl_histogram_set_ranges_uniform(g0[d],0.0f,config.bins*config.width);
+		gsl_histogram_set_ranges_uniform(g1[d],0.0f,config.bins*config.width);
+		gsl_histogram_set_ranges_uniform(g2[d],0.0f,config.bins*config.width);
+	}
+
+#if defined(_OPENMP)
+#pragma omp parallel for
+#endif
+
+	for(d=0;d<config.nthreads;d++)
+	{
+		int c;
+		struct diagram_t *dgr;
+
+		/*
+			We initialize some basic data structures and various other stuff, as well as the
+			random number generator, in case a NON deterministic seed is requested.
+		*/
+
+		dgr=init_diagram(&dcfg,(d==0)?(true):(false));
+
+		dgr->rng_ctx=gsl_rng_alloc(gsl_rng_mt19937);
+		assert(dgr->rng_ctx!=NULL);
+
+		if(config.seedrng)
+			seed_rng(dgr->rng_ctx);
+
+		/*
+			If we are running many threads in parallel, we must initialized
+			the RNG in each thread in a different way, otherwise we are sampling
+			the same diagrams.
+		
+			In case a random seed has NOT been required (config.seedrng==false),
+			we use a deterministic seed (just the thread number).
+		*/
+
+		if((config.parallel)&&(!config.seedrng))
+			gsl_rng_set(dgr->rng_ctx,d);
+
+		/*
+			This is the main DiagMC loop
+		*/
+
+		for(c=0;(c<config.iterations/config.nthreads)&&(keep_running==1);c++)
+		{
+			int update_type,status;
+
+			update_type=gsl_rng_uniform_int(dgr->rng_ctx,DIAGRAM_NR_UPDATES);
+			status=updates[update_type](dgr,&config);
+
+			if((config.nthreads==1)&&(config.animate)&&(status==UPDATE_ACCEPTED)&&((update_type==1)||(update_type==2)))
+			{
+				if((c%16)==0)
+				{
+					int d,plines,flags;
+
+					flags=PRINT_TOPOLOGY|PRINT_INFO0;
+					plines=print_diagram(dgr,flags|PRINT_DRYRUN);
+	
+					for(d=plines;d<tgetnum("li");d++)
+							printf("\n");
+
+					print_diagram(dgr,flags);
+					usleep(5000);
+				}
+			}
+
+#if defined(_OPENMP)
+#pragma omp atomic
+#endif
+			proposed[update_type]++;
+
+			switch(status)
+			{
+				case UPDATE_ACCEPTED:
+
+#if defined(_OPENMP)
+#pragma omp atomic
+#endif
+				accepted[update_type]++;
+
+				break;
+
+				/*
+					FIXME
+
+					Here unphysical and rejected updates are treated in exactly the same
+					way. Is this OK?
+				*/
+
+				case UPDATE_UNPHYSICAL:
+				case UPDATE_REJECTED:
+
+#if defined(_OPENMP)
+#pragma omp atomic
+#endif
+				rejected[update_type]++;
+
+				break;
+
+				case UPDATE_ERROR:
+				assert(false);
+			}
+
+			assert(almost_same_float(diagram_weight(dgr),diagram_weight_non_incremental(dgr))==true);
+			diagram_check_consistency(dgr);
+
+			assert(diagram_weight(dgr)*diagram_m_weight(dgr,config.use_hashtable)>=0.0f);
+
+			gsl_histogram_increment(g[d],dgr->endtau);
+
+			if(get_nr_phonons(dgr)==0)
+				gsl_histogram_increment(g0[d],dgr->endtau);
+
+			if(get_nr_phonons(dgr)==1)
+				gsl_histogram_increment(g1[d],dgr->endtau);
+
+			if(get_nr_phonons(dgr)==2)
+				gsl_histogram_increment(g2[d],dgr->endtau);
+
+#if defined(_OPENMP)
+#pragma omp critical
+#endif
+			{
+				avgorder[0]+=get_nr_phonons(dgr);
+				avgorder[1]++;
+
+				avglength[0]+=dgr->endtau;
+				avglength[1]++;
+			}
+
+			if((c%16384)==0)
+			{
+#if defined(_OPENMP)
+#pragma omp atomic
+#endif
+				progressbar_ticks++;
+
+				if((config.progressbar)&&(d==0))
+				{
+					double avg1,avg2;
+
+					avg1=((double)(avgorder[0]))/((double)(avgorder[1]));
+					avg2=((double)(avglength[0]))/((double)(avglength[1]));
+
+					snprintf(progressbar_text,1024,"Progress (avg. order: %f, avg. length: %f)",avg1,avg2);
+
+					progress->value+=progressbar_ticks;
+
+#if defined(_OPENMP)
+#pragma omp critical
+#endif
+					progressbar_ticks=0;
+
+					progressbar_update_label(progress,progressbar_text);
+					progressbar_update(progress,progress->value);
+				}
+
+#if 0
+				if(config.liveplot)
+					send_to_gnuplot(gp,g,&config);	
+#endif
+			}
+		}
+
+		if(dgr->rng_ctx)
+			gsl_rng_free(dgr->rng_ctx);
+
+		fini_diagram(dgr);
+
+		if((keep_running==0)&&(d==0))
+		{
+			printf("Caught SIGINT, exiting earlier.\n");
+			
+			/*
+				FIXME This should contain the sum of all thread-local iterations performed!
+			*/
+			
+			config.iterations=c;
+		}
+	}
+
+	if(config.progressbar)
+		progressbar_finish(progress);
+
+	for(d=1;d<config.nthreads;d++)
+	{
+		gsl_histogram_add(g[d],g[d]);
+		gsl_histogram_add(g0[d],g0[d]);
+		gsl_histogram_add(g1[d],g1[d]);
+		gsl_histogram_add(g2[d],g2[d]);
+	}
+
+	/*
+		Now we print the statistics we collected to the output file in a nice way.
+	*/
+
+	fprintf(out,"# Diagrammatic Monte Carlo for the angulon\n");
+	fprintf(out,"#\n");
+	fprintf(out,"# Configuration loaded from '%s'\n",configfile);
+	fprintf(out,"# Output file is '%s'\n",fname);
+	fprintf(out,"#\n");
+	fprintf(out,"# Initial and final state: (j=%d, sampling over all possible m values)\n",config.j);
+	fprintf(out,"# Chemical potential: %f\n",config.chempot);
+	fprintf(out,"# Initial diagram length: %f\n",config.endtau);
+	fprintf(out,"# Max diagram length: %f\n",config.maxtau);
+	fprintf(out,"# Potential parameters: (logn) = (%f)\n",log(config.n));
+	fprintf(out,"#\n");
+
+	total_proposed=total_accepted=total_rejected=0;
+
+	fprintf(out,"# Update statistics:\n");
+
+	for(d=0;d<DIAGRAM_NR_UPDATES;d++)
+	{
+		fprintf(out,"# Update #%d (%s): ",d,update_names[d]);
+		show_update_statistics(out,proposed[d],accepted[d],rejected[d]);
+	
+		total_proposed+=proposed[d];
+		total_accepted+=accepted[d];
+		total_rejected+=rejected[d];
+	}
+
+	fprintf(out,"# Total: ");
+	show_update_statistics(out,total_proposed,total_accepted,total_rejected);
+	fprintf(out,"#\n# Average order: %f\n",((double)(avgorder[0]))/((double)(avgorder[1])));
+	fprintf(out,"# Average length: %f\n",99.9f);
+	fprintf(out,"# Extrapolated quasiparticle weight: %f\n",calculate_qpw(&config,g[0]));
+	fprintf(out,"# Extrapolated energy: %f\n",calculate_energy(&config,g[0]));
+	fprintf(out,"#\n");
+	fprintf(out,"# Sampled quantity: Green's function (G)\n");
+	fprintf(out,"# Iterations: %d\n",config.iterations);
+	fprintf(out,"# Nr of bins: %d\n",config.bins);
+	fprintf(out,"# Bin width: %f\n",config.width);
+	fprintf(out,"# (last bin is overflow)\n");
+	fprintf(out,"#\n");
+
+	fprintf(out,"# <Bin center> <Average> <Stddev> <Free rotor>\n");
+
+	/*
+		We normalize the histogram...
+	*/
+	
+	{
+		double lower,upper,bin0center,Ej,scalefactor;
+	
+		gsl_histogram_get_range(g[0],0,&lower,&upper);
+	
+		bin0center=(lower+upper)/2.0f;
+		Ej=config.j*(config.j+1)-config.chempot;
+		scalefactor=exp(-Ej*bin0center)/gsl_histogram_get(g[0],0);
+	
+		gsl_histogram_scale(g[0],scalefactor);
+		gsl_histogram_scale(g0[0],scalefactor);
+		gsl_histogram_scale(g1[0],scalefactor);
+		gsl_histogram_scale(g2[0],scalefactor);
+	}
+
+	/*
+		...and then we print it
+	*/
+
+	for(d=0;d<config.bins;d++)
+	{
+		double lower,upper,bincenter,Ej;
+
+		gsl_histogram_get_range(g[0],d,&lower,&upper);
+		bincenter=(lower+upper)/2.0f;
+
+		assert(almost_same_float(bincenter,config.width*d+config.width/2.0f)==true);
+
+		Ej=config.j*(config.j+1)-config.chempot;
+
+		fprintf(out,"%f %f %f ",bincenter,gsl_histogram_get(g[0],d),exp(-Ej*bincenter));
+		fprintf(out,"%f %f %f\n",gsl_histogram_get(g0[0],d),gsl_histogram_get(g1[0],d),gsl_histogram_get(g2[0],d));
+	}
+
+	/*
+		That's all folks. Cleaning up.
+	*/
+
+	if(out)
+		fclose(out);
+
+	for(d=0;d<config.nthreads;d++)
+	{
+		gsl_histogram_free(g[d]);
+		gsl_histogram_free(g0[d]);
+		gsl_histogram_free(g1[d]);
+		gsl_histogram_free(g2[d]);
+	}
+
+	free(g);
+	free(g0);
+	free(g1);
+	free(g2);
 
 	if(config.liveplot)
 		gnuplot_close(gp);

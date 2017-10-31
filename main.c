@@ -47,7 +47,7 @@ int main(int argc,char *argv[])
 		if(first==true)
 			fprintf(stderr,"Diagrammatic Monte Carlo for the angulon\n");
 
-		do_diagmc(argv[c]);
+		do_diagmc_parallel(argv[c]);
 		first=false;
 		
 		if((c+1)!=argc)

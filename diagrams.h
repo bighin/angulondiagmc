@@ -1,6 +1,7 @@
 #ifndef __DIAGRAMS_H__
 #define __DIAGRAMS_H__
 
+#include <stdbool.h>
 #include <gsl/gsl_rng.h>
 
 /*
@@ -128,7 +129,7 @@ struct diagram_t
 	struct phonon_ctx_t *phonon_ctx;
 };
 
-struct diagram_t *init_diagram(struct diagram_cfg_t *cfg);
+struct diagram_t *init_diagram(struct diagram_cfg_t *cfg,bool verbose);
 void fini_diagram(struct diagram_t *dgr);
 
 struct arc_t *get_phonon_line(struct diagram_t *dgr,int c);
