@@ -8,9 +8,9 @@ CFLAGS =  -Wall -pedantic -O0 -g -I/opt/local/include/ -fopenmp
 LDFLAGS = -L/opt/local/lib/
 
 # Linux-specific flags
-#CC=gcc
-#CFLAGS+=-std=gnu99
-#LDFLAGS+=-lcblas
+CC=gcc
+CFLAGS+=-std=gnu99
+LDFLAGS+=-lcblas
 
 .PHONY: clean all default
 
