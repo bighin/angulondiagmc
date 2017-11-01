@@ -1,9 +1,7 @@
 #!/bin/bash
-#
 
 #SBATCH --job-name=AngulonDiagMC
 #SBATCH --output=admc.log
-
 
 # Number of CPU cores to use within one node
 #SBATCH -c 1
@@ -34,6 +32,12 @@ export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 # Load the respective software module you intend to use
 #module load YourModuleHere
 
-#run the respective binary through SLURM's srun
-srun --cpu_bind=verbose ../diagmc --tuning diagmc.ini
+# Run the binary through SLURM's srun
 
+if [ -z "$INIFILE" ] ;
+then
+        echo "Error: the \$INIFILE environment variable needs to be set!"
+        echo "Usage: sbatch --export=INFILE=diagmc.ini diagmc.sbatch"
+else
+    srun --cpu_bind=verbose ../diagmc --tuning $INIFILE
+fi

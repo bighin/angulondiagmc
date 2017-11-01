@@ -111,7 +111,11 @@ bool hashtable_probe(struct graph_t *gt,double *value,int *hashindex);
 void hashtable_insert(struct graph_t *gt,double value,int hashindex);
 void hasthtable_show_stats(void);
 
-double diagram_m_weight(struct diagram_t *dgr,bool use_hashtable);
+#define STATUS_FROM_HASHTABLE	(10)
+#define STATUS_OK		(11)
+#define STATUS_OVERFLOW		(12)
+
+double diagram_m_weight(struct diagram_t *dgr,bool use_hashtable,int *status);
 double diagram_m_weight_reference(struct diagram_t *dgr);
 
 void init_njsummat(void);

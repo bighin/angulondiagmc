@@ -900,7 +900,7 @@ void hashtable_insert(struct graph_t *gt,double value,int hashindex)
 	hashtable[hashindex].value=value;
 }
 
-double diagram_m_weight(struct diagram_t *dgr,bool use_hashtable)
+double diagram_m_weight(struct diagram_t *dgr,bool use_hashtable,int *status)
 {
 	struct graph_t gt;
 	double value;
@@ -921,6 +921,9 @@ double diagram_m_weight(struct diagram_t *dgr,bool use_hashtable)
 	{
 		assert(value==evaluate_graph(&gt,false));
 
+		if(status)
+			*status=STATUS_FROM_HASHTABLE;
+
 		return value;
 	}
 
@@ -931,7 +934,11 @@ double diagram_m_weight(struct diagram_t *dgr,bool use_hashtable)
 		printf("The current diagram translates to a formula exceeding the limits of NJSUMMAT.");
 		printf(" Please tune the limits in njformul.h\n");
 		printf("(nrjs=%d, nrks=%d, nrsixjs=%d)\n",gt.f.nrjs,gt.f.nrks,gt.f.nrsixjs);
-		exit(0);
+
+		if(status)
+			*status=STATUS_OVERFLOW;
+
+		return 0.0f;
 	}
 
 	//formula_to_wolfram(gt.f);
@@ -983,6 +990,9 @@ double diagram_m_weight(struct diagram_t *dgr,bool use_hashtable)
 #endif
 		}
 	}
+
+	if(status)
+		*status=STATUS_OK;
 
 	return value;
 }

@@ -211,7 +211,7 @@ int update_length(struct diagram_t *dgr,struct configuration_t *cfg)
 
 int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 {
-	int lambda,mu;
+	int lambda,mu,status1,status2;
 	double k,tau1,tau2,weightratio,acceptance_ratio;
 	bool is_accepted;
 
@@ -290,7 +290,15 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	*/
 
 	acceptance_ratio=weightratio;
-	acceptance_ratio*=diagram_m_weight(dgr,cfg->use_hashtable)/diagram_m_weight(old,cfg->use_hashtable);
+	acceptance_ratio*=diagram_m_weight(dgr,cfg->use_hashtable,&status1)/diagram_m_weight(old,cfg->use_hashtable,&status2);
+
+	if((status1==STATUS_OVERFLOW)||(status2==STATUS_OVERFLOW))
+	{
+		diagram_copy(old,dgr);
+		fini_diagram(old);
+
+		return UPDATE_REJECTED;
+	}
 
 	acceptance_ratio/=1.0f/(1+MAXLAMBDA);
 	acceptance_ratio/=1.0f/dgr->endtau;
@@ -324,7 +332,7 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	struct arc_t *arc;
 	struct diagram_t *old;
 
-	int target,lambda,nr_available_phonons,startmidpoint,endmidpoint;
+	int target,lambda,nr_available_phonons,startmidpoint,endmidpoint,status1,status2;
 	double weightratio,targetweight,acceptance_ratio,tau1,tau2;
 	bool is_accepted;
 
@@ -361,7 +369,15 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	*/
 
 	acceptance_ratio=weightratio;
-	acceptance_ratio*=diagram_m_weight(dgr,cfg->use_hashtable)/diagram_m_weight(old,cfg->use_hashtable);
+	acceptance_ratio*=diagram_m_weight(dgr,cfg->use_hashtable,&status1)/diagram_m_weight(old,cfg->use_hashtable,&status2);
+
+	if((status1==STATUS_OVERFLOW)||(status2==STATUS_OVERFLOW))
+	{
+		diagram_copy(old,dgr);
+		fini_diagram(old);
+
+		return UPDATE_REJECTED;
+	}
 
 	acceptance_ratio*=1.0f/(1+MAXLAMBDA);
 	acceptance_ratio*=1.0f/dgr->endtau;
@@ -693,7 +709,7 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 		assert(almost_same_float(diagram_weight(dgr),diagram_weight_non_incremental(dgr))==true);
 		diagram_check_consistency(dgr);
 
-		assert(diagram_weight(dgr)*diagram_m_weight(dgr,config->use_hashtable)>=0.0f);
+		assert(diagram_weight(dgr)*diagram_m_weight(dgr,config->use_hashtable,NULL)>=0.0f);
 
 		gsl_histogram_increment(g,dgr->endtau);
 
@@ -1100,7 +1116,7 @@ int do_diagmc_parallel(char *configfile)
 			assert(almost_same_float(diagram_weight(dgr),diagram_weight_non_incremental(dgr))==true);
 			diagram_check_consistency(dgr);
 
-			assert(diagram_weight(dgr)*diagram_m_weight(dgr,config.use_hashtable)>=0.0f);
+			assert(diagram_weight(dgr)*diagram_m_weight(dgr,config.use_hashtable,NULL)>=0.0f);
 
 			gsl_histogram_increment(g[d],dgr->endtau);
 

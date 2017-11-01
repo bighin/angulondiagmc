@@ -190,7 +190,7 @@ int test_one_diagram(int index,int j1,int j2,int j3,int j4,int flags)
 
 	w1=w2=w3=0.0f; // To silence GCC (wrong) warnings...
 
-	if(flags&TEST_GRAPHS)		w1=diagram_m_weight(dgr,false);
+	if(flags&TEST_GRAPHS)		w1=diagram_m_weight(dgr,false,NULL);
 	if(flags&TEST_REFERENCE_ALGO)	w2=diagram_m_weight_reference(dgr);
 	if(flags&TEST_SWAPPED_GRAPHS)	w3=diagram_m_weight_with_swap(dgr);
 
