@@ -813,6 +813,24 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 	fprintf(out,"#\n");
 	fprintf(out,"# Sampled quantity: Green's function (G)\n");
 	fprintf(out,"# Iterations: %d\n",config->iterations);
+	
+	/*
+		FIXME Poco elegante!
+	*/
+	
+	{
+		struct timeval now;
+		double elapsedtime;
+
+		gettimeofday(&now,NULL);
+
+		elapsedtime=(now.tv_sec-starttime.tv_sec)*1000.0;
+		elapsedtime+=(now.tv_usec-starttime.tv_usec)/1000.0;
+		elapsedtime/=1000;
+
+		fprintf(out,"# Total time: %f seconds\n",elapsedtime);
+	}
+	
 	fprintf(out,"# Nr of bins: %d\n",config->bins);
 	fprintf(out,"# Bin width: %f\n",config->width);
 	fprintf(out,"# (last bin is overflow)\n");

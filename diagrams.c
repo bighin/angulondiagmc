@@ -337,8 +337,15 @@ void diagram_check_consistency(struct diagram_t *dgr)
 		if(!almost_same_float(w1,w2))
 		{
 			printf("Consistency check for the incremental weight failed! (%f, %f)\n",w1,w2);
+
+#warning RewriteMe!
+
+			print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
 			debug_weight(dgr);
-			exit(0);
+
+			//exit(0);
+		
+			dgr->weight=w2;
 		}
 	
 		assert(almost_same_float(w1,w2));
