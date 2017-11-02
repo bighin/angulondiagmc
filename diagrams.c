@@ -645,7 +645,8 @@ struct diagram_t *diagram_clone(struct diagram_t *src)
 	assert(get_nr_phonons(src)==get_nr_phonons(ret));
 	assert(get_nr_vertices(src)==get_nr_vertices(ret));
 
-	diagram_check_consistency(ret);
+#warning ReinstateMeIfNeeded!
+	//diagram_check_consistency(ret);
 
 	return ret;
 }
