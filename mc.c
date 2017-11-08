@@ -204,7 +204,7 @@ int update_length(struct diagram_t *dgr,struct configuration_t *cfg)
 
 int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 {
-	int lambda,mu,status1,status2;
+	int lambda,mu;
 	double k,tau1,tau2,weightratio,acceptance_ratio;
 	bool is_accepted;
 
@@ -273,6 +273,8 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	weightratio*=calculate_vertex_weight(dgr,thisline->startmidpoint);
 	weightratio*=calculate_vertex_weight(dgr,thisline->endmidpoint);
 
+	assert(almost_same_float(weightratio,diagram_weight_non_incremental(dgr)/diagram_weight_non_incremental(old)));
+
 	/*
 		Finally we calculate the acceptance ratio for the update.
 	*/
@@ -303,7 +305,7 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	struct arc_t *arc;
 	struct diagram_t *old;
 
-	int target,lambda,nr_available_phonons,startmidpoint,endmidpoint,status1,status2;
+	int target,lambda,nr_available_phonons,startmidpoint,endmidpoint;
 	double weightratio,targetweight,acceptance_ratio,tau1,tau2;
 	bool is_accepted;
 
@@ -329,6 +331,8 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	weightratio=1.0f/targetweight;
 	weightratio/=calculate_vertex_weight(old,startmidpoint);
 	weightratio/=calculate_vertex_weight(old,endmidpoint);
+
+	assert(almost_same_float(weightratio,diagram_weight_non_incremental(dgr)/diagram_weight_non_incremental(old)));
 
 	/*
 		Finally we calculate the acceptance ratio for the update.
@@ -359,7 +363,11 @@ int update_recouple(struct diagram_t *dgr,struct configuration_t *cfg)
 {
 	int nr_vertices;
 	double weightratio,acceptance_ratio;
-	bool result,is_accepted;
+	bool is_accepted;
+
+#ifndef NDEBUG
+	bool result;
+#endif
 
 	struct diagram_t *old;
 
@@ -370,8 +378,12 @@ int update_recouple(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	old=diagram_clone(dgr);
 
+#ifndef NDEBUG
 	result=recouple(dgr,0,nr_vertices-1);
 	assert(result==true);
+#else
+	recouple(dgr,0,nr_vertices-1);
+#endif
 
 	weightratio=calculate_propagators_and_vertices(dgr,0,nr_vertices-1);
 	weightratio/=calculate_propagators_and_vertices(old,0,nr_vertices-1);
@@ -763,12 +775,6 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 	show_update_statistics(out,total_proposed,total_accepted,total_rejected);
 	fprintf(out,"#\n# Average order: %f\n",((double)(avgorder[0]))/((double)(avgorder[1])));
 	fprintf(out,"# Average length: %f\n",((double)(avglength[0]))/((double)(avglength[1])));
-
-#warning Fix me please, now I crash!
-
-	//fprintf(out,"# Extrapolated quasiparticle weight: %f\n",calculate_qpw(config,g));
-	//fprintf(out,"# Extrapolated energy: %f\n",calculate_energy(config,g));
-
 	fprintf(out,"#\n");
 	fprintf(out,"# Sampled quantity: Green's function (G)\n");
 	fprintf(out,"# Iterations: %d\n",config->iterations);

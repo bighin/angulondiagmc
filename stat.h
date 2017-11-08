@@ -21,7 +21,4 @@ double slope_error(struct linreg_ctx_t *lct);
 double doubly_truncated_exp_dist(gsl_rng *rctx,double lambda,double tau1,double tau2);
 double doubly_truncated_exp_pdf(gsl_rng *rctx,double lambda,double tau1,double tau2,double tau);
 
-double calculate_qpw(struct configuration_t *config,gsl_histogram *g);
-double calculate_energy(struct configuration_t *config,gsl_histogram *g);
-
 #endif

@@ -322,34 +322,6 @@ void diagram_check_consistency(struct diagram_t *dgr)
 		diagram_check_consistency_of_times(dgr,thisline->starttau,thisline->startmidpoint);
 		diagram_check_consistency_of_times(dgr,thisline->endtau,thisline->endmidpoint);
 	}
-
-	/*
-		Finally, the weight calculate incrementally should match the non-incremental
-		reference version
-	*/
-
-	{
-		double w1,w2;
-		
-		w1=diagram_weight(dgr);
-		w2=diagram_weight_non_incremental(dgr);
-	
-		if(!almost_same_float(w1,w2))
-		{
-			printf("Consistency check for the incremental weight failed! (%f, %f)\n",w1,w2);
-
-#warning RewriteMe!
-
-			print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
-			debug_weight(dgr);
-
-			//exit(0);
-		
-			dgr->weight=w2;
-		}
-	
-		assert(almost_same_float(w1,w2));
-	}
 	
 	/*
 		Now we check the consistency of the arcs_over_me field
@@ -645,8 +617,7 @@ struct diagram_t *diagram_clone(struct diagram_t *src)
 	assert(get_nr_phonons(src)==get_nr_phonons(ret));
 	assert(get_nr_vertices(src)==get_nr_vertices(ret));
 
-#warning ReinstateMeIfNeeded!
-	//diagram_check_consistency(ret);
+	diagram_check_consistency(ret);
 
 	return ret;
 }
