@@ -206,7 +206,7 @@ double calculate_arc_weight(struct diagram_t *dgr,struct arc_t *arc)
 	return ret;
 }
 
-void diagram_add_phonon_line(struct diagram_t *dgr,double tau1,double tau2,double k,int lambda,int mu)
+void diagram_add_phonon_line(struct diagram_t *dgr,double tau1,double tau2,int lambda,int mu)
 {
 	struct arc_t *arc;
 	int c,lo,hi;
@@ -217,7 +217,6 @@ void diagram_add_phonon_line(struct diagram_t *dgr,double tau1,double tau2,doubl
 
 	arc=vlist_append_empty(dgr->phonons);
 
-	arc->k=k;
 	arc->lambda=lambda;
 	arc->mu=mu;
 

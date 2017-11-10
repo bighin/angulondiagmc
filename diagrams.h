@@ -18,7 +18,6 @@
 
 struct arc_t
 {
-	double k;
 	int lambda,mu;
 
 	int startmidpoint,endmidpoint;
@@ -103,12 +102,6 @@ struct diagram_t
 	struct vlist_t *vertices;
 
 	/*
-		The diagram weight is updated incrementally
-	*/
-
-	double weight;
-
-	/*
 		Parameters defining the interaction potential:
 
 		- n is the adimensional density
@@ -151,7 +144,6 @@ struct arc_t *get_phonon_line_after_propagator(struct diagram_t *dgr,int c);
 void diagram_check_consistency_of_times(struct diagram_t *dgr,double tau,int c);
 void diagram_check_consistency(struct diagram_t *dgr);
 double diagram_weight(struct diagram_t *dgr);
-double diagram_weight_non_incremental(struct diagram_t *dgr);
 
 void diagram_copy(struct diagram_t *src,struct diagram_t *dst);
 struct diagram_t *diagram_clone(struct diagram_t *src);

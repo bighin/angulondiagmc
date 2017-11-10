@@ -72,7 +72,7 @@ int test_one_diagram(int index,int j1,int j2,int j3,int j4,int flags)
 
 		case 0:
 
-		diagram_add_phonon_line(dgr,0.05,0.10,1.0,j1,0);
+		diagram_add_phonon_line(dgr,0.05,0.10,j1,0);
 
 		break;
 
@@ -82,8 +82,8 @@ int test_one_diagram(int index,int j1,int j2,int j3,int j4,int flags)
 
 		case 1:
 
-		diagram_add_phonon_line(dgr,0.05,0.10,1.0,j1,0);
-		diagram_add_phonon_line(dgr,0.35,0.65,1.0,j2,0);
+		diagram_add_phonon_line(dgr,0.05,0.10,j1,0);
+		diagram_add_phonon_line(dgr,0.35,0.65,j2,0);
 
 		break;
 		
@@ -93,9 +93,9 @@ int test_one_diagram(int index,int j1,int j2,int j3,int j4,int flags)
 
 		case 2:
 
-		diagram_add_phonon_line(dgr,0.05,0.10,1.0,j1,0);
-		diagram_add_phonon_line(dgr,0.35,0.65,1.0,j2,0);
-		diagram_add_phonon_line(dgr,0.45,0.75,1.0,j3,0);
+		diagram_add_phonon_line(dgr,0.05,0.10,j1,0);
+		diagram_add_phonon_line(dgr,0.35,0.65,j2,0);
+		diagram_add_phonon_line(dgr,0.45,0.75,j3,0);
 
 		break;
 
@@ -105,8 +105,8 @@ int test_one_diagram(int index,int j1,int j2,int j3,int j4,int flags)
 
 		case 3:
 
-		diagram_add_phonon_line(dgr,0.05,0.50,1.0,j1,0);
-		diagram_add_phonon_line(dgr,0.45,0.55,1.0,j2,0);
+		diagram_add_phonon_line(dgr,0.05,0.50,j1,0);
+		diagram_add_phonon_line(dgr,0.45,0.55,j2,0);
 		
 		break;
 
@@ -116,9 +116,9 @@ int test_one_diagram(int index,int j1,int j2,int j3,int j4,int flags)
 
 		case 4:
 
-		diagram_add_phonon_line(dgr,0.05,0.95,1.0,j1,0);
-		diagram_add_phonon_line(dgr,0.25,0.75,1.0,j2,0);
-		diagram_add_phonon_line(dgr,0.45,0.55,1.0,j3,0);
+		diagram_add_phonon_line(dgr,0.05,0.95,j1,0);
+		diagram_add_phonon_line(dgr,0.25,0.75,j2,0);
+		diagram_add_phonon_line(dgr,0.45,0.55,j3,0);
 
 		break;
 
@@ -128,9 +128,9 @@ int test_one_diagram(int index,int j1,int j2,int j3,int j4,int flags)
 
 		case 5:
 
-		diagram_add_phonon_line(dgr,0.05,0.45,1.0,j1,0);
-		diagram_add_phonon_line(dgr,0.35,0.75,1.0,j2,0);
-		diagram_add_phonon_line(dgr,0.65,0.95,1.0,j3,0);
+		diagram_add_phonon_line(dgr,0.05,0.45,j1,0);
+		diagram_add_phonon_line(dgr,0.35,0.75,j2,0);
+		diagram_add_phonon_line(dgr,0.65,0.95,j3,0);
 		
 		break;
 	
@@ -140,9 +140,9 @@ int test_one_diagram(int index,int j1,int j2,int j3,int j4,int flags)
 
 		case 6:
 
-		diagram_add_phonon_line(dgr,0.05,0.65,1.0,j1,0);
-		diagram_add_phonon_line(dgr,0.25,0.85,1.0,j2,0);
-		diagram_add_phonon_line(dgr,0.45,0.95,1.0,j3,0);
+		diagram_add_phonon_line(dgr,0.05,0.65,j1,0);
+		diagram_add_phonon_line(dgr,0.25,0.85,j2,0);
+		diagram_add_phonon_line(dgr,0.45,0.95,j3,0);
 	
 		break;
 	
@@ -152,10 +152,10 @@ int test_one_diagram(int index,int j1,int j2,int j3,int j4,int flags)
 
 		case 7:
 
-		diagram_add_phonon_line(dgr,0.05,0.95,1.0,j1,0);
-		diagram_add_phonon_line(dgr,0.15,0.85,1.0,j2,0);
-		diagram_add_phonon_line(dgr,0.25,0.75,1.0,j3,0);
-		diagram_add_phonon_line(dgr,0.45,0.55,1.0,j4,0);
+		diagram_add_phonon_line(dgr,0.05,0.95,j1,0);
+		diagram_add_phonon_line(dgr,0.15,0.85,j2,0);
+		diagram_add_phonon_line(dgr,0.25,0.75,j3,0);
+		diagram_add_phonon_line(dgr,0.45,0.55,j4,0);
 		
 		break;
 
@@ -165,10 +165,10 @@ int test_one_diagram(int index,int j1,int j2,int j3,int j4,int flags)
 
 		case 8:
 
-		diagram_add_phonon_line(dgr,0.05,0.95,1.0,j1,0);
-		diagram_add_phonon_line(dgr,0.15,0.85,1.0,j2,0);
-		diagram_add_phonon_line(dgr,0.25,0.75,1.0,j3,0);
-		diagram_add_phonon_line(dgr,0.025,0.55,1.0,j4,0);
+		diagram_add_phonon_line(dgr,0.05,0.95,j1,0);
+		diagram_add_phonon_line(dgr,0.15,0.85,j2,0);
+		diagram_add_phonon_line(dgr,0.25,0.75,j3,0);
+		diagram_add_phonon_line(dgr,0.025,0.55,j4,0);
 		
 		break;
 
@@ -178,10 +178,10 @@ int test_one_diagram(int index,int j1,int j2,int j3,int j4,int flags)
 
 		case 9:
 
-		diagram_add_phonon_line(dgr,0.05,0.95,1.0,j1,0);
-		diagram_add_phonon_line(dgr,0.15,0.85,1.0,j2,0);
-		diagram_add_phonon_line(dgr,0.25,0.975,1.0,j3,0);
-		diagram_add_phonon_line(dgr,0.025,0.55,1.0,j4,0);
+		diagram_add_phonon_line(dgr,0.05,0.95,j1,0);
+		diagram_add_phonon_line(dgr,0.15,0.85,j2,0);
+		diagram_add_phonon_line(dgr,0.25,0.975,j3,0);
+		diagram_add_phonon_line(dgr,0.025,0.55,j4,0);
 		
 		break;
 	}

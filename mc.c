@@ -52,12 +52,12 @@ double calculate_propagators_and_vertices(struct diagram_t *dgr,int startmidpoin
 	return ret;
 }
 
-int deltaj(struct diagram_t *dgr,int index)
+int deltaj(struct diagram_t *dgr,int vertex)
 {
 	struct g0_t *left,*right;
 	
-	left=get_left_neighbour(dgr,index);
-	right=get_right_neighbour(dgr,index);	
+	left=get_left_neighbour(dgr,vertex);
+	right=get_right_neighbour(dgr,vertex);
 
 	return right->j-left->j;
 }
@@ -200,12 +200,12 @@ int update_length(struct diagram_t *dgr,struct configuration_t *cfg)
 	return UPDATE_ACCEPTED;
 }
 
-#define MAXLAMBDA	(0)
+#define MAXLAMBDA	(1)
 
 int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 {
 	int lambda,mu;
-	double k,tau1,tau2,weightratio,acceptance_ratio;
+	double tau1,tau2,weightratio,acceptance_ratio;
 	bool is_accepted;
 
 	struct arc_t *thisline;
@@ -226,14 +226,13 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	*/
 
 	lambda=gsl_rng_uniform_int(dgr->rng_ctx,1+MAXLAMBDA);
-	mu=0;
+	mu=gsl_rng_uniform_int(dgr->rng_ctx,1+2*lambda)-lambda;
 
 	/*
 		The start time tau1 is sampled uniformly in a randomly chosen propagator,
 		whereas tau2 is sampled from a truncated exponential distribution.
 	*/
 
-	k=0.0f;
 	tau1=dgr->endtau*gsl_rng_uniform_pos(dgr->rng_ctx);
 	tau2=tau1+phonon_dist(dgr->rng_ctx,dgr->phonon_ctx,lambda);
 
@@ -246,7 +245,7 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	old=diagram_clone(dgr);
 
-	diagram_add_phonon_line(dgr,tau1,tau2,k,lambda,mu);
+	diagram_add_phonon_line(dgr,tau1,tau2,lambda,mu);
 
 	/*
 		...and then we check if the new line makes sense physically!
@@ -273,7 +272,7 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	weightratio*=calculate_vertex_weight(dgr,thisline->startmidpoint);
 	weightratio*=calculate_vertex_weight(dgr,thisline->endmidpoint);
 
-	assert(almost_same_float(weightratio,diagram_weight_non_incremental(dgr)/diagram_weight_non_incremental(old)));
+	assert(almost_same_float(weightratio,diagram_weight(dgr)/diagram_weight(old)));
 
 	/*
 		Finally we calculate the acceptance ratio for the update.
@@ -281,6 +280,7 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	acceptance_ratio=weightratio;
 	acceptance_ratio/=1.0f/(1+MAXLAMBDA);
+	acceptance_ratio/=1.0f/(1+2*lambda);
 	acceptance_ratio/=1.0f/dgr->endtau;
 	acceptance_ratio/=phonon_pdf(dgr->phonon_ctx,lambda,tau2-tau1);
 	acceptance_ratio*=1.0f/get_nr_available_phonons(dgr);
@@ -332,7 +332,7 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	weightratio/=calculate_vertex_weight(old,startmidpoint);
 	weightratio/=calculate_vertex_weight(old,endmidpoint);
 
-	assert(almost_same_float(weightratio,diagram_weight_non_incremental(dgr)/diagram_weight_non_incremental(old)));
+	assert(almost_same_float(weightratio,diagram_weight(dgr)/diagram_weight(old)));
 
 	/*
 		Finally we calculate the acceptance ratio for the update.
@@ -340,6 +340,7 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	acceptance_ratio=weightratio;
 	acceptance_ratio*=1.0f/(1+MAXLAMBDA);
+	acceptance_ratio*=1.0f/(1+2*lambda);
 	acceptance_ratio*=1.0f/dgr->endtau;
 	acceptance_ratio*=phonon_pdf(dgr->phonon_ctx,lambda,tau2-tau1);
 	acceptance_ratio/=1.0f/nr_available_phonons;
@@ -388,9 +389,9 @@ int update_recouple(struct diagram_t *dgr,struct configuration_t *cfg)
 	weightratio=calculate_propagators_and_vertices(dgr,0,nr_vertices-1);
 	weightratio/=calculate_propagators_and_vertices(old,0,nr_vertices-1);
 
-	dgr->weight=old->weight*weightratio;
-
 	acceptance_ratio=weightratio;
+
+	//assert(almost_same_float(weightratio,diagram_weight(dgr)/diagram_weight(old)));
 
 	is_accepted=(gsl_rng_uniform(dgr->rng_ctx)<acceptance_ratio)?(true):(false);
 
@@ -674,7 +675,7 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 			assert(false);
 		}
 
-		//assert(almost_same_float(diagram_weight(dgr),diagram_weight_non_incremental(dgr))==true);
+		//assert(almost_same_float(diagram_weight(dgr),diagram_weight(dgr))==true);
 		//diagram_check_consistency(dgr);
 		//assert(diagram_weight(dgr)*diagram_m_weight(dgr,config->use_hashtable,NULL)>=0.0f);
 
@@ -1090,7 +1091,7 @@ int do_diagmc_parallel(char *configfile)
 				assert(false);
 			}
 
-			assert(fabs(diagram_weight(dgr)-diagram_weight_non_incremental(dgr))<10e-7*diagram_weight(dgr));
+			assert(fabs(diagram_weight(dgr)-diagram_weight(dgr))<10e-7*diagram_weight(dgr));
 			diagram_check_consistency(dgr);
 
 			totalweight=diagram_weight(dgr)*diagram_m_weight(dgr,config.use_hashtable);

@@ -80,13 +80,6 @@ struct diagram_t *init_diagram(struct diagram_parameters_t *dpars,bool verbose)
 	g0->arcs_over_me=0;
 
 	/*
-		We set the initial value for the diagram weight, it will
-		be updated incrementally from now on.
-	*/
-
-	ret->weight=diagram_weight_non_incremental(ret);
-
-	/*
 		Finally we initialize the phonon context
 	*/
 
@@ -350,11 +343,6 @@ void diagram_check_consistency(struct diagram_t *dgr)
 
 double diagram_weight(struct diagram_t *dgr)
 {
-	return dgr->weight;
-}
-
-double diagram_weight_non_incremental(struct diagram_t *dgr)
-{
 	int c;
 	double ret=1.0f;
 	
@@ -571,7 +559,6 @@ void diagram_copy(struct diagram_t *src,struct diagram_t *dst)
 
 	dst->n=src->n;
 
-	dst->weight=src->weight;
 	dst->rng_ctx=src->rng_ctx;
 
 	vlist_copy(src->phonons,dst->phonons);
