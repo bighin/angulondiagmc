@@ -260,6 +260,14 @@ void diagram_add_phonon_line(struct diagram_t *dgr,double tau1,double tau2,int l
 		get_right_neighbour(dgr,c)->arcs_over_me++;
 
 	assert(hi>lo);
+
+	/*
+		Finally we fix the update the m quantum number of the free
+		propagators under the new line, which is now completely determined.
+	*/
+
+	for(c=arc->startmidpoint+1;c<=arc->endmidpoint;c++)
+		get_free_propagator(dgr,c)->m-=mu;
 }
 
 void diagram_remove_start_midpoint(struct diagram_t *dgr,int c)
@@ -385,6 +393,14 @@ void diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 
 	for(c=arc->startmidpoint;c<arc->endmidpoint;c++)
 		get_right_neighbour(dgr,c)->arcs_over_me--;
+
+	/*
+		Then we fix the m quantum numbers of the free propagators
+		under the arc to be removed.
+	*/
+
+	for(c=arc->startmidpoint+1;c<=arc->endmidpoint;c++)
+		get_free_propagator(dgr,c)->m+=arc->mu;
 
 	/*
 		Now the hardcore part starts: we update all the field in a diagram_t struct.
