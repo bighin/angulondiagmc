@@ -5,10 +5,6 @@
 
 #include "diagrams.h"
 
-double calculate_free_propagator_weight(struct diagram_t *dgr,struct g0_t *g0);
-double calculate_arc_weight(struct diagram_t *dgr,struct arc_t *arc);
-double calculate_vertex_weight(struct diagram_t *dgr,int index);
-
 void diagram_remove_midpoint(struct diagram_t *dgr,int c);
 void diagram_add_midpoint(struct diagram_t *dgr,int c,double tau,struct arc_t *phononline);
 void diagram_remove_phonon_line(struct diagram_t *dgr,int c);

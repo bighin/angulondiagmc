@@ -341,6 +341,68 @@ void diagram_check_consistency(struct diagram_t *dgr)
 	}
 }
 
+bool is_last_propagator(struct diagram_t *dgr,struct g0_t *g0)
+{
+	bool result;
+	int nr_propagators;
+	
+	nr_propagators=get_nr_free_propagators(dgr);
+	result=((g0==get_free_propagator(dgr,nr_propagators-1))?(true):(false));
+
+	assert(result==((g0->endtau==dgr->endtau)?(true):(false)));
+
+	return result;
+}
+
+double calculate_arc_weight(struct diagram_t *dgr,struct arc_t *arc)
+{
+	double timediff;
+	double ret=1.0f;
+
+	timediff=arc->endtau-arc->starttau;
+
+	assert(timediff>=0);
+
+	ret*=chi_lambda(dgr->phonon_ctx,arc->lambda,timediff);
+	ret*=pow(-1.0f,arc->lambda);
+
+	return ret;
+}
+
+double calculate_free_propagator_weight(struct diagram_t *dgr,struct g0_t *g0)
+{
+	double en,tau,phase;
+	int j;
+	
+	j=g0->j;
+	en=j*(j+1)-dgr->chempot;
+	tau=g0->endtau-g0->starttau;
+
+	phase=1.0f;
+
+	if(is_last_propagator(dgr,g0)==false)
+		phase=pow(-1.0f,j);
+
+	return exp(-en*tau)*phase;
+}
+
+double calculate_vertex_weight(struct diagram_t *dgr,int index)
+{
+	int j1,j2,j3;
+	double coupling;
+
+	struct vertex_t *thisvertex=get_vertex(dgr,index);
+
+	j1=thisvertex->left->j;
+	j2=thisvertex->right->j;
+	j3=thisvertex->phononline->lambda;
+
+	coupling=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,0,0,0)*
+	         sqrtf((2.0f*j1+1)*(2.0f*j2+1)*(2.0f*j3+1)/(4.0f*M_PI));
+
+	return coupling;
+}
+
 double diagram_weight(struct diagram_t *dgr)
 {
 	int c;
@@ -351,59 +413,21 @@ double diagram_weight(struct diagram_t *dgr)
 	*/
 	
 	for(c=0;c<get_nr_free_propagators(dgr);c++)
-	{
-		struct g0_t *g0=get_free_propagator(dgr,c);
-		double en,tau;
-		int j;
-		
-		j=g0->j;
-		en=j*(j+1)-dgr->chempot;
-		tau=g0->endtau-g0->starttau;
-
-		ret*=exp(-en*tau);
-		
-		if(c!=get_nr_free_propagators(dgr)-1)
-			ret*=pow(-1.0f,j);
-	}
+		ret*=calculate_free_propagator_weight(dgr,get_free_propagator(dgr,c));
 
 	/*
 		...then we add the phonon arcs...
 	*/
 
 	for(c=0;c<get_nr_phonons(dgr);c++)
-	{
-		struct arc_t *arc;
-		double timediff;
-
-		arc=get_phonon_line(dgr,c);
-		timediff=arc->endtau-arc->starttau;
-
-		assert(timediff>=0);
-
-		ret*=chi_lambda(dgr->phonon_ctx,arc->lambda,timediff);
-		ret*=pow(-1.0f,arc->lambda);
-	}
+		ret*=calculate_arc_weight(dgr,get_phonon_line(dgr,c));
 
 	/*
 		...and finally we consider the vertices.
 	*/
 
 	for(c=0;c<get_nr_vertices(dgr);c++)
-	{
-		int j1,j2,j3;
-		double coupling;
-
-		struct vertex_t *thisvertex=get_vertex(dgr,c);
-
-		j1=thisvertex->left->j;
-		j2=thisvertex->right->j;
-		j3=thisvertex->phononline->lambda;
-
-		coupling=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,0,0,0)*
-		         sqrtf((2.0f*j1+1)*(2.0f*j2+1)*(2.0f*j3+1)/(4.0f*M_PI));
-
-		ret*=coupling;
-	}
+		ret*=calculate_vertex_weight(dgr,c);
 
 	return ret;
 }

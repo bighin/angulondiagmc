@@ -143,6 +143,11 @@ struct arc_t *get_phonon_line_after_propagator(struct diagram_t *dgr,int c);
 
 void diagram_check_consistency_of_times(struct diagram_t *dgr,double tau,int c);
 void diagram_check_consistency(struct diagram_t *dgr);
+
+bool is_last_propagator(struct diagram_t *dgr,struct g0_t *g0);
+double calculate_free_propagator_weight(struct diagram_t *dgr,struct g0_t *g0);
+double calculate_arc_weight(struct diagram_t *dgr,struct arc_t *arc);
+double calculate_vertex_weight(struct diagram_t *dgr,int index);
 double diagram_weight(struct diagram_t *dgr);
 
 void diagram_copy(struct diagram_t *src,struct diagram_t *dst);
