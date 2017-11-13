@@ -46,6 +46,27 @@ bool is_in_P(struct diagram_t *dgr)
 
 	for(c=0;c<get_nr_vertices(dgr);c++)
 	{
+		int j1,j2,j3,m1,m2,m3;
+		struct vertex_t *thisvertex;
+
+		thisvertex=get_vertex(dgr,c);
+
+		j1=thisvertex->left->j;
+		j2=thisvertex->right->j;
+		j3=thisvertex->phononline->lambda;
+
+		m1=thisvertex->left->j;
+		m2=thisvertex->right->j;
+		m3=thisvertex->phononline->lambda;
+
+		assert(abs(m3)<=j3);
+
+		if(abs(m2)>j2)
+			return false;
+
+		if(abs(m1)>j1)
+			return false;
+
 		if(check_parity(dgr,get_vertex(dgr,c))==false)
 			return false;
 		
