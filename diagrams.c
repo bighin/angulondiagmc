@@ -13,6 +13,7 @@
 #include "selfenergies.h"
 #include "stat.h"
 #include "phonon.h"
+#include "sectors.h"
 
 int vertex_get_j1(struct vertex_t *vif)
 {
@@ -256,41 +257,53 @@ void diagram_check_consistency(struct diagram_t *dgr)
 			d++;
 		
 		assert(d>0);
+		assert((c==thisvertex->phononline->startmidpoint)||(c==thisvertex->phononline->endmidpoint));
 	}
 
 	/*
-		Check for consistency of angular momentum couplings
+		Check for consistency of angular momentum couplings,
+		if we are in the physical sector
 	*/
 
-	for(c=0;c<get_nr_vertices(dgr);c++)
+	if(is_in_P(dgr)==true)
 	{
-		int j1,m1,j2,m2,j3,m3;
-		double coupling,epsilon;
-
-		struct vertex_t *thisvertex=get_vertex(dgr,c);
-
-		j1=thisvertex->left->j;
-		m1=thisvertex->left->m;
-
-		j2=thisvertex->right->j;
-		m2=thisvertex->right->m;
-
-		j3=thisvertex->phononline->lambda;
-		m3=thisvertex->phononline->mu;
-
-		coupling=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,0,0,0);		
-		epsilon=1e-10;
-
-		if(fabs(coupling)<=epsilon)
+		for(c=0;c<get_nr_vertices(dgr);c++)
 		{
-			printf("Wrong coupling: (%d, %d) (%d, %d) (%d, %d)\n",j1,m1,j2,m2,j3,m3);
-			
-			if(get_nr_vertices(dgr)<10)
-				print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
-		}
+			int j1,m1,j2,m2,j3,m3;
+			double coupling,epsilon;
 
-		assert(fabs(coupling)>epsilon);
+			struct vertex_t *thisvertex=get_vertex(dgr,c);
+
+			j1=thisvertex->left->j;
+			m1=thisvertex->left->m;
+
+			j2=thisvertex->right->j;
+			m2=thisvertex->right->m;
+
+			j3=thisvertex->phononline->lambda;
+			m3=thisvertex->phononline->mu;
+
+			coupling=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,0,0,0);		
+			epsilon=1e-10;
+
+			if(fabs(coupling)<=epsilon)
+			{
+				printf("Wrong coupling: (%d, %d) (%d, %d) (%d, %d)\n",j1,m1,j2,m2,j3,m3);
+			
+				if(get_nr_vertices(dgr)<10)
+					print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
+			}
+
+			assert(fabs(coupling)>epsilon);
+		}
 	}
+
+	/*
+		We check that the diagram is in the extended sector,
+		which includes the physical sector and other unphysical diagrams.
+	*/
+
+	assert(is_in_E(dgr)==true);
 
 	/*
 		More checks: again we check propagators...
@@ -339,6 +352,36 @@ void diagram_check_consistency(struct diagram_t *dgr)
 		
 		assert(count==0);
 	}
+
+	/*
+		Conservation of the m quantum number at each vertex and parity
+	*/
+
+	for(c=0;c<get_nr_vertices(dgr);c++)
+	{
+		int j1,m1,j2,m2,j3,m3,count;
+
+		struct vertex_t *thisvertex=get_vertex(dgr,c);
+
+		j1=thisvertex->left->j;
+		m1=thisvertex->left->m;
+
+		j2=thisvertex->right->j;
+		m2=thisvertex->right->m;
+
+		j3=thisvertex->phononline->lambda;
+		m3=thisvertex->phononline->mu;
+
+		if(c==thisvertex->phononline->startmidpoint)
+			count=-m1+m2+m3;
+		else
+			count=-m1+m2-m3;
+
+		assert(count==0);
+
+		if(is_in_P(dgr)==true)
+			assert(ISEVEN(j1+j2+j3));
+	}
 }
 
 bool is_last_propagator(struct diagram_t *dgr,struct g0_t *g0)
@@ -380,6 +423,8 @@ double calculate_free_propagator_weight(struct diagram_t *dgr,struct g0_t *g0)
 
 	phase=1.0f;
 
+#warning CheckMe! Non dovrebbe contare dato che prendiamo solo rapporti di pesi di diagrammi!
+
 	if(is_last_propagator(dgr,g0)==false)
 		phase=pow(-1.0f,j);
 
@@ -388,7 +433,7 @@ double calculate_free_propagator_weight(struct diagram_t *dgr,struct g0_t *g0)
 
 double calculate_vertex_weight(struct diagram_t *dgr,int index)
 {
-	int j1,j2,j3;
+	int j1,j2,j3,m1,m2,m3;
 	double coupling;
 
 	struct vertex_t *thisvertex=get_vertex(dgr,index);
@@ -397,8 +442,31 @@ double calculate_vertex_weight(struct diagram_t *dgr,int index)
 	j2=thisvertex->right->j;
 	j3=thisvertex->phononline->lambda;
 
-	coupling=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,0,0,0)*
-	         sqrtf((2.0f*j1+1)*(2.0f*j2+1)*(2.0f*j3+1)/(4.0f*M_PI));
+	m1=thisvertex->left->m;
+	m2=thisvertex->right->m;
+	m3=thisvertex->phononline->mu;
+
+
+	/*
+		If the triangle condition and the parity condition are met, then we are 
+		in the physical sector (P), and we use the usual vertex rule. Otherwise, we
+		are just in the extended sector (E) and a different rule is to be applied.
+	*/
+
+	if((check_parity(dgr,thisvertex)==true)&&(check_triangle_condition(dgr,thisvertex)==true))
+	{
+		coupling=sqrtf((2.0f*j1+1)*(2.0f*j2+1)*(2.0f*j3+1)/(4.0f*M_PI));
+		coupling*=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,0,0,0);
+		
+		if(index==thisvertex->phononline->startmidpoint)
+			coupling*=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,-2*m1,2*m2,2*m3);
+		else
+			coupling*=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,-2*m1,2*m2,-2*m3);
+	}
+	else
+	{
+		coupling=0.10f;
+	}
 
 	return coupling;
 }
@@ -631,55 +699,4 @@ struct diagram_t *diagram_clone(struct diagram_t *src)
 	diagram_check_consistency(ret);
 
 	return ret;
-}
-
-bool check_triangle_condition_and_parity(struct diagram_t *dgr,struct vertex_t *thisvertex)
-{
-	int j1,j2,j3;
-	bool result;
-
-	j1=thisvertex->left->j;
-	j2=thisvertex->right->j;
-	j3=thisvertex->phononline->lambda;
-
-	result=true;
-
-	if(j1+j2<j3)
-		result=false;
-
-	if(j2+j3<j1)
-		result=false;
-
-	if(j3+j1<j2)
-		result=false;
-
-	/*
-		This additional condition is not stricly the triangular condition,
-		however we must check them because of the 3j symbols with all the
-		magnetic quantum numbers to zero, that appear at every vertex.
-	*/
-
-	if(!ISEVEN(j1+j2+j3))
-		result=false;
-
-	return result;
-}
-
-bool check_triangle_condition_and_parity_from_js(int j1,int j2,int j3)
-{
-	bool result=true;
-
-	if(j1+j2<j3)
-		result=false;
-
-	if(j2+j3<j1)
-		result=false;
-
-	if(j3+j1<j2)
-		result=false;
-
-	if(!ISEVEN(j1+j2+j3))
-		result=false;
-
-	return result;
 }

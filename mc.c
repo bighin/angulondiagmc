@@ -23,6 +23,7 @@
 #include "phonon.h"
 #include "debug.h"
 #include "config.h"
+#include "sectors.h"
 
 #include "inih/ini.h"
 #include "libprogressbar/progressbar.h"
@@ -209,7 +210,6 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	bool is_accepted;
 
 	struct arc_t *thisline;
-	struct vertex_t *v1,*v2;
 	struct diagram_t *old;
 
 	/*
@@ -221,8 +221,6 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	/*
 		The new lambda is chosen using a uniform distribution.
-		Note that mu does not need to be initialized, we will sum over all mu's
-		when evaluating the weight of a diagram.
 	*/
 
 	lambda=gsl_rng_uniform_int(dgr->rng_ctx,1+MAXLAMBDA);
@@ -252,16 +250,6 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	*/
 
 	thisline=get_phonon_line(dgr,get_nr_phonons(dgr)-1);
-	v1=get_vertex(dgr,thisline->startmidpoint);
-	v2=get_vertex(dgr,thisline->endmidpoint);
-
-	if((check_triangle_condition_and_parity(dgr,v1)==false)||(check_triangle_condition_and_parity(dgr,v2)==false))
-	{
-		diagram_copy(old,dgr);
-		fini_diagram(old);
-
-		return UPDATE_UNPHYSICAL;
-	}
 
 	/*
 		We calculate the weight ratio (the fundamental quantity in accepting/rejecting the update)
@@ -272,7 +260,11 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	weightratio*=calculate_vertex_weight(dgr,thisline->startmidpoint);
 	weightratio*=calculate_vertex_weight(dgr,thisline->endmidpoint);
 
-	assert(almost_same_float(weightratio,diagram_weight(dgr)/diagram_weight(old)));
+	if((!isinf(diagram_weight(dgr)))&&(!isinf(diagram_weight(old))))
+		assert(almost_same_float(weightratio,diagram_weight(dgr)/diagram_weight(old)));
+
+	assert(diagram_weight(dgr)>=0);
+	assert(diagram_weight(old)>=0);
 
 	/*
 		Finally we calculate the acceptance ratio for the update.
@@ -332,7 +324,11 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	weightratio/=calculate_vertex_weight(old,startmidpoint);
 	weightratio/=calculate_vertex_weight(old,endmidpoint);
 
-	assert(almost_same_float(weightratio,diagram_weight(dgr)/diagram_weight(old)));
+	if((!isinf(diagram_weight(dgr)))&&(!isinf(diagram_weight(old))))
+		assert(almost_same_float(weightratio,diagram_weight(dgr)/diagram_weight(old)));
+
+	assert(diagram_weight(dgr)>=0);
+	assert(diagram_weight(old)>=0);
 
 	/*
 		Finally we calculate the acceptance ratio for the update.
@@ -391,7 +387,11 @@ int update_recouple(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	acceptance_ratio=weightratio;
 
-	//assert(almost_same_float(weightratio,diagram_weight(dgr)/diagram_weight(old)));
+	if((!isinf(diagram_weight(dgr)))&&(!isinf(diagram_weight(old))))
+		assert(almost_same_float(weightratio,diagram_weight(dgr)/diagram_weight(old)));
+
+	assert(diagram_weight(dgr)>=0);
+	assert(diagram_weight(old)>=0);
 
 	is_accepted=(gsl_rng_uniform(dgr->rng_ctx)<acceptance_ratio)?(true):(false);
 
@@ -510,13 +510,14 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 
 	struct timeval starttime;
 
-#define DIAGRAM_NR_UPDATES	(3)
+#define DIAGRAM_NR_UPDATES	(4)
 
 	int (*updates[DIAGRAM_NR_UPDATES])(struct diagram_t *,struct configuration_t *);
 	char *update_names[DIAGRAM_NR_UPDATES];
 
 	int proposed[DIAGRAM_NR_UPDATES],accepted[DIAGRAM_NR_UPDATES],rejected[DIAGRAM_NR_UPDATES];
 	int total_proposed,total_accepted,total_rejected;
+	int samples_in_P_sector,samples_not_in_P_sector;
 	int avgorder[2];
 	double avglength[2];
 
@@ -527,10 +528,12 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 	updates[0]=update_length;
 	updates[1]=update_add_phonon_line;
 	updates[2]=update_remove_phonon_line;
+	updates[3]=update_recouple;
 
 	update_names[0]="UpdateLength";
 	update_names[1]="AddPhononLine";
 	update_names[2]="RemovePhononLine";
+	update_names[3]="RecoupleFull";
 
 	/*
 		We reset the update statistics
@@ -675,20 +678,36 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 			assert(false);
 		}
 
-		//assert(almost_same_float(diagram_weight(dgr),diagram_weight(dgr))==true);
-		//diagram_check_consistency(dgr);
-		//assert(diagram_weight(dgr)*diagram_m_weight(dgr,config->use_hashtable,NULL)>=0.0f);
+#ifndef NDEBUG
+		diagram_check_consistency(dgr);
+#endif
 
-		gsl_histogram_increment(g,dgr->endtau);
+		assert(diagram_weight(dgr)>=0.0f);
+		assert(is_in_E(dgr)==true);
+		
+		/*
+			The histograms are updated only if we are in the physical sector
+		*/
+		
+		if(is_in_P(dgr)==true)
+		{
+			gsl_histogram_increment(g,dgr->endtau);
 
-		if(get_nr_phonons(dgr)==0)
-			gsl_histogram_increment(g0,dgr->endtau);
+			if(get_nr_phonons(dgr)==0)
+				gsl_histogram_increment(g0,dgr->endtau);
 
-		if(get_nr_phonons(dgr)==1)
-			gsl_histogram_increment(g1,dgr->endtau);
+			if(get_nr_phonons(dgr)==1)
+				gsl_histogram_increment(g1,dgr->endtau);
 
-		if(get_nr_phonons(dgr)==2)
-			gsl_histogram_increment(g2,dgr->endtau);
+			if(get_nr_phonons(dgr)==2)
+				gsl_histogram_increment(g2,dgr->endtau);
+		
+			samples_in_P_sector++;
+		}
+		else
+		{
+			samples_not_in_P_sector++;
+		}
 
 		avgorder[0]+=get_nr_phonons(dgr);
 		avgorder[1]++;
@@ -779,7 +798,10 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 	fprintf(out,"#\n");
 	fprintf(out,"# Sampled quantity: Green's function (G)\n");
 	fprintf(out,"# Iterations: %d\n",config->iterations);
-	
+	fprintf(out,"# Samples taken in physical sector: %d\n",samples_in_P_sector);
+	fprintf(out,"# Total samples: %d\n",samples_in_P_sector+samples_not_in_P_sector);
+	fprintf(out,"# Percentage in physical sector: %f\n",((double)(samples_in_P_sector))/((double)(samples_in_P_sector+samples_not_in_P_sector)));
+
 	/*
 		FIXME Poco elegante!
 	*/

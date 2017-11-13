@@ -572,7 +572,16 @@ bool recouple(struct diagram_t *dgr,int lo,int hi)
 			vtx=get_vertex(dgr,c);
 			lambda=vtx->phononline->lambda;
 
-			deltalist[c-lo]=2*gsl_rng_uniform_int(dgr->rng_ctx,1+lambda)-lambda;
+			/*
+				FIXME
+			
+				The comment above should be updated to explain that even
+				the non-parity conserving choices are taken in the unphysical
+				sector, hence the commented code below and the new code
+			*/
+
+			//deltalist[c-lo]=2*gsl_rng_uniform_int(dgr->rng_ctx,1+lambda)-lambda;
+			deltalist[c-lo]=gsl_rng_uniform_int(dgr->rng_ctx,1+2*lambda)-lambda;
 		}
 
 		for(c=lo;c<=hi;c++)
@@ -580,12 +589,14 @@ bool recouple(struct diagram_t *dgr,int lo,int hi)
 			total+=deltalist[c-lo];
 		}
 
+#warning Probably the whole next 10ish lines of code could be removed!
+
 		/*
 			jlist[i] referes to the propagator *after* the i-th vertex
 		*/
 
 		jlist[0]=get_left_neighbour(dgr,lo)->j+deltalist[0];
-		
+
 		failedtc=false;
 		for(c=lo+1;c<=hi;c++)
 		{
@@ -593,8 +604,8 @@ bool recouple(struct diagram_t *dgr,int lo,int hi)
 			
 			jlist[c-lo]=jlist[c-lo-1]+deltalist[c-lo];
 	
-			if(check_triangle_condition_and_parity_from_js(jlist[c-lo],jlist[c-lo-1],lambda)==false)
-				failedtc=true;
+			//if(check_triangle_condition_and_parity_from_js(jlist[c-lo],jlist[c-lo-1],lambda)==false)
+			//	failedtc=true;
 		}
 
 		if((total==targettotal)&&(failedtc==false))
