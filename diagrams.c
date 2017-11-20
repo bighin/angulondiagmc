@@ -368,6 +368,15 @@ void diagram_check_consistency(struct diagram_t *dgr)
 		else
 			count=-m1+m2-m3;
 
+		/*
+			The following silences unused variable warnings
+		*/
+
+		(void)(j1);
+		(void)(j2);
+		(void)(j3);
+		(void)(count);
+
 		assert(count==0);
 
 		assert(ISEVEN(j1+j2+j3));
@@ -415,7 +424,7 @@ double calculate_free_propagator_weight(struct diagram_t *dgr,struct g0_t *g0)
 {
 	double en,tau,phase;
 	int j;
-	
+
 	j=g0->j;
 	en=j*(j+1)-dgr->chempot;
 	tau=g0->endtau-g0->starttau;
