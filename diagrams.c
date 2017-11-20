@@ -13,7 +13,6 @@
 #include "selfenergies.h"
 #include "stat.h"
 #include "phonon.h"
-#include "sectors.h"
 
 int vertex_get_j1(struct vertex_t *vif)
 {
@@ -265,45 +264,35 @@ void diagram_check_consistency(struct diagram_t *dgr)
 		if we are in the physical sector
 	*/
 
-	if(is_in_P(dgr)==true)
+	for(c=0;c<get_nr_vertices(dgr);c++)
 	{
-		for(c=0;c<get_nr_vertices(dgr);c++)
+		int j1,m1,j2,m2,j3,m3;
+		double coupling,epsilon;
+
+		struct vertex_t *thisvertex=get_vertex(dgr,c);
+
+		j1=thisvertex->left->j;
+		m1=thisvertex->left->m;
+
+		j2=thisvertex->right->j;
+		m2=thisvertex->right->m;
+
+		j3=thisvertex->phononline->lambda;
+		m3=thisvertex->phononline->mu;
+
+		coupling=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,0,0,0);		
+		epsilon=1e-10;
+
+		if(fabs(coupling)<=epsilon)
 		{
-			int j1,m1,j2,m2,j3,m3;
-			double coupling,epsilon;
-
-			struct vertex_t *thisvertex=get_vertex(dgr,c);
-
-			j1=thisvertex->left->j;
-			m1=thisvertex->left->m;
-
-			j2=thisvertex->right->j;
-			m2=thisvertex->right->m;
-
-			j3=thisvertex->phononline->lambda;
-			m3=thisvertex->phononline->mu;
-
-			coupling=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,0,0,0);		
-			epsilon=1e-10;
-
-			if(fabs(coupling)<=epsilon)
-			{
-				printf("Wrong coupling: (%d, %d) (%d, %d) (%d, %d)\n",j1,m1,j2,m2,j3,m3);
+			printf("Wrong coupling: (%d, %d) (%d, %d) (%d, %d)\n",j1,m1,j2,m2,j3,m3);
 			
-				if(get_nr_vertices(dgr)<10)
-					print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
-			}
-
-			assert(fabs(coupling)>epsilon);
+			if(get_nr_vertices(dgr)<10)
+				print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
 		}
+
+		assert(fabs(coupling)>epsilon);
 	}
-
-	/*
-		We check that the diagram is in the extended sector,
-		which includes the physical sector and other unphysical diagrams.
-	*/
-
-	assert(is_in_E(dgr)==true);
 
 	/*
 		More checks: again we check propagators...
@@ -328,7 +317,7 @@ void diagram_check_consistency(struct diagram_t *dgr)
 		diagram_check_consistency_of_times(dgr,thisline->starttau,thisline->startmidpoint);
 		diagram_check_consistency_of_times(dgr,thisline->endtau,thisline->endmidpoint);
 	}
-	
+
 	/*
 		Now we check the consistency of the arcs_over_me field
 	*/
@@ -379,8 +368,7 @@ void diagram_check_consistency(struct diagram_t *dgr)
 
 		assert(count==0);
 
-		if(is_in_P(dgr)==true)
-			assert(ISEVEN(j1+j2+j3));
+		assert(ISEVEN(j1+j2+j3));
 	}
 }
 
@@ -446,27 +434,13 @@ double calculate_vertex_weight(struct diagram_t *dgr,int index)
 	m2=thisvertex->right->m;
 	m3=thisvertex->phononline->mu;
 
-
-	/*
-		If the triangle condition and the parity condition are met, then we are 
-		in the physical sector (P), and we use the usual vertex rule. Otherwise, we
-		are just in the extended sector (E) and a different rule is to be applied.
-	*/
-
-	if((check_parity(dgr,thisvertex)==true)&&(check_triangle_condition(dgr,thisvertex)==true))
-	{
-		coupling=sqrtf((2.0f*j1+1)*(2.0f*j2+1)*(2.0f*j3+1)/(4.0f*M_PI));
-		coupling*=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,0,0,0);
+	coupling=sqrtf((2.0f*j1+1)*(2.0f*j2+1)*(2.0f*j3+1)/(4.0f*M_PI));
+	coupling*=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,0,0,0);
 		
-		if(index==thisvertex->phononline->startmidpoint)
-			coupling*=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,-2*m1,2*m2,2*m3);
-		else
-			coupling*=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,-2*m1,2*m2,-2*m3);
-	}
+	if(index==thisvertex->phononline->startmidpoint)
+		coupling*=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,-2*m1,2*m2,2*m3);
 	else
-	{
-		coupling=0.10f;
-	}
+		coupling*=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,-2*m1,2*m2,-2*m3);
 
 	return coupling;
 }

@@ -23,7 +23,6 @@
 #include "phonon.h"
 #include "debug.h"
 #include "config.h"
-#include "sectors.h"
 
 #include "inih/ini.h"
 #include "libprogressbar/progressbar.h"
@@ -517,7 +516,6 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 
 	int proposed[DIAGRAM_NR_UPDATES],accepted[DIAGRAM_NR_UPDATES],rejected[DIAGRAM_NR_UPDATES];
 	int total_proposed,total_accepted,total_rejected;
-	int samples_in_P_sector,samples_not_in_P_sector;
 	int avgorder[2];
 	double avglength[2];
 
@@ -683,31 +681,21 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 #endif
 
 		assert(diagram_weight(dgr)>=0.0f);
-		assert(is_in_E(dgr)==true);
 		
 		/*
 			The histograms are updated only if we are in the physical sector
 		*/
-		
-		if(is_in_P(dgr)==true)
-		{
-			gsl_histogram_increment(g,dgr->endtau);
 
-			if(get_nr_phonons(dgr)==0)
-				gsl_histogram_increment(g0,dgr->endtau);
+		gsl_histogram_increment(g,dgr->endtau);
 
-			if(get_nr_phonons(dgr)==1)
-				gsl_histogram_increment(g1,dgr->endtau);
+		if(get_nr_phonons(dgr)==0)
+			gsl_histogram_increment(g0,dgr->endtau);
 
-			if(get_nr_phonons(dgr)==2)
-				gsl_histogram_increment(g2,dgr->endtau);
-		
-			samples_in_P_sector++;
-		}
-		else
-		{
-			samples_not_in_P_sector++;
-		}
+		if(get_nr_phonons(dgr)==1)
+			gsl_histogram_increment(g1,dgr->endtau);
+
+		if(get_nr_phonons(dgr)==2)
+			gsl_histogram_increment(g2,dgr->endtau);
 
 		avgorder[0]+=get_nr_phonons(dgr);
 		avgorder[1]++;
@@ -798,9 +786,6 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 	fprintf(out,"#\n");
 	fprintf(out,"# Sampled quantity: Green's function (G)\n");
 	fprintf(out,"# Iterations: %d\n",config->iterations);
-	fprintf(out,"# Samples taken in physical sector: %d\n",samples_in_P_sector);
-	fprintf(out,"# Total samples: %d\n",samples_in_P_sector+samples_not_in_P_sector);
-	fprintf(out,"# Percentage in physical sector: %f\n",((double)(samples_in_P_sector))/((double)(samples_in_P_sector+samples_not_in_P_sector)));
 
 	/*
 		FIXME Poco elegante!
