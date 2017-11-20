@@ -10,10 +10,6 @@
 #include <signal.h>
 #include <sys/time.h>
 
-#if defined(_OPENMP)
-#include <omp.h>
-#endif
-
 #include "mc.h"
 #include "diagrams.h"
 #include "updates.h"
@@ -27,6 +23,43 @@
 #include "inih/ini.h"
 #include "libprogressbar/progressbar.h"
 #include "gnuplot_i/gnuplot_i.h"
+
+/*
+	This function checks if, for every propagator, one has |m| <= j
+*/
+
+bool propagators_are_physical(struct diagram_t *dgr)
+{
+	int c;
+
+	for(c=0;c<get_nr_free_propagators(dgr);c++)
+	{
+		struct g0_t *g0=get_free_propagator(dgr,c);
+
+		if(g0->j<0)
+			return false;
+	
+		if(abs(g0->m)>g0->j)
+			return false;
+	}
+
+	return true;
+}
+
+/*
+	This function checks if the diagrams conserves the angular momentum,
+	i.e. if the first and last free propagators have the same angular momentum.
+*/
+
+bool angular_momentum_is_conserved(struct diagram_t *dgr)
+{
+	struct g0_t *first,*last;
+	
+	first=get_free_propagator(dgr,0);
+	last=get_free_propagator(dgr,get_nr_free_propagators(dgr)-1);
+
+	return (first->j==last->j)?(true):(false);
+}
 
 /*
 	This routine calculates the weight all the propagators between two midpoints,
@@ -52,6 +85,15 @@ double calculate_propagators_and_vertices(struct diagram_t *dgr,int startmidpoin
 	return ret;
 }
 
+/*
+	(Delta_j)_i is defined as the difference in angular momentum between
+	the free propagators before and after the i-th vertex, i.e.
+
+	(Delta_j)_i = j_{i+1} - j_i
+
+	The following functions allow to get and set (Delta_j)_i.
+*/
+
 int deltaj(struct diagram_t *dgr,int vertex)
 {
 	struct g0_t *left,*right;
@@ -71,72 +113,6 @@ void change_deltaj(struct diagram_t *dgr,int index,int newdeltaj)
 
 	for(c=index+1;c<nr_free_propagators;c++)
 		get_free_propagator(dgr,c)->j+=newdeltaj-olddeltaj;
-}
-
-int get_nr_available_phonons(struct diagram_t *dgr)
-{
-	int c,available;
-
-	for(c=available=0;c<get_nr_phonons(dgr);c++)
-	{
-		int startmidpoint,endmidpoint;
-		
-		startmidpoint=get_phonon_line(dgr,c)->startmidpoint;
-		endmidpoint=get_phonon_line(dgr,c)->endmidpoint;
-		
-		if((deltaj(dgr,startmidpoint)==0)&&(deltaj(dgr,endmidpoint)==0))
-			available++;
-	}
-	
-	return available;
-}
-
-int get_random_available_phonon(struct diagram_t *dgr)
-{
-	int c,available,target;
-
-	available=0;
-	target=gsl_rng_uniform_int(dgr->rng_ctx,get_nr_available_phonons(dgr));
-
-	for(c=0;c<get_nr_phonons(dgr);c++)
-	{
-		int startmidpoint,endmidpoint;
-		
-		startmidpoint=get_phonon_line(dgr,c)->startmidpoint;
-		endmidpoint=get_phonon_line(dgr,c)->endmidpoint;
-		
-		if((deltaj(dgr,startmidpoint)==0)&&(deltaj(dgr,endmidpoint)==0))
-		{
-			if(available==target)
-				return c;
-			
-			available++;
-		}
-	}
-
-	assert(false);
-	
-	return -1;
-}
-
-struct g0_t *find_propagator_containing_time(struct diagram_t *dgr,double tau)
-{
-	int c;
-	
-	assert(tau>=dgr->mintau);
-	assert(tau<=dgr->endtau);
-
-	for(c=0;c<get_nr_free_propagators(dgr);c++)
-	{
-		struct g0_t *thisg0=get_free_propagator(dgr,c);
-		
-		if((tau>=thisg0->starttau)&&(tau<=thisg0->endtau))
-			return thisg0;
-	}
-
-	assert(false);
-
-	return NULL;
 }
 
 /*
@@ -204,7 +180,7 @@ int update_length(struct diagram_t *dgr,struct configuration_t *cfg)
 
 int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 {
-	int lambda,mu;
+	int lambda,mu,deltaj1,deltaj2;
 	double tau1,tau2,weightratio,acceptance_ratio;
 	bool is_accepted;
 
@@ -219,11 +195,13 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 		return UPDATE_UNPHYSICAL;
 
 	/*
-		The new lambda is chosen using a uniform distribution.
+		The new lambda and mu are chosen using a uniform distribution.
 	*/
 
 	lambda=gsl_rng_uniform_int(dgr->rng_ctx,1+MAXLAMBDA);
 	mu=gsl_rng_uniform_int(dgr->rng_ctx,1+2*lambda)-lambda;
+	deltaj1=2*gsl_rng_uniform_int(dgr->rng_ctx,1+lambda)-lambda;
+	deltaj2=2*gsl_rng_uniform_int(dgr->rng_ctx,1+lambda)-lambda;
 
 	/*
 		The start time tau1 is sampled uniformly in a randomly chosen propagator,
@@ -245,10 +223,21 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	diagram_add_phonon_line(dgr,tau1,tau2,lambda,mu);
 
 	/*
-		...and then we check if the new line makes sense physically!
+		...and finally we fix the \Delta_j's at every vertex
 	*/
 
 	thisline=get_phonon_line(dgr,get_nr_phonons(dgr)-1);
+	
+	change_deltaj(dgr,thisline->endmidpoint,deltaj2);
+	change_deltaj(dgr,thisline->startmidpoint,deltaj1);
+
+	if(propagators_are_physical(dgr)==false)
+	{
+		diagram_copy(old,dgr);
+		fini_diagram(old);
+
+		return UPDATE_REJECTED;
+	}
 
 	/*
 		We calculate the weight ratio (the fundamental quantity in accepting/rejecting the update)
@@ -256,25 +245,30 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	*/
 
 	weightratio=calculate_arc_weight(dgr,thisline);
-	weightratio*=calculate_vertex_weight(dgr,thisline->startmidpoint);
-	weightratio*=calculate_vertex_weight(dgr,thisline->endmidpoint);
+
+#warning This can be optimized, the range does not need to be so big!
+#warning Ever better, a dedicated function could calculate the ratio between two diagrams! Less numerical errors!
+
+	weightratio*=calculate_propagators_and_vertices(dgr,0,get_nr_vertices(dgr)-1);
+	weightratio/=calculate_propagators_and_vertices(old,0,get_nr_vertices(old)-1);
+
+	if(weightratio<0.0f)
+		dgr->sign*=-1;
 
 	if((!isinf(diagram_weight(dgr)))&&(!isinf(diagram_weight(old))))
 		assert(almost_same_float(weightratio,diagram_weight(dgr)/diagram_weight(old)));
-
-	assert(diagram_weight(dgr)>=0);
-	assert(diagram_weight(old)>=0);
 
 	/*
 		Finally we calculate the acceptance ratio for the update.
 	*/
 
-	acceptance_ratio=weightratio;
+	acceptance_ratio=fabs(weightratio);
 	acceptance_ratio/=1.0f/(1+MAXLAMBDA);
-	acceptance_ratio/=1.0f/(1+2*lambda);
+	acceptance_ratio/=1.0f/(1+2*lambda);	
+	acceptance_ratio/=1.0f/pow(1+lambda,2.0f);
 	acceptance_ratio/=1.0f/dgr->endtau;
 	acceptance_ratio/=phonon_pdf(dgr->phonon_ctx,lambda,tau2-tau1);
-	acceptance_ratio*=1.0f/get_nr_available_phonons(dgr);
+	acceptance_ratio*=1.0f/get_nr_phonons(dgr);
 
 	is_accepted=(gsl_rng_uniform(dgr->rng_ctx)<acceptance_ratio)?(true):(false);
 
@@ -300,12 +294,12 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	double weightratio,targetweight,acceptance_ratio,tau1,tau2;
 	bool is_accepted;
 
-	nr_available_phonons=get_nr_available_phonons(dgr);
+	nr_available_phonons=get_nr_phonons(dgr);
 
 	if(nr_available_phonons<=0)
 		return UPDATE_UNPHYSICAL;
 
-	target=get_random_available_phonon(dgr);
+	target=gsl_rng_uniform_int(dgr->rng_ctx,get_nr_phonons(dgr));
 	arc=get_phonon_line(dgr,target);
 	targetweight=calculate_arc_weight(dgr,arc);
 
@@ -316,33 +310,13 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	endmidpoint=arc->endmidpoint;
 
 	old=diagram_clone(dgr);
-	
+
+	change_deltaj(dgr,endmidpoint,0);
+	change_deltaj(dgr,startmidpoint,0);
+
 	diagram_remove_phonon_line(dgr,target);
 
-	weightratio=1.0f/targetweight;
-	weightratio/=calculate_vertex_weight(old,startmidpoint);
-	weightratio/=calculate_vertex_weight(old,endmidpoint);
-
-	if((!isinf(diagram_weight(dgr)))&&(!isinf(diagram_weight(old))))
-		assert(almost_same_float(weightratio,diagram_weight(dgr)/diagram_weight(old)));
-
-	assert(diagram_weight(dgr)>=0);
-	assert(diagram_weight(old)>=0);
-
-	/*
-		Finally we calculate the acceptance ratio for the update.
-	*/
-
-	acceptance_ratio=weightratio;
-	acceptance_ratio*=1.0f/(1+MAXLAMBDA);
-	acceptance_ratio*=1.0f/(1+2*lambda);
-	acceptance_ratio*=1.0f/dgr->endtau;
-	acceptance_ratio*=phonon_pdf(dgr->phonon_ctx,lambda,tau2-tau1);
-	acceptance_ratio/=1.0f/nr_available_phonons;
-
-	is_accepted=(gsl_rng_uniform(dgr->rng_ctx)<acceptance_ratio)?(true):(false);
-
-	if(is_accepted==false)
+	if(propagators_are_physical(dgr)==false)
 	{
 		diagram_copy(old,dgr);
 		fini_diagram(old);
@@ -350,47 +324,31 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 		return UPDATE_REJECTED;
 	}
 
-	fini_diagram(old);
+	weightratio=1.0f/targetweight;
 
-	return UPDATE_ACCEPTED;
-}
+#warning This can be optimized, the range does not need to be so big!
+#warning Ever better, a dedicated function could calculate the ratio between two diagrams! Less numerical errors!
 
-int update_recouple(struct diagram_t *dgr,struct configuration_t *cfg)
-{
-	int nr_vertices;
-	double weightratio,acceptance_ratio;
-	bool is_accepted;
+	weightratio*=calculate_propagators_and_vertices(dgr,0,get_nr_vertices(dgr)-1);
+	weightratio/=calculate_propagators_and_vertices(old,0,get_nr_vertices(old)-1);
 
-#ifndef NDEBUG
-	bool result;
-#endif
-
-	struct diagram_t *old;
-
-	nr_vertices=get_nr_vertices(dgr);
-	
-	if(nr_vertices<1)
-		return UPDATE_UNPHYSICAL;
-
-	old=diagram_clone(dgr);
-
-#ifndef NDEBUG
-	result=recouple(dgr,0,nr_vertices-1);
-	assert(result==true);
-#else
-	recouple(dgr,0,nr_vertices-1);
-#endif
-
-	weightratio=calculate_propagators_and_vertices(dgr,0,nr_vertices-1);
-	weightratio/=calculate_propagators_and_vertices(old,0,nr_vertices-1);
-
-	acceptance_ratio=weightratio;
+	if(weightratio<0.0f)
+		dgr->sign*=-1;
 
 	if((!isinf(diagram_weight(dgr)))&&(!isinf(diagram_weight(old))))
 		assert(almost_same_float(weightratio,diagram_weight(dgr)/diagram_weight(old)));
 
-	assert(diagram_weight(dgr)>=0);
-	assert(diagram_weight(old)>=0);
+	/*
+		Finally we calculate the acceptance ratio for the update.
+	*/
+
+	acceptance_ratio=fabs(weightratio);
+	acceptance_ratio*=1.0f/(1+MAXLAMBDA);
+	acceptance_ratio*=1.0f/(1+2*lambda);
+	acceptance_ratio*=1.0f/pow(1+lambda,2.0f);
+	acceptance_ratio*=1.0f/dgr->endtau;
+	acceptance_ratio*=phonon_pdf(dgr->phonon_ctx,lambda,tau2-tau1);
+	acceptance_ratio/=1.0f/nr_available_phonons;
 
 	is_accepted=(gsl_rng_uniform(dgr->rng_ctx)<acceptance_ratio)?(true):(false);
 
@@ -509,7 +467,7 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 
 	struct timeval starttime;
 
-#define DIAGRAM_NR_UPDATES	(4)
+#define DIAGRAM_NR_UPDATES	(3)
 
 	int (*updates[DIAGRAM_NR_UPDATES])(struct diagram_t *,struct configuration_t *);
 	char *update_names[DIAGRAM_NR_UPDATES];
@@ -526,12 +484,10 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 	updates[0]=update_length;
 	updates[1]=update_add_phonon_line;
 	updates[2]=update_remove_phonon_line;
-	updates[3]=update_recouple;
 
 	update_names[0]="UpdateLength";
 	update_names[1]="AddPhononLine";
 	update_names[2]="RemovePhononLine";
-	update_names[3]="RecoupleFull";
 
 	/*
 		We reset the update statistics
@@ -680,22 +636,28 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 		diagram_check_consistency(dgr);
 #endif
 
-		assert(diagram_weight(dgr)>=0.0f);
-		
-		/*
-			The histograms are updated only if we are in the physical sector
-		*/
+		if(angular_momentum_is_conserved(dgr))
+		{
+			double w;
+			
+			/*
+				The histograms are updated only if we are in the physical sector,
+				where the diagram conserves angular momentum.
+			*/
 
-		gsl_histogram_increment(g,dgr->endtau);
+			w=dgr->sign;
+			
+			gsl_histogram_accumulate(g,dgr->endtau,w);
 
-		if(get_nr_phonons(dgr)==0)
-			gsl_histogram_increment(g0,dgr->endtau);
+			if(get_nr_phonons(dgr)==0)
+				gsl_histogram_accumulate(g0,dgr->endtau,w);
 
-		if(get_nr_phonons(dgr)==1)
-			gsl_histogram_increment(g1,dgr->endtau);
+			if(get_nr_phonons(dgr)==1)
+				gsl_histogram_accumulate(g1,dgr->endtau,w);
 
-		if(get_nr_phonons(dgr)==2)
-			gsl_histogram_increment(g2,dgr->endtau);
+			if(get_nr_phonons(dgr)==2)
+				gsl_histogram_accumulate(g2,dgr->endtau,w);
+		}
 
 		avgorder[0]+=get_nr_phonons(dgr);
 		avgorder[1]++;
@@ -873,380 +835,3 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 
 	return 0;
 }
-
-/*
-	Things to add here:
-
-	- CTRL-c handler
-	- gnuplot interface
-	- Number of updates
-*/
-
-#if 0
-int do_diagmc_parallel(char *configfile)
-{
-	struct diagram_cfg_t dcfg;
-	struct configuration_t config;
-	struct histogram_t *ht;
-
-	int d;
-	FILE *out;
-	char fname[1024];
-	progressbar *progress;
-
-	int (*updates[DIAGRAM_NR_UPDATES])(struct diagram_t *,struct configuration_t *);
-	char *update_names[DIAGRAM_NR_UPDATES];
-
-	int proposed[DIAGRAM_NR_UPDATES],accepted[DIAGRAM_NR_UPDATES],rejected[DIAGRAM_NR_UPDATES];
-	int total_proposed,total_accepted,total_rejected;
-	int avgorder[2];
-
-	updates[0]=update_length;
-	updates[1]=update_add_phonon_line;
-	updates[2]=update_remove_phonon_line;
-
-	update_names[0]="UpdateLength";
-	update_names[1]="AddPhononLine";
-	update_names[2]="RemovePhononLine";
-
-	for(d=0;d<DIAGRAM_NR_UPDATES;d++)
-		proposed[d]=accepted[d]=rejected[d]=0;
-	
-	avgorder[0]=avgorder[1]=0;
-
-	/*
-		We load some sensible defaults in case they are not in the .ini file, the we try
-		loading a .ini file.
-	*/
-
-	load_config_defaults(&config);
-
-	if(ini_parse(configfile,configuration_handler,&config)<0)
-	{
-		fprintf(stderr,"Couldn't read or parse '%s'\n",configfile);
-		return 1;
-	}
-
-	if((config.animate==true)&&(config.progressbar==true))
-	{
-		fprintf(stderr,"The options 'animate' and 'progressbar' cannot be set at the same time!\n");
-		exit(0);
-	}
-
-	if((config.animate==true)&&(config.parallel==true))
-	{
-		fprintf(stderr,"The options 'animate' and 'parallel' cannot be set at the same time!\n");
-		exit(0);
-	}
-
-#if !defined(_OPENMP)
-	if(config.nthreads>1)
-	{
-		fprintf(stderr,"Warning: parallel run requested, but the current binary has been compiled without OpenMP support.\n");
-		config.nthreads=1;
-	}
-#endif
-
-	if(config.j*(config.j+1)<=config.chempot)
-	{
-		fprintf(stderr,"Warning: the chemical potential should be set below j(j+1).\n");
-	}
-
-	if((config.parallel==true)&&(config.use_hashtable==true))
-	{
-		fprintf(stderr,"Warning: the hashtable is incompatible with the 'parallel' option. The hashtable will be switched off.\n");
-		config.use_hashtable=false;
-	}
-
-	if(config.parallel==false)
-		config.nthreads=1;
-
-	fprintf(stderr,"Loaded '%s'\n",configfile);
-	fprintf(stderr,"Performing %d iterations, using %d thread(s)\n",config.iterations,config.nthreads);
-
-	snprintf(fname,1024,"%s.dat",config.prefix);
-	
-	if(!(out=fopen(fname,"w+")))
-	{
-		fprintf(stderr,"Error: couldn't open %s for writing\n",fname);
-		return 0;
-	}
-
-	fprintf(stderr,"Writing results to '%s'\n",fname);
-
-	dcfg.j=config.j;
-	dcfg.endtau=config.endtau;
-	dcfg.maxtau=config.maxtau;
-	dcfg.chempot=config.chempot;
-
-	dcfg.n=config.n;
-
-        init_terminal_data();
-
-	if(config.progressbar)
-		progress=progressbar_new("Progress",config.iterations/16384);
-	else
-		progress=NULL;
-
-	ht=init_histogram(config.bins,config.width);
-
-	/*
-		This is the main DiagMC loop
-	*/
-
-#if defined(_OPENMP)
-#pragma omp parallel for
-#endif
-
-	for(d=0;d<config.nthreads;d++)
-	{
-		struct diagram_t *dgr;
-		int c;
-
-#define LOCALSTORAGE	(1024*16)
-
-		double localtotalweight[LOCALSTORAGE][2];
-		int localavgorder[2];
-		int progressbarticks;
-
-		localavgorder[0]=localavgorder[1]=0;
-		progressbarticks=0;
-
-		/*
-			We initialize some basic data structures and various other stuff, as well as the
-			random number generator, in case a NON deterministic seed is requested.
-		*/
-
-		dgr=init_diagram(&dcfg);
-
-		dgr->rng_ctx=gsl_rng_alloc(gsl_rng_mt19937);
-		assert(dgr->rng_ctx!=NULL);
-
-		if(config.seedrng)
-			seed_rng(dgr->rng_ctx);
-
-		/*
-			If we are running many threads in parallel, we must initialized
-			the RNG in each thread in a different way, otherwise we are sampling
-			the same diagrams.
-		
-			In case a random seed has NOT been required (config.seedrng==false),
-			we use a deterministic seed (just the thread number).
-		*/
-
-		if((config.parallel)&&(!config.seedrng))
-			gsl_rng_set(dgr->rng_ctx,d);
-
-		for(c=0;c<config.iterations/config.nthreads;c++)
-		{
-			int update_type,status;
-			double totalweight;
-
-			update_type=gsl_rng_uniform_int(dgr->rng_ctx,DIAGRAM_NR_UPDATES);
-			status=updates[update_type](dgr,&config);
-
-			if((config.nthreads==1)&&(config.animate)&&(status==UPDATE_ACCEPTED)&&((update_type==1)||(update_type==2)))
-			{
-				if((c%16)==0)
-				{
-					int d,plines;
-
-					plines=print_diagram(dgr,PRINT_TOPOLOGY|PRINT_INFO0|PRINT_DRYRUN);
-		
-					for(d=plines;d<tgetnum("li");d++)
-							printf("\n");
-
-					print_diagram(dgr,PRINT_TOPOLOGY|PRINT_INFO0);
-					usleep(5000);
-				}
-			}
-
-#if defined(_OPENMP)				
-#pragma omp atomic
-#endif
-			proposed[update_type]++;
-
-			switch(status)
-			{
-				case UPDATE_ACCEPTED:
-
-#if defined(_OPENMP)				
-#pragma omp atomic
-#endif
-				accepted[update_type]++;
-
-				break;
-
-				/*
-					FIXME
-
-					Here unphysical and rejected updates are treated in exactly the same
-					way. Is this OK?
-				*/
-
-				case UPDATE_UNPHYSICAL:
-				case UPDATE_REJECTED:
-
-#if defined(_OPENMP)
-#pragma omp atomic
-#endif
-				rejected[update_type]++;
-
-				break;
-
-				case UPDATE_ERROR:
-				assert(false);
-			}
-
-			assert(fabs(diagram_weight(dgr)-diagram_weight(dgr))<10e-7*diagram_weight(dgr));
-			diagram_check_consistency(dgr);
-
-			totalweight=diagram_weight(dgr)*diagram_m_weight(dgr,config.use_hashtable);
-			assert(totalweight>=0.0f);
-
-			if(totalweight>10e4)
-			{
-				debug_weight(dgr);
-				exit(0);
-			}
-
-			localtotalweight[c%LOCALSTORAGE][0]=totalweight;
-			localtotalweight[c%LOCALSTORAGE][1]=dgr->endtau;
-
-			localavgorder[0]+=get_nr_phonons(dgr);
-			localavgorder[1]++;
-
-			if((config.progressbar)&&((c%16384)==0))
-				progressbarticks++;
-
-			if(((c+1)%LOCALSTORAGE)==0)
-			{
-#if defined(_OPENMP)
-#pragma omp atomic
-#endif
-				avgorder[0]+=localavgorder[0];
-
-#if defined(_OPENMP)
-#pragma omp atomic
-#endif
-
-				avgorder[1]+=localavgorder[1];
-				localavgorder[0]=localavgorder[1]=0;
-		
-#if defined(_OPENMP)
-#pragma omp critical
-#endif
-				{
-					int i;
-					
-					for(i=0;i<LOCALSTORAGE;i++)
-						histogram_add_sample(ht,localtotalweight[i][0],localtotalweight[i][1]);
-				}
-
-				if(config.progressbar)
-				{
-#if defined(_OPENMP)
-#pragma omp atomic
-#endif
-					progress->value+=progressbarticks;
-				}
-
-				progressbarticks=0;
-
-#if defined(_OPENMP)
-				if((config.progressbar)&&(omp_get_thread_num()==0))
-				{
-					progressbar_update(progress,progress->value);
-				}
-#else
-				if(config.progressbar)
-				{
-					progressbar_update(progress,progress->value);
-				}
-#endif		
-			}
-		}
-
-		if(dgr->rng_ctx)
-			gsl_rng_free(dgr->rng_ctx);
-
-		fini_diagram(dgr);
-	}
-
-	if(config.progressbar)
-		progressbar_finish(progress);
-
-	/*
-		Now we print the statistics we collected to the output file in a nice way.
-	*/
-
-	fprintf(out,"# Diagrammatic Monte Carlo for the angulon\n");
-	fprintf(out,"#\n");
-	fprintf(out,"# Configuration loaded from '%s'\n",configfile);
-	fprintf(out,"# Output file is '%s'\n",fname);
-	fprintf(out,"#\n");
-	fprintf(out,"# Initial and final state: (j=%d, sampling over all possible m values)\n",config.j);
-	fprintf(out,"# Chemical potential: %f\n",config.chempot);
-	fprintf(out,"# Initial diagram length: %f\n",config.endtau);
-	fprintf(out,"# Max diagram length: %f\n",config.maxtau);
-	fprintf(out,"# Potential parameters: (logn) = (%f)\n",log(config.n));
-	fprintf(out,"#\n");
-
-	total_proposed=total_accepted=total_rejected=0;
-
-	fprintf(out,"# Update statistics:\n");
-
-	for(d=0;d<DIAGRAM_NR_UPDATES;d++)
-	{
-		fprintf(out,"# Update #%d (%s): ",d,update_names[d]);
-		show_update_statistics(out,proposed[d],accepted[d],rejected[d]);
-	
-		total_proposed+=proposed[d];
-		total_accepted+=accepted[d];
-		total_rejected+=rejected[d];
-	}
-
-	fprintf(out,"# Total: ");
-	show_update_statistics(out,total_proposed,total_accepted,total_rejected);
-	fprintf(out,"#\n# Average order: %f\n",((double)(avgorder[0]))/((double)(avgorder[1])));
-	fprintf(out,"# Extrapolated quasiparticle weight: %f\n",calculate_qpw(&config,ht));
-	fprintf(out,"# Extrapolated energy: %f\n",calculate_energy(&config,ht));
-	fprintf(out,"#\n");
-	fprintf(out,"# Sampled quantity: Green's function (G)\n");
-	fprintf(out,"# Iterations: %d\n",config.iterations);
-	fprintf(out,"# Nr of bins: %d\n",config.bins);
-	fprintf(out,"# Bin width: %f\n",config.width);
-	fprintf(out,"# (last bin is overflow)\n");
-	fprintf(out,"#\n");
-
-	fprintf(out,"# <Bin center> <Average> <Stddev> <Free rotor>\n");
-
-	for(d=0;d<=config.bins;d++)
-	{
-		double tau,Ej;
-		
-		tau=config.width*d+config.width/2.0f;
-		Ej=config.j*(config.j+1);
-		
-		fprintf(out,"%f %f ",tau,histogram_get_bin_average(ht,d));
-		
-		if(ht->sctx->smpls[d]->next>1)
-			fprintf(out,"%f ",sqrtf(histogram_get_bin_variance(ht,d)/(ht->sctx->smpls[d]->next)));
-		else
-			fprintf(out,"%f ",0.0f);
-
-		fprintf(out,"%f\n",exp(-(Ej-config.chempot)*tau));
-	}
-
-	/*
-		That's all folks. Cleaning up.
-	*/
-
-	if(out)
-		fclose(out);
-
-	fini_histogram(ht);
-
-	return 0;
-}
-#endif

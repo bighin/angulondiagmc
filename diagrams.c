@@ -79,6 +79,8 @@ struct diagram_t *init_diagram(struct diagram_parameters_t *dpars,bool verbose)
 	
 	g0->arcs_over_me=0;
 
+	ret->sign=(ISEVEN(g0->j))?(+1):(-1);
+
 	/*
 		Finally we initialize the phonon context
 	*/
@@ -370,6 +372,15 @@ void diagram_check_consistency(struct diagram_t *dgr)
 
 		assert(ISEVEN(j1+j2+j3));
 	}
+	
+	/*
+		We check the sign
+	*/
+
+	if(diagram_weight(dgr)>0.0f)
+		assert(dgr->sign==+1);
+	else
+		assert(dgr->sign==-1);
 }
 
 bool is_last_propagator(struct diagram_t *dgr,struct g0_t *g0)
@@ -410,8 +421,6 @@ double calculate_free_propagator_weight(struct diagram_t *dgr,struct g0_t *g0)
 	tau=g0->endtau-g0->starttau;
 
 	phase=1.0f;
-
-#warning CheckMe! Non dovrebbe contare dato che prendiamo solo rapporti di pesi di diagrammi!
 
 	if(is_last_propagator(dgr,g0)==false)
 		phase=pow(-1.0f,j);
@@ -622,6 +631,7 @@ void diagram_copy(struct diagram_t *src,struct diagram_t *dst)
 	dst->mintau=src->mintau;
 	dst->endtau=src->endtau;
 	dst->chempot=src->chempot;
+	dst->sign=src->sign;
 
 	dst->n=src->n;
 

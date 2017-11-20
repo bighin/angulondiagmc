@@ -71,7 +71,7 @@ void debug_vertices_ext(struct diagram_t *dgr)
 	}
 }
 
-void debug_weight(struct diagram_t *dgr)
+void debug_weight_old(struct diagram_t *dgr)
 {
 	int c;
 	double ret=1.0f;
@@ -136,6 +136,56 @@ void debug_weight(struct diagram_t *dgr)
 		ret*=coupling;
 
 		printf("Adding %f (coupling of %d %d %d)\n",coupling,j1,j2,j3);
+	}
+
+	printf("Final result: %f\n",ret);
+}
+
+void debug_weight(struct diagram_t *dgr)
+{
+	int c;
+	double ret=1.0f;
+	
+	/*
+		We calculate the weight associated to each free rotor line...
+	*/
+	
+	for(c=0;c<get_nr_free_propagators(dgr);c++)
+	{
+		double localret;
+		
+		localret=calculate_free_propagator_weight(dgr,get_free_propagator(dgr,c));
+		printf("Free propagator: %f\n",localret);
+	
+		ret*=localret;
+	}
+
+	/*
+		...then we add the phonon arcs...
+	*/
+
+	for(c=0;c<get_nr_phonons(dgr);c++)
+	{
+		double localret;
+		
+		localret=calculate_arc_weight(dgr,get_phonon_line(dgr,c));
+		printf("Arc: %f\n",localret);
+	
+		ret*=localret;
+	}
+
+	/*
+		...and finally we consider the vertices.
+	*/
+
+	for(c=0;c<get_nr_vertices(dgr);c++)
+	{
+		double localret;
+		
+		localret=calculate_vertex_weight(dgr,c);
+		printf("Vertex: %f\n",localret);
+	
+		ret*=localret;
 	}
 
 	printf("Final result: %f\n",ret);

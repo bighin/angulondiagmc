@@ -120,6 +120,14 @@ struct diagram_t
 	*/
 
 	struct phonon_ctx_t *phonon_ctx;
+	
+	/*
+		We don't need to save the weight of the diagram, since it
+		would be affected by precision losses, however we need to
+		save the sign.
+	*/
+
+	int sign;
 };
 
 struct diagram_t *init_diagram(struct diagram_parameters_t *dpars,bool verbose);

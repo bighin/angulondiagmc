@@ -906,15 +906,6 @@ double diagram_m_weight(struct diagram_t *dgr,bool use_hashtable,int *status)
 	double value;
 	int hashindex;
 
-#warning Valid only if MAXLAMBDA=0 and j=0
-
-	{
-		if(status)
-			*status=STATUS_OK;
-
-		return 1.0f;
-	}
-
 	clock_t t=clock();
 
 	/*
