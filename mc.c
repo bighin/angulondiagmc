@@ -25,7 +25,7 @@
 #include "gnuplot_i/gnuplot_i.h"
 
 /*
-	This function checks if, for every propagator, one has |m| <= j
+	This function checks if -- for every propagator -- one has |m| <= j
 */
 
 bool propagators_are_physical(struct diagram_t *dgr)
@@ -196,6 +196,11 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	/*
 		The new lambda and mu are chosen using a uniform distribution.
+	
+		Deltaj_1 and Delta_j are chosen as to respect angular momentum conservation
+		and parity, i.e. among the following integer values
+	
+		-lambda, -lambda + 2, ..., lambda - 2, lambda
 	*/
 
 	lambda=gsl_rng_uniform_int(dgr->rng_ctx,1+MAXLAMBDA);
