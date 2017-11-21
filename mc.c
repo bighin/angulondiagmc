@@ -474,7 +474,7 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 
 	int proposed[DIAGRAM_NR_UPDATES],accepted[DIAGRAM_NR_UPDATES],rejected[DIAGRAM_NR_UPDATES];
 	int total_proposed,total_accepted,total_rejected;
-	int avgorder[2];
+	long long int avgorder[2];
 	double avglength[2];
 
 	/*
@@ -660,8 +660,6 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 			if(get_nr_phonons(dgr)==2)
 				gsl_histogram_accumulate(g2,dgr->endtau,w);
 		}
-
-#warning DEBUG AVG ORDER!
 
 		avgorder[0]+=get_nr_phonons(dgr);
 		avgorder[1]++;
