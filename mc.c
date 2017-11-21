@@ -636,6 +636,8 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 		diagram_check_consistency(dgr);
 #endif
 
+#warning Statistics here, even order by order!
+
 		if(angular_momentum_is_conserved(dgr))
 		{
 			double w;
@@ -658,6 +660,8 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 			if(get_nr_phonons(dgr)==2)
 				gsl_histogram_accumulate(g2,dgr->endtau,w);
 		}
+
+#warning DEBUG AVG ORDER!
 
 		avgorder[0]+=get_nr_phonons(dgr);
 		avgorder[1]++;
