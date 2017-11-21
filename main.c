@@ -69,7 +69,7 @@ int main(int argc,char *argv[])
 		{
 			double targetlength;
 			double lo,hi,mid;
-			int d;
+			int d,j;
 			
 			if((c+1)>=argc)
 				usage(argv[0]);
@@ -83,8 +83,10 @@ int main(int argc,char *argv[])
 
 			targetlength=10.0f;
 
-			lo=-10.0f;
-			hi=0.0f;
+			j=config.j;
+
+			lo=-10.0f+j*(j+1);
+			hi=0.0f+j*(j+1);
 
 			for(d=0;d<=10;d++)
 			{
