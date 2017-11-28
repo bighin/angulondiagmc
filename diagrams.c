@@ -13,6 +13,7 @@
 #include "selfenergies.h"
 #include "stat.h"
 #include "phonon.h"
+#include "mc.h"
 
 int vertex_get_j1(struct vertex_t *vif)
 {
@@ -596,8 +597,10 @@ int print_diagram(struct diagram_t *dgr,int flags)
 
 	if(flags&PRINT_INFO0)
 	{
+		char sector=(angular_momentum_is_conserved(dgr)==true)?('P'):('E');
+	
 		if(!(flags&PRINT_DRYRUN))
-			printf("\n(diagram order: %d, local weight: %f, length: %f)\n",get_nr_phonons(dgr),diagram_weight(dgr),dgr->endtau);
+			printf("\n(diagram order: %d, local weight: %f, length: %f, sector: %c)\n",get_nr_phonons(dgr),diagram_weight(dgr),dgr->endtau,sector);
 		
 		plines+=2;
 	}

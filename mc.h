@@ -6,6 +6,9 @@
 #include "diagrams.h"
 #include "config.h"
 
+bool propagators_are_physical(struct diagram_t *dgr);
+bool angular_momentum_is_conserved(struct diagram_t *dgr);
+
 int update_length(struct diagram_t *dgr,struct configuration_t *cfg);
 int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg);
 int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg);
