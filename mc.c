@@ -101,6 +101,29 @@ bool angular_momentum_is_conserved(struct diagram_t *dgr)
 }
 
 /*
+	The weight 'penalty' for diagrams not conserving angular momentum
+*/
+
+double unphysical_penalty(struct diagram_t *dgr)
+{
+	struct g0_t *first,*last;
+	double firstlen,lastlen,x;
+	
+	first=get_free_propagator(dgr,0);
+	last=get_free_propagator(dgr,get_nr_free_propagators(dgr)-1);
+
+	firstlen=first->endtau-first->starttau;
+	lastlen=last->endtau-last->starttau;
+
+	assert(firstlen>0);
+	assert(lastlen>0);
+
+	x=pow(last->j-first->j,2.0f)*(firstlen+lastlen);
+	
+	return exp(-x);
+}
+
+/*
 	This routine calculates the weight all the propagators between two midpoints,
 	including the propagators preceding the first midpoint, and the propagators following
 	the last midpoint.
@@ -519,6 +542,7 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 	int proposed[DIAGRAM_NR_UPDATES],accepted[DIAGRAM_NR_UPDATES],rejected[DIAGRAM_NR_UPDATES];
 	int total_proposed,total_accepted,total_rejected;
 	long long int avgorder[2];
+	long long int physical_diagrams,unphysical_diagrams;
 	double avglength[2];
 
 	/*
@@ -542,6 +566,8 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 	
 	avgorder[0]=avgorder[1]=0;
 	avglength[0]=avglength[1]=0.0f;
+	
+	physical_diagrams=unphysical_diagrams=0;
 
 	/*
 		We print some informative message, and then we open the log file
@@ -703,6 +729,12 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 
 			if(get_nr_phonons(dgr)==2)
 				gsl_histogram_accumulate(g2,dgr->endtau,w);
+		
+			physical_diagrams++;
+		}
+		else
+		{
+			unphysical_diagrams++;
 		}
 
 		avgorder[0]+=get_nr_phonons(dgr);
@@ -718,12 +750,14 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 			
 			if(config->progressbar)
 			{
-				double avg1,avg2;
+				double avg1,avg2,ratio;
 
 				avg1=((double)(avgorder[0]))/((double)(avgorder[1]));
 				avg2=((double)(avglength[0]))/((double)(avglength[1]));
 
-				snprintf(progressbar_text,1024,"Progress (avg. order: %f, avg. length: %f)",avg1,avg2);
+				ratio=((double)(physical_diagrams))/((double)(physical_diagrams+unphysical_diagrams));
+
+				snprintf(progressbar_text,1024,"Progress (avg. order: %f, avg. length: %f, P/(P+U): %f)",avg1,avg2,ratio);
 
 				progressbar_update_label(progress,progressbar_text);
 				progressbar_inc(progress);
