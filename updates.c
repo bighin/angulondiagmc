@@ -262,12 +262,20 @@ void diagram_add_phonon_line(struct diagram_t *dgr,double tau1,double tau2,int l
 	assert(hi>lo);
 
 	/*
-		Finally we fix the update the m quantum number of the free
+		We update the m quantum number of the free
 		propagators under the new line, which is now completely determined.
 	*/
 
 	for(c=arc->startmidpoint+1;c<=arc->endmidpoint;c++)
 		get_free_propagator(dgr,c)->m-=mu;
+
+	/*
+		Finally if \lambda >= 1 we add the present propagator as a node
+		to an interval tree
+	*/
+
+	if(arc->lambda>=1)
+		interval_tree_insert(arc,&dgr->treeroot);
 }
 
 void diagram_remove_start_midpoint(struct diagram_t *dgr,int c)
@@ -390,6 +398,13 @@ void diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 
 	startmidpoint=arc->startmidpoint;
 	endmidpoint=arc->endmidpoint;
+
+	/*
+		If \lambda >= 1 we remove the present propagator from the interval tree
+	*/
+
+	if(arc->lambda>=1)
+		interval_tree_remove(arc,&dgr->treeroot);
 
 	for(c=arc->startmidpoint;c<arc->endmidpoint;c++)
 		get_right_neighbour(dgr,c)->arcs_over_me--;

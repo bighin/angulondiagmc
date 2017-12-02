@@ -83,6 +83,13 @@ struct diagram_t *init_diagram(struct diagram_parameters_t *dpars,bool verbose)
 	ret->sign=(ISEVEN(g0->j))?(+1):(-1);
 
 	/*
+		We initialize the interval tree that will keep
+		track of overlapping phonon line with \lambda >= 1
+	*/
+	
+	ret->treeroot=RB_ROOT_CACHED;
+	
+	/*
 		Finally we initialize the phonon context
 	*/
 
@@ -696,3 +703,15 @@ struct diagram_t *diagram_clone(struct diagram_t *src)
 
 	return ret;
 }
+
+/*
+	We use the template in rbitree/interval_tree_generic.h to create the functions
+	for managing an interval tree
+*/
+
+#define START(node) ((node)->startmidpoint)
+#define LAST(node)  ((node)->endmidpoint)
+
+INTERVAL_TREE_DEFINE(struct arc_t, rb,
+		     double, subtree_last,
+		     START, LAST,, interval_tree)
