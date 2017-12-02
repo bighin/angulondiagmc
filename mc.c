@@ -373,9 +373,6 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	if(propagators_are_physical(dgr)==false)
 	{
-		printf("Removal of a phonon arc lead to unphysical state. Plase debug me!\n");
-		assert(false);
-
 		diagram_add_phonon_line(dgr,tau1,tau2,lambda,mu);
 		change_deltaj(dgr,endmidpoint,deltaj2);
 		change_deltaj(dgr,startmidpoint,deltaj1);
