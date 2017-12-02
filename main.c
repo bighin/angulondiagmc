@@ -17,6 +17,8 @@
 #include "tests.h"
 #include "selfenergies.h"
 #include "config.h"
+#include "rbitree/rbtree.h"
+#include "rbitree/interval_tree_double.h"
 
 double try_diagmc_and_get_length(struct configuration_t *config,double chempot)
 {
@@ -39,8 +41,37 @@ void usage(char *argv0)
 	printf("Usage: %s <inifile>\n",argv0);
 	printf("       %s --tuning <inifile>\n",argv0);
 	printf("       %s --testgraphs\n",argv0);
+	printf("       %s --testrbitree\n",argv0);
 
 	exit(0);
+}
+
+int test_rbitree(void)
+{
+	struct rb_root_cached root=RB_ROOT_CACHED;
+	struct interval_tree_node *nodes;
+	int c;
+
+#define NRNODES	(16*1024*1024)
+
+	nodes=malloc(sizeof(struct interval_tree_node)*NRNODES);
+	
+	for(c=0;c<NRNODES;c++)
+	{
+		nodes[c].start=drand48();
+		nodes[c].last=drand48();
+
+		interval_tree_insert(&nodes[c],&root);
+	}
+
+	printf("%i\n",interval_tree_count_overlaps(&root,0.0,1.0f));
+	printf("%i\n",interval_tree_count_overlaps(&root,0.0,0.5f));
+	printf("%i\n",interval_tree_count_overlaps(&root,0.5,1.0f));
+
+	if(nodes)
+		free(nodes);
+
+	return 0;
 }
 
 int main(int argc,char *argv[])
@@ -62,6 +93,12 @@ int main(int argc,char *argv[])
 		if(strcmp(argv[c],"--testgraphs")==0)
 		{
 			test_graphical_machinery();
+			continue;
+		}
+
+		if(strcmp(argv[c],"--testrbitree")==0)
+		{
+			test_rbitree();
 			continue;
 		}
 

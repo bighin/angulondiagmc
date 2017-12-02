@@ -17,8 +17,8 @@ LDFLAGS = -L/opt/local/lib/
 default: $(TARGET)
 all: default
 
-OBJECTS = $(patsubst %.c, %.o, $(wildcard *.c libprogressbar/*.c inih/*.c njsummat/*.c murmurhash3/*.c cubature/hcubature.c gnuplot_i/*.c))
-HEADERS = $(wildcard *.h  libprogressbar/*.h inih/*.h njsummat/*.h murmurhash3/*.h gnuplot_i/*.h)
+OBJECTS = $(patsubst %.c, %.o, $(wildcard *.c libprogressbar/*.c inih/*.c njsummat/*.c murmurhash3/*.c cubature/hcubature.c gnuplot_i/*.c rbitree/*.c))
+HEADERS = $(wildcard *.h  libprogressbar/*.h inih/*.h njsummat/*.h murmurhash3/*.h gnuplot_i/*.h rbitree/*.h)
 
 %.o: %.c $(HEADERS)
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -29,5 +29,5 @@ $(TARGET): $(OBJECTS)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJECTS) -Wall $(LIBS) -o $@
 
 clean:
-	-rm -f *.o libprogressbar/*.o inih/*.o njsummat/*.o murmurhash3/*.o cubature/*.o gnuplot_i/*.o
+	-rm -f *.o libprogressbar/*.o inih/*.o njsummat/*.o murmurhash3/*.o cubature/*.o gnuplot_i/*.o rbitree/*.o
 	-rm -f $(TARGET)

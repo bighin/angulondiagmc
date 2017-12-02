@@ -268,7 +268,7 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	lambda=gsl_rng_uniform_int(dgr->rng_ctx,1+MAXLAMBDA);
 	mu=gsl_rng_uniform_int(dgr->rng_ctx,1+2*lambda)-lambda;
 	deltaj1=2*gsl_rng_uniform_int(dgr->rng_ctx,1+lambda)-lambda;
-	deltaj2=2*gsl_rng_uniform_int(dgr->rng_ctx,1+lambda)-lambda;
+	deltaj2=-deltaj1;
 
 	/*
 		The start time tau1 is sampled uniformly in a randomly chosen propagator,
@@ -332,7 +332,7 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	acceptance_ratio=fabs(weightratio);
 	acceptance_ratio/=1.0f/(1+MAXLAMBDA);
 	acceptance_ratio/=1.0f/(1+2*lambda);	
-	acceptance_ratio/=1.0f/pow(1+lambda,2.0f);
+	acceptance_ratio/=1.0f/(1+lambda);
 	acceptance_ratio/=1.0f/dgr->endtau;
 	acceptance_ratio/=phonon_pdf(dgr->phonon_ctx,lambda,tau2-tau1);
 	acceptance_ratio*=1.0f/get_nr_phonons(dgr);
@@ -412,7 +412,7 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	acceptance_ratio=fabs(weightratio);
 	acceptance_ratio*=1.0f/(1+MAXLAMBDA);
 	acceptance_ratio*=1.0f/(1+2*lambda);
-	acceptance_ratio*=1.0f/pow(1+lambda,2.0f);
+	acceptance_ratio*=1.0f/(1+lambda);
 	acceptance_ratio*=1.0f/dgr->endtau;
 	acceptance_ratio*=phonon_pdf(dgr->phonon_ctx,lambda,tau2-tau1);
 	acceptance_ratio/=1.0f/nr_available_phonons;
