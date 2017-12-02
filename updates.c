@@ -274,8 +274,11 @@ void diagram_add_phonon_line(struct diagram_t *dgr,double tau1,double tau2,int l
 		to an interval tree
 	*/
 
+#warning Interval tree disabled
+#if 0
 	if(arc->lambda>=1)
 		interval_tree_insert(arc,&dgr->treeroot);
+#endif
 }
 
 void diagram_remove_start_midpoint(struct diagram_t *dgr,int c)
@@ -403,8 +406,11 @@ void diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 		If \lambda >= 1 we remove the present propagator from the interval tree
 	*/
 
+#warning Interval tree disabled
+#if 0
 	if(arc->lambda>=1)
 		interval_tree_remove(arc,&dgr->treeroot);
+#endif
 
 	for(c=arc->startmidpoint;c<arc->endmidpoint;c++)
 		get_right_neighbour(dgr,c)->arcs_over_me--;
