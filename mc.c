@@ -64,7 +64,7 @@ double calculate_propagators_and_vertices_ratio(struct diagram_t *numerator,int 
 #include "gnuplot_i/gnuplot_i.h"
 
 /*
-	This function checks if -- for every propagator -- one has |m| <= j
+	This function checks if -- for every propagator -- one has |m| <= j and j >= 0
 */
 
 bool propagators_are_physical(struct diagram_t *dgr)
@@ -98,29 +98,6 @@ bool angular_momentum_is_conserved(struct diagram_t *dgr)
 	last=get_free_propagator(dgr,get_nr_free_propagators(dgr)-1);
 
 	return (first->j==last->j)?(true):(false);
-}
-
-/*
-	The weight 'penalty' for diagrams not conserving angular momentum
-*/
-
-double unphysical_penalty(struct diagram_t *dgr)
-{
-	struct g0_t *first,*last;
-	double firstlen,lastlen,x;
-	
-	first=get_free_propagator(dgr,0);
-	last=get_free_propagator(dgr,get_nr_free_propagators(dgr)-1);
-
-	firstlen=first->endtau-first->starttau;
-	lastlen=last->endtau-last->starttau;
-
-	assert(firstlen>0);
-	assert(lastlen>0);
-
-	x=pow(last->j-first->j,2.0f)*(firstlen+lastlen);
-	
-	return exp(-x);
 }
 
 /*
@@ -396,6 +373,9 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	if(propagators_are_physical(dgr)==false)
 	{
+		printf("Removal of a phonon arc lead to unphysical state. Plase debug me!\n");
+		assert(false);
+
 		diagram_add_phonon_line(dgr,tau1,tau2,lambda,mu);
 		change_deltaj(dgr,endmidpoint,deltaj2);
 		change_deltaj(dgr,startmidpoint,deltaj1);
@@ -557,7 +537,6 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 	int proposed[DIAGRAM_NR_UPDATES],accepted[DIAGRAM_NR_UPDATES],rejected[DIAGRAM_NR_UPDATES];
 	int total_proposed,total_accepted,total_rejected;
 	long long int avgorder[2];
-	long long int physical_diagrams,unphysical_diagrams;
 	double avglength[2];
 
 	/*
@@ -581,8 +560,6 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 	
 	avgorder[0]=avgorder[1]=0;
 	avglength[0]=avglength[1]=0.0f;
-	
-	physical_diagrams=unphysical_diagrams=0;
 
 	/*
 		We print some informative message, and then we open the log file
@@ -719,38 +696,19 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 
 #ifndef NDEBUG
 		diagram_check_consistency(dgr);
+		assert(angular_momentum_is_conserved(dgr)==true);
 #endif
 
-#warning Statistics here, even order by order!
+		gsl_histogram_accumulate(g,dgr->endtau,dgr->sign);
 
-		if(angular_momentum_is_conserved(dgr))
-		{
-			double w;
-			
-			/*
-				The histograms are updated only if we are in the physical sector,
-				where the diagram conserves angular momentum.
-			*/
+		if(get_nr_phonons(dgr)==0)
+			gsl_histogram_accumulate(g0,dgr->endtau,dgr->sign);
 
-			w=dgr->sign;
-			
-			gsl_histogram_accumulate(g,dgr->endtau,w);
+		if(get_nr_phonons(dgr)==1)
+			gsl_histogram_accumulate(g1,dgr->endtau,dgr->sign);
 
-			if(get_nr_phonons(dgr)==0)
-				gsl_histogram_accumulate(g0,dgr->endtau,w);
-
-			if(get_nr_phonons(dgr)==1)
-				gsl_histogram_accumulate(g1,dgr->endtau,w);
-
-			if(get_nr_phonons(dgr)==2)
-				gsl_histogram_accumulate(g2,dgr->endtau,w);
-		
-			physical_diagrams++;
-		}
-		else
-		{
-			unphysical_diagrams++;
-		}
+		if(get_nr_phonons(dgr)==2)
+			gsl_histogram_accumulate(g2,dgr->endtau,dgr->sign);
 
 		avgorder[0]+=get_nr_phonons(dgr);
 		avgorder[1]++;
@@ -765,14 +723,12 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 			
 			if(config->progressbar)
 			{
-				double avg1,avg2,ratio;
+				double avg1,avg2;
 
 				avg1=((double)(avgorder[0]))/((double)(avgorder[1]));
 				avg2=((double)(avglength[0]))/((double)(avglength[1]));
 
-				ratio=((double)(physical_diagrams))/((double)(physical_diagrams+unphysical_diagrams));
-
-				snprintf(progressbar_text,1024,"Progress (avg. order: %f, avg. length: %f, P/(P+U): %f)",avg1,avg2,ratio);
+				snprintf(progressbar_text,1024,"Progress (avg. order: %f, avg. length: %f)",avg1,avg2);
 
 				progressbar_update_label(progress,progressbar_text);
 				progressbar_inc(progress);
