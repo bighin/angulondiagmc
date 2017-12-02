@@ -17,7 +17,6 @@
 #include "tests.h"
 #include "selfenergies.h"
 #include "config.h"
-#include "rbitree/rbtree.h"
 
 double try_diagmc_and_get_length(struct configuration_t *config,double chempot)
 {
@@ -40,7 +39,6 @@ void usage(char *argv0)
 	printf("Usage: %s <inifile>\n",argv0);
 	printf("       %s --tuning <inifile>\n",argv0);
 	printf("       %s --testgraphs\n",argv0);
-	printf("       %s --testrbitree\n",argv0);
 
 	exit(0);
 }
