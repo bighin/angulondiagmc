@@ -3,8 +3,8 @@ LIBS = -lncurses -lgsl -lm
 CC = gcc-mp-7
 #CC = clang-mp-5.0
 #CC = /opt/local/libexec/llvm-5.0/libexec/ccc-analyzer
-#CFLAGS = -DNDEBUG -O2 -Wall -fopenmp -std=gnu11 -I/opt/local/include/
-CFLAGS =  -Wall -std=gnu11 -O0 -g -I/opt/local/include/ -lgmalloc
+CFLAGS = -DNDEBUG -O2 -Wall -fopenmp -std=gnu11 -I/opt/local/include/ -pg
+#CFLAGS =  -Wall -std=gnu11 -O0 -g -I/opt/local/include/ -lgmalloc
 LDFLAGS = -L/opt/local/lib/
 
 # Linux-specific flags

@@ -243,10 +243,14 @@ int update_length(struct diagram_t *dgr,struct configuration_t *cfg)
 int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 {
 	int lambda,mu,deltaj1,deltaj2;
-	double tau1,tau2,weightratio,acceptance_ratio,oldweight;
+	double tau1,tau2,weightratio,acceptance_ratio;
 	bool is_accepted;
 
 	struct arc_t *thisline;
+
+#ifndef NDEBUG
+	double oldweight=diagram_weight(dgr);
+#endif
 
 	/*
 		Do we want to limit the simulation only to first order diagrams (or at a certain maximum order)?
@@ -284,8 +288,6 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 		We save the current diagram and the line is added...
 	*/
 
-	oldweight=diagram_weight(dgr);
-
 	weightratio=1.0f/calculate_propagators_and_vertices(dgr,0,get_nr_vertices(dgr)-1);
 
 	diagram_add_phonon_line(dgr,tau1,tau2,lambda,mu);
@@ -293,10 +295,8 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	/*
 		...and finally we fix the \Delta_j's at every vertex
 	*/
-
-	thisline=get_phonon_line(dgr,get_nr_phonons(dgr)-1);
-	weightratio*=calculate_arc_weight(dgr,thisline);
 	
+	thisline=get_phonon_line(dgr,get_nr_phonons(dgr)-1);
 	change_deltaj(dgr,thisline->endmidpoint,deltaj2);
 	change_deltaj(dgr,thisline->startmidpoint,deltaj1);
 
@@ -316,13 +316,16 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 		and we use it to update the diagram weight, as well.
 	*/
 
+	weightratio*=calculate_arc_weight(dgr,thisline);
 	weightratio*=calculate_propagators_and_vertices(dgr,0,get_nr_vertices(dgr)-1);
 
 	if(weightratio<0.0f)
 		dgr->sign*=-1;
 
+#ifndef NDEBUG
 	if((!isinf(diagram_weight(dgr)))&&(!isinf(oldweight)))
 		assert(almost_same_float(weightratio,diagram_weight(dgr)/oldweight));
+#endif
 
 	/*
 		Finally we calculate the acceptance ratio for the update.
@@ -360,8 +363,12 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	struct arc_t *arc;
 
 	int target,lambda,mu,nr_available_phonons,startmidpoint,endmidpoint,deltaj1,deltaj2;
-	double weightratio,targetweight,acceptance_ratio,tau1,tau2,oldweight;
+	double weightratio,targetweight,acceptance_ratio,tau1,tau2;
 	bool is_accepted;
+
+#ifndef NDEBUG
+	double oldweight=diagram_weight(dgr);
+#endif
 
 	nr_available_phonons=get_nr_phonons(dgr);
 
@@ -381,13 +388,10 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	deltaj1=deltaj(dgr,startmidpoint);
 	deltaj2=deltaj(dgr,endmidpoint);
 
-	oldweight=diagram_weight(dgr);
-
 	weightratio=1.0f/calculate_propagators_and_vertices(dgr,0,get_nr_vertices(dgr)-1);
 
 	change_deltaj(dgr,endmidpoint,0);
 	change_deltaj(dgr,startmidpoint,0);
-
 	diagram_remove_phonon_line(dgr,target);
 
 	if(propagators_are_physical(dgr)==false)
@@ -401,15 +405,16 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 		return UPDATE_REJECTED;
 	}
 
-
 	weightratio/=targetweight;
 	weightratio*=calculate_propagators_and_vertices(dgr,0,get_nr_vertices(dgr)-1);
 
 	if(weightratio<0.0f)
 		dgr->sign*=-1;
 
+#ifndef NDEBUG
 	if((!isinf(diagram_weight(dgr)))&&(!isinf(oldweight)))
 		assert(almost_same_float(weightratio,diagram_weight(dgr)/oldweight));
+#endif
 
 	/*
 		Finally we calculate the acceptance ratio for the update.

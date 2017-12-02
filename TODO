@@ -1,8 +1,4 @@
-MAXLAMBDA > 0 and recouple() update
-
-update_add_phonon() and update_remove_phonon() could avoid using diagram_clone() -- which is quite expensive --
-by calculating the weightratio without creating a new diagram. Then we add add/remove a line only if the update
-has been accepted.
+When adding a new phonon line we should use a binary search to get the insertion point, this would make strong coupling simulations faster.
 
 Support in Makefile for cppcheck and clang-analyzer, and maybe try getting access to Coverity Scan
 
