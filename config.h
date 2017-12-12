@@ -29,6 +29,7 @@ struct configuration_t
 	/* "sampling" section */
 
 	int iterations;
+	int thermalization;
 	double timelimit;
 	int bins;
 	double width;

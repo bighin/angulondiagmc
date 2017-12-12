@@ -813,7 +813,7 @@ int fchi(unsigned ndim,const double *x,void *fdata,unsigned fdim,double *fval)
 	b=exp(-deltat*omegak(k,n));
 
 	z=a*b*pow(1-t,-2.0f);
-	
+
 	fval[0]=z;
 
 	return 0;

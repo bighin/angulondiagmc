@@ -10,6 +10,8 @@
 #include "debug.h"
 #include "aux.h"
 #include "phonon.h"
+#include "mc.h"
+#include "physics.h"
 
 void debug_propagators(struct diagram_t *dgr)
 {
@@ -156,7 +158,7 @@ void debug_weight(struct diagram_t *dgr)
 		
 		localret=calculate_free_propagator_weight(dgr,get_free_propagator(dgr,c));
 		printf("Free propagator: %f\n",localret);
-	
+
 		ret*=localret;
 	}
 
@@ -190,4 +192,3 @@ void debug_weight(struct diagram_t *dgr)
 
 	printf("Final result: %f\n",ret);
 }
-

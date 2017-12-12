@@ -7,8 +7,6 @@
 #include "stat.h"
 #include "selfenergies.h"
 
-void test_phonon_ctx(struct phonon_ctx_t *ctx);
-
 /*
 	The values of corresponding to the k integral for each line
 	joining two vertices are precalculated and an interpolation is
@@ -29,6 +27,8 @@ struct phonon_ctx_t *init_phonon_ctx(double maxtau,int nsteps,double n,bool verb
 
 	ret->n=n;
 	ret->nsteps=nsteps;
+	ret->maxtau=maxtau;
+
 	step=maxtau/nsteps;
 
 	if(verbose)
@@ -61,6 +61,9 @@ struct phonon_ctx_t *init_phonon_ctx(double maxtau,int nsteps,double n,bool verb
 
 	/*
 		We fill the tables...
+	
+		y0 holds the phonon distrivution \chi_\lambda for \lambda = 0
+		y1 holds the phonon distrivution \chi_\lambda for \lambda = 1
 	*/
 
 	for(c=0;c<nsteps;c++)
@@ -98,7 +101,14 @@ struct phonon_ctx_t *init_phonon_ctx(double maxtau,int nsteps,double n,bool verb
 	}
 
 	/*
-		At last we create the interpolations...
+		At this points one has that:
+	
+		ncy0 contains the normalized, cumulative phonon distribution for \lambda = 0 and
+		ncy1 contains the normalized, cumulative phonon distribution for \lambda = 1
+
+		At last, we create the interpolations...
+	
+		y0int will contain the unnormalized phonon distribution, a similarly for y1int.
 	*/
 
 	ret->y0int=init_interpolation(ret->x,ret->y0,nsteps);
@@ -106,7 +116,7 @@ struct phonon_ctx_t *init_phonon_ctx(double maxtau,int nsteps,double n,bool verb
 
 	/*
 		...and the interpolations for the inverse of the normalized, cumulative distribution.
-		
+
 		Since most of datapoints will be 1.0f, we can use a smaller number of steps, saving memory and time.
 	*/
 
@@ -130,8 +140,18 @@ struct phonon_ctx_t *init_phonon_ctx(double maxtau,int nsteps,double n,bool verb
 		}
 	}
 
+	nsteps0=nsteps1=c;
+
+	ret->ncy0int=init_interpolation(ret->x,ret->ncy0,nsteps0);
+	ret->ncy1int=init_interpolation(ret->x,ret->ncy1,nsteps1);
+
 	ret->invncy0int=init_interpolation(ret->ncy0,ret->x,nsteps0);
 	ret->invncy1int=init_interpolation(ret->ncy1,ret->x,nsteps1);
+
+	/*
+		ncy0int will contain the normalized, cumulative phonon distribution, and similarly for ncy1int.
+		invncy0int will contain the normalized, cumulative, *inverse* phonon distribution, and similarly for invncy1int.
+	*/
 
 	ret->refs=0;
 
@@ -153,6 +173,9 @@ void fini_phonon_ctx(struct phonon_ctx_t *ctx)
 
 		fini_interpolation(ctx->y0int);
 		fini_interpolation(ctx->y1int);
+
+		fini_interpolation(ctx->ncy0int);
+		fini_interpolation(ctx->ncy1int);
 
 		fini_interpolation(ctx->invncy0int);
 		fini_interpolation(ctx->invncy1int);
@@ -258,7 +281,7 @@ void test_phonon_ctx(struct phonon_ctx_t *ctx)
 	for(lambda=0;lambda<=1;lambda++)
 	{
 		int d;
-		double deltatau;
+		double x,deltatau;
 		char fname[1024];
 				
 		snprintf(fname,1024,"histogram.%d.test.dat",lambda);
@@ -275,10 +298,138 @@ void test_phonon_ctx(struct phonon_ctx_t *ctx)
 		snprintf(fname,1024,"phononpdf.%d.test.dat",lambda);
 		out=fopen(fname,"w+");
 
-		for(deltatau=0.0f;deltatau<=10;deltatau+=0.00125f)
-			fprintf(out,"%f %f\n",deltatau,phonon_pdf(ctx,lambda,deltatau));
+		for(deltatau=0.0f;deltatau<=ctx->maxtau;deltatau+=0.125f)
+		{
+			fprintf(out,"%f %f ",deltatau,phonon_pdf(ctx,lambda,deltatau));
+		
+			if(lambda==0)
+				fprintf(out,"%f ",get_point(ctx->ncy0int,deltatau));
+			else
+				fprintf(out,"%f ",get_point(ctx->ncy1int,deltatau));
+
+			fprintf(out,"\n");
+		}
 
 		if(out)
 			fclose(out);
+
+		snprintf(fname,1024,"phononpdf.inverse.%d.test.dat",lambda);
+		out=fopen(fname,"w+");
+
+		for(x=0.0f;x<=1.0f;x+=0.000125f)
+		{
+			if(lambda==0)
+				fprintf(out,"%f %f\n",x,get_point(ctx->invncy0int,x));
+			else if(lambda==1)
+				fprintf(out,"%f %f\n",x,get_point(ctx->invncy1int,x));
+		}
+
+		if(out)
+			fclose(out);
+
+		snprintf(fname,1024,"phononpdf.id1.%d.test.dat",lambda);
+		out=fopen(fname,"w+");
+
+		for(x=0.0f;x<=1.0f;x+=0.000125f)
+		{
+			if(lambda==0)
+				fprintf(out,"%f %f\n",x,get_point(ctx->ncy0int,get_point(ctx->invncy0int,x)));
+			else if(lambda==1)
+				fprintf(out,"%f %f\n",x,get_point(ctx->ncy1int,get_point(ctx->invncy1int,x)));
+		}
+
+		if(out)
+			fclose(out);
+
+		snprintf(fname,1024,"phononpdf.id2.%d.test.dat",lambda);
+		out=fopen(fname,"w+");
+
+		for(deltatau=0.0f;deltatau<=ctx->maxtau;deltatau+=0.00125f)
+		{
+			if(lambda==0)
+				fprintf(out,"%f %f\n",deltatau,get_point(ctx->invncy0int,get_point(ctx->ncy0int,deltatau)));
+			else if(lambda==1)
+				fprintf(out,"%f %f\n",deltatau,get_point(ctx->invncy1int,get_point(ctx->ncy1int,deltatau)));
+		}
+
+		if(out)
+			fclose(out);
+
 	}
+}
+
+double phonon_truncated_dist(gsl_rng *rctx,struct phonon_ctx_t *ctx,int lambda,double tau1,double tau2)
+{
+        double x1,x2,x,retval;
+	struct interpolation_t *it,*is;
+
+	assert((lambda==0)||(lambda==1));
+	assert(tau2>=tau1);
+
+	switch(lambda)
+	{
+		case 0:
+		it=ctx->invncy0int;
+		is=ctx->ncy0int;
+		break;
+
+		case 1:
+		it=ctx->invncy1int;
+		is=ctx->ncy1int;
+		break;
+		
+		/*
+			To silence silly compiler warnings.
+		*/
+		
+		default:
+		it=NULL;
+		is=NULL;
+		break;
+	}
+
+	x1=(tau1<=ctx->maxtau)?(get_point(is,tau1)):(1.0f);
+	x2=(tau2<=ctx->maxtau)?(get_point(is,tau2)):(1.0f);
+
+	assert(x2>=x1);
+	assert(x1>=0);
+	assert(x2>=0);
+
+	x=x1+(x2-x1)*gsl_rng_uniform_pos(rctx);
+
+	retval=get_point(it,x);
+
+	assert(retval>=tau1);
+	assert(retval<=tau2);
+	
+	return retval;
+}
+
+double phonon_truncated_pdf(struct phonon_ctx_t *ctx,int lambda,double tau1,double tau2,double deltatau)
+{
+	double c;
+
+	assert((lambda==0)||(lambda==1));
+	assert((tau1<=deltatau)&&(deltatau<=tau2));
+
+	switch(lambda)
+	{
+		case 0:
+		c=ctx->c0*(get_point(ctx->ncy0int,tau2)-get_point(ctx->ncy0int,tau1));
+		break;
+
+		case 1:
+		c=ctx->c1*(get_point(ctx->ncy1int,tau2)-get_point(ctx->ncy1int,tau1));
+		break;
+
+		/*
+			To silence silly compiler warnings.
+		*/
+	
+		default:
+		c=1.0f;
+		break;
+	}
+
+	return chi_lambda(ctx,lambda,deltatau)/c;
 }

@@ -14,6 +14,7 @@
 #include "stat.h"
 #include "phonon.h"
 #include "mc.h"
+#include "physics.h"
 
 int vertex_get_j1(struct vertex_t *vif)
 {
@@ -80,7 +81,7 @@ struct diagram_t *init_diagram(struct diagram_parameters_t *dpars,bool verbose)
 	
 	g0->arcs_over_me=0;
 
-	ret->sign=(ISEVEN(g0->j))?(+1):(-1);
+	ret->sign=1;
 
 	/*
 		We initialize the interval tree that will keep
@@ -93,7 +94,7 @@ struct diagram_t *init_diagram(struct diagram_parameters_t *dpars,bool verbose)
 		Finally we initialize the phonon context
 	*/
 
-	ret->phonon_ctx=init_phonon_ctx(30.0f,32*1024,dpars->n,verbose);
+	ret->phonon_ctx=init_phonon_ctx(120.0f,128*1024,dpars->n,verbose);
 
 	return ret;
 }
@@ -274,34 +275,37 @@ void diagram_check_consistency(struct diagram_t *dgr)
 		if we are in the physical sector
 	*/
 
-	for(c=0;c<get_nr_vertices(dgr);c++)
+	if(configuration_is_physical(dgr)==true)
 	{
-		int j1,m1,j2,m2,j3,m3;
-		double coupling,epsilon;
-
-		struct vertex_t *thisvertex=get_vertex(dgr,c);
-
-		j1=thisvertex->left->j;
-		m1=thisvertex->left->m;
-
-		j2=thisvertex->right->j;
-		m2=thisvertex->right->m;
-
-		j3=thisvertex->phononline->lambda;
-		m3=thisvertex->phononline->mu;
-
-		coupling=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,0,0,0);		
-		epsilon=1e-10;
-
-		if(fabs(coupling)<=epsilon)
+		for(c=0;c<get_nr_vertices(dgr);c++)
 		{
-			printf("Wrong coupling: (%d, %d) (%d, %d) (%d, %d)\n",j1,m1,j2,m2,j3,m3);
-			
-			if(get_nr_vertices(dgr)<10)
-				print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
-		}
+			int j1,m1,j2,m2,j3,m3;
+			double coupling,epsilon;
 
-		assert(fabs(coupling)>epsilon);
+			struct vertex_t *thisvertex=get_vertex(dgr,c);
+
+			j1=thisvertex->left->j;
+			m1=thisvertex->left->m;
+
+			j2=thisvertex->right->j;
+			m2=thisvertex->right->m;
+
+			j3=thisvertex->phononline->lambda;
+			m3=thisvertex->phononline->mu;
+
+			coupling=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,0,0,0);		
+			epsilon=1e-10;
+
+			if(fabs(coupling)<=epsilon)
+			{
+				printf("Wrong coupling: (%d, %d) (%d, %d) (%d, %d)\n",j1,m1,j2,m2,j3,m3);
+			
+				if(get_nr_vertices(dgr)<10)
+					print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
+			}
+
+			assert(fabs(coupling)>epsilon);
+		}
 	}
 
 	/*
@@ -385,9 +389,12 @@ void diagram_check_consistency(struct diagram_t *dgr)
 		(void)(j3);
 		(void)(count);
 
-		assert(count==0);
+		if(configuration_is_physical(dgr)==true)
+		{
+			assert(count==0);
 
-		assert(ISEVEN(j1+j2+j3));
+			assert(ISEVEN(j1+j2+j3));
+		}
 	}
 	
 	/*
@@ -411,64 +418,6 @@ bool is_last_propagator(struct diagram_t *dgr,struct g0_t *g0)
 	assert(result==((g0->endtau==dgr->endtau)?(true):(false)));
 
 	return result;
-}
-
-double calculate_arc_weight(struct diagram_t *dgr,struct arc_t *arc)
-{
-	double timediff;
-	double ret=1.0f;
-
-	timediff=arc->endtau-arc->starttau;
-
-	assert(timediff>=0);
-
-	ret*=chi_lambda(dgr->phonon_ctx,arc->lambda,timediff);
-	ret*=pow(-1.0f,arc->lambda);
-
-	return ret;
-}
-
-double calculate_free_propagator_weight(struct diagram_t *dgr,struct g0_t *g0)
-{
-	double en,tau,phase;
-	int j;
-
-	j=g0->j;
-	en=j*(j+1)-dgr->chempot;
-	tau=g0->endtau-g0->starttau;
-
-	phase=1.0f;
-
-	if(is_last_propagator(dgr,g0)==false)
-		phase=pow(-1.0f,j);
-
-	return exp(-en*tau)*phase;
-}
-
-double calculate_vertex_weight(struct diagram_t *dgr,int index)
-{
-	int j1,j2,j3,m1,m2,m3;
-	double coupling;
-
-	struct vertex_t *thisvertex=get_vertex(dgr,index);
-
-	j1=thisvertex->left->j;
-	j2=thisvertex->right->j;
-	j3=thisvertex->phononline->lambda;
-
-	m1=thisvertex->left->m;
-	m2=thisvertex->right->m;
-	m3=thisvertex->phononline->mu;
-
-	coupling=sqrtf((2.0f*j1+1)*(2.0f*j2+1)*(2.0f*j3+1)/(4.0f*M_PI));
-	coupling*=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,0,0,0);
-		
-	if(index==thisvertex->phononline->startmidpoint)
-		coupling*=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,-2*m1,2*m2,2*m3);
-	else
-		coupling*=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,-2*m1,2*m2,-2*m3);
-
-	return coupling;
 }
 
 double diagram_weight(struct diagram_t *dgr)
@@ -603,11 +552,9 @@ int print_diagram(struct diagram_t *dgr,int flags)
 	}
 
 	if(flags&PRINT_INFO0)
-	{
-		char sector=(angular_momentum_is_conserved(dgr)==true)?('P'):('E');
-	
+	{	
 		if(!(flags&PRINT_DRYRUN))
-			printf("\n(diagram order: %d, local weight: %f, length: %f, sector: %c)\n",get_nr_phonons(dgr),diagram_weight(dgr),dgr->endtau,sector);
+			printf("\n(diagram order: %d, local weight: %f, length: %f)\n",get_nr_phonons(dgr),diagram_weight(dgr),dgr->endtau);
 		
 		plines+=2;
 	}

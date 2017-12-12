@@ -15,6 +15,7 @@
 #include "mc.h"
 #include "graphs.h"
 #include "tests.h"
+#include "phonon.h"
 #include "selfenergies.h"
 #include "config.h"
 
@@ -62,6 +63,14 @@ int main(int argc,char *argv[])
 		if(strcmp(argv[c],"--testgraphs")==0)
 		{
 			test_graphical_machinery();
+			continue;
+		}
+
+		if(strcmp(argv[c],"--testphonons")==0)
+		{
+			struct phonon_ctx_t *ctx=init_phonon_ctx(120.0f,128*1024,exp(-10),true);
+
+			test_phonon_ctx(ctx);
 			continue;
 		}
 

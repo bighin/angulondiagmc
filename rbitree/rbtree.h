@@ -93,9 +93,9 @@ struct rb_node *rb_first_postorder(const struct rb_root *);
 struct rb_node *rb_next_postorder(const struct rb_node *);
 
 /* Fast replacement of a single node without remove/rebalance/add/rebalance */
-void rb_replace_node(struct rb_node *victim, struct rb_node *new,
+void rb_replace_node(struct rb_node *victim, struct rb_node *newnode,
 			    struct rb_root *root);
-void rb_replace_node_rcu(struct rb_node *victim, struct rb_node *new,
+void rb_replace_node_rcu(struct rb_node *victim, struct rb_node *newnode,
 				struct rb_root *root);
 
 void rb_link_node(struct rb_node *node, struct rb_node *parent,

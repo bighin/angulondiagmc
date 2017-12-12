@@ -11,6 +11,7 @@
 #include <sys/time.h>
 
 #include "mc.h"
+#include "physics.h"
 #include "diagrams.h"
 #include "updates.h"
 #include "stat.h"
@@ -19,149 +20,13 @@
 #include "phonon.h"
 #include "debug.h"
 #include "config.h"
-
-#warning UseMe!
-#if 0
-
-double calculate_propagators_and_vertices_ratio(struct diagram_t *numerator,int startmidpoint1,int endmidpoint1,
-						struct diagram_t *denominator,int startmidpoint2,int endmidpoint2)
-{
-	assert(endmidpoint1>=startmidpoint1);
-	assert(endmidpoint2>=startmidpoint2);
-
-	assert((endmidpoint1-startmidpoint1)==(endmidpoint2-startmidpoint2));
-	x
-	int length=endmidpoint1-startmidpoint1;
-	double ret=0.0f;
-
-	for(c=0;c<=length;c++)
-	{
-
-#warning This ratio can be optimized (taken in a single step)
-
-		ret*=calculate_free_propagator_weight(numerator,get_left_neighbour(numerator,startmidpoint1+c));
-		ret/=calculate_free_propagator_weight(denominator,get_left_neighbour(denominator,startmidpoint2+c));
-
-		ret*=calculate_vertex_weight(numerator,startmidpoint1+c);
-		ret/=calculate_vertex_weight(denominator,startmidpoint2+c);
-	}
-
-	assert((startmidpoint1+c)==endmidpoint1);
-	assert((startmidpoint2+c)==endmidpoint2);
-
-#warning This ratio can be optimized (taken in a single step)
-
-	ret*=calculate_free_propagator_weight(numerator,get_right_neighbour(numerator,endmidpoint1));
-	ret/=calculate_free_propagator_weight(denominator,get_right_neighbour(denominator,endmidpoint2));
-
-	return ret;
-}
-
-#endif
-
 #include "inih/ini.h"
 #include "libprogressbar/progressbar.h"
 #include "gnuplot_i/gnuplot_i.h"
 
 /*
-	This function checks if -- for every propagator -- one has |m| <= j and j >= 0
-*/
-
-bool propagators_are_physical(struct diagram_t *dgr)
-{
-	int c;
-
-	for(c=0;c<get_nr_free_propagators(dgr);c++)
-	{
-		struct g0_t *g0=get_free_propagator(dgr,c);
-
-		if(g0->j<0)
-			return false;
-	
-		if(abs(g0->m)>g0->j)
-			return false;
-	}
-
-	return true;
-}
-
-/*
-	This function checks if the diagrams conserves the angular momentum,
-	i.e. if the first and last free propagators have the same angular momentum.
-*/
-
-bool angular_momentum_is_conserved(struct diagram_t *dgr)
-{
-	struct g0_t *first,*last;
-	
-	first=get_free_propagator(dgr,0);
-	last=get_free_propagator(dgr,get_nr_free_propagators(dgr)-1);
-
-	return (first->j==last->j)?(true):(false);
-}
-
-/*
-	This routine calculates the weight all the propagators between two midpoints,
-	including the propagators preceding the first midpoint, and the propagators following
-	the last midpoint.
-
-	The weight of all enclosed vertices is also calculated.
-*/
-
-double calculate_propagators_and_vertices(struct diagram_t *dgr,int startmidpoint,int endmidpoint)
-{
-	double ret=1.0f;
-	int c;
-
-	for(c=startmidpoint;c<=endmidpoint;c++)
-	{
-		ret*=calculate_free_propagator_weight(dgr,get_left_neighbour(dgr,c));
-		ret*=calculate_vertex_weight(dgr,c);
-	}
-
-	ret*=calculate_free_propagator_weight(dgr,get_right_neighbour(dgr,endmidpoint));
-
-	return ret;
-}
-
-/*
-	(Delta_j)_i is defined as the difference in angular momentum between
-	the free propagators before and after the i-th vertex, i.e.
-
-	(Delta_j)_i = j_{i+1} - j_i
-
-	The following functions allow to get and set (Delta_j)_i.
-*/
-
-int deltaj(struct diagram_t *dgr,int vertex)
-{
-	struct g0_t *left,*right;
-	
-	left=get_left_neighbour(dgr,vertex);
-	right=get_right_neighbour(dgr,vertex);
-
-	return right->j-left->j;
-}
-
-void change_deltaj(struct diagram_t *dgr,int index,int newdeltaj)
-{
-	int c,nr_free_propagators,olddeltaj;
-	
-	nr_free_propagators=get_nr_free_propagators(dgr);
-	olddeltaj=deltaj(dgr,index);
-
-	for(c=index+1;c<nr_free_propagators;c++)
-		get_free_propagator(dgr,c)->j+=newdeltaj-olddeltaj;
-}
-
-/*
 	Now it's time to start with all the different updates!
 */
-
-#define UPDATE_UNPHYSICAL	(0)
-#define UPDATE_REJECTED		(1)
-#define UPDATE_ACCEPTED		(2)
-#define UPDATE_ERROR		(3)
 
 int update_length(struct diagram_t *dgr,struct configuration_t *cfg)
 {
@@ -277,17 +142,20 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	change_deltaj(dgr,thisline->endmidpoint,deltaj2);
 	change_deltaj(dgr,thisline->startmidpoint,deltaj1);
 
-	if(propagators_are_physical(dgr)==false)
-	{	
+	if(propagators_are_allowed(dgr)==false)
+	{
 		change_deltaj(dgr,thisline->endmidpoint,0);
 		change_deltaj(dgr,thisline->startmidpoint,0);
 		diagram_remove_phonon_line(dgr,get_nr_phonons(dgr)-1);
 
-                assert(almost_same_float(oldweight,diagram_weight(dgr))==true);
+#ifndef NDEBUG
+		if(isfinite(oldweight)&&isfinite(diagram_weight(dgr)))
+			assert(almost_same_float(oldweight,diagram_weight(dgr))==true);
+#endif
 
 		return UPDATE_REJECTED;
 	}
-
+	
 	/*
 		We calculate the weight ratio (the fundamental quantity in accepting/rejecting the update)
 		and we use it to update the diagram weight, as well.
@@ -310,7 +178,7 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	acceptance_ratio=fabs(weightratio);
 	acceptance_ratio/=1.0f/(1+MAXLAMBDA);
-	acceptance_ratio/=1.0f/(1+2*lambda);	
+	acceptance_ratio/=1.0f/(1+2*lambda);
 	acceptance_ratio/=1.0f/(1+lambda);
 	acceptance_ratio/=1.0f/dgr->endtau;
 	acceptance_ratio/=phonon_pdf(dgr->phonon_ctx,lambda,tau2-tau1);
@@ -327,7 +195,10 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 		if(weightratio<0.0f)
 			dgr->sign*=-1;
 
-                assert(almost_same_float(oldweight,diagram_weight(dgr))==true);
+#ifndef NDEBUG
+		if(isfinite(oldweight)&&isfinite(diagram_weight(dgr)))
+			assert(almost_same_float(oldweight,diagram_weight(dgr))==true);
+#endif
 
 		return UPDATE_REJECTED;
 	}
@@ -371,13 +242,16 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	change_deltaj(dgr,startmidpoint,0);
 	diagram_remove_phonon_line(dgr,target);
 
-	if(propagators_are_physical(dgr)==false)
+	if(propagators_are_allowed(dgr)==false)
 	{
 		diagram_add_phonon_line(dgr,tau1,tau2,lambda,mu);
 		change_deltaj(dgr,endmidpoint,deltaj2);
 		change_deltaj(dgr,startmidpoint,deltaj1);
 
-                assert(almost_same_float(oldweight,diagram_weight(dgr))==true);
+#ifndef NDEBUG
+		if(isfinite(oldweight)&&isfinite(diagram_weight(dgr)))
+			assert(almost_same_float(oldweight,diagram_weight(dgr))==true);
+#endif
 
 		return UPDATE_REJECTED;
 	}
@@ -416,10 +290,319 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 		if(weightratio<0.0f)
 			dgr->sign*=-1;
 
-                assert(almost_same_float(oldweight,diagram_weight(dgr))==true);
+#ifndef NDEBUG
+		if(isfinite(oldweight)&&isfinite(diagram_weight(dgr)))
+			assert(almost_same_float(oldweight,diagram_weight(dgr))==true);
+#endif
 
 		return UPDATE_REJECTED;
 	}
+
+	return UPDATE_ACCEPTED;
+}
+
+#warning Probably truncated_phonon_dist() has numerical errors!
+
+int update_shift_vertex(struct diagram_t *dgr,struct configuration_t *cfg)
+{
+	int target;
+	double min,max,minlength,maxlength,oldlength,newlength,oldtau,newtau,weightratio,acceptance_ratio;
+
+#ifndef NDEBUG
+	double oldweight=diagram_weight(dgr);
+#endif
+
+	struct vertex_t *vertex;
+	struct g0_t *left,*right;
+	struct arc_t *arc;
+
+	bool is_accepted,startshere;
+
+	if(get_nr_vertices(dgr)<=0)
+		return UPDATE_UNPHYSICAL;
+
+	/*
+		We select a random vertex...
+	*/
+
+	target=gsl_rng_uniform_int(dgr->rng_ctx,get_nr_vertices(dgr));
+	vertex=get_vertex(dgr,target);
+
+	/*
+		...and we load the informations about the left and right neighbours.
+	*/
+
+	left=vertex->left;
+	right=vertex->right;
+	arc=vertex->phononline;
+
+	assert((left!=NULL)&&(right!=NULL));
+	assert(left->endtau==right->starttau);
+	assert(left->endtau==get_midpoint(dgr,target));
+
+	/*
+		We load the position of the previous vertex, of the next vertex
+		and of the selected vertex, which we will try to move.
+	*/
+
+	min=left->starttau;
+	max=right->endtau;
+	oldtau=get_midpoint(dgr,target);
+	oldlength=arc->endtau-arc->starttau;
+
+	assert((min<=oldtau)&&(oldtau<=max));
+	assert((arc->starttau==get_midpoint(dgr,target))||(arc->endtau==get_midpoint(dgr,target)));
+
+	weightratio=1.0f;
+	weightratio/=calculate_free_propagator_weight(dgr,left);
+	weightratio/=calculate_free_propagator_weight(dgr,right);
+	weightratio/=calculate_arc_weight(dgr,arc);
+
+	if(arc->starttau==get_midpoint(dgr,target))
+	{
+		/*
+			In this case the phonon *starts* at the vertex we selected
+
+ 		                 _____....
+			        |
+			..._____|_____....
+		*/
+
+		minlength=arc->endtau-max;
+		maxlength=arc->endtau-min;
+		
+		assert(minlength>=0.0f);
+		assert(maxlength>=0.0f);
+		assert(maxlength>minlength);
+
+		/*
+			We have to select oldtau in the interval [min,max]
+			according a (truncated) phonon distribution function.
+		*/
+
+		newtau=arc->endtau-phonon_truncated_dist(dgr->rng_ctx,dgr->phonon_ctx,arc->lambda,minlength,maxlength);
+
+		left->endtau=newtau;
+		right->starttau=newtau;
+		arc->starttau=newtau;
+		*((double *)(vlist_get_element(dgr->midpoints,target)))=newtau;
+
+		startshere=true;
+	}
+	else
+	{
+		/*
+			In this case the phonon *ends* at the vertex we selected
+
+		        ..._____
+	        		|
+			..._____|_____....
+		*/
+
+		minlength=min-arc->starttau;
+		maxlength=max-arc->starttau;
+
+		assert(minlength>=0.0f);
+		assert(maxlength>=0.0f);
+		assert(maxlength>minlength);
+
+		newtau=arc->starttau+phonon_truncated_dist(dgr->rng_ctx,dgr->phonon_ctx,arc->lambda,minlength,maxlength);
+
+		left->endtau=newtau;
+		right->starttau=newtau;
+		arc->endtau=newtau;
+		*((double *)(vlist_get_element(dgr->midpoints,target)))=newtau;
+
+
+		startshere=false;
+	}
+
+	weightratio*=calculate_free_propagator_weight(dgr,left);
+	weightratio*=calculate_free_propagator_weight(dgr,right);
+	weightratio*=calculate_arc_weight(dgr,arc);
+
+	assert(weightratio>=0.0f);
+
+#ifndef NDEBUG
+	diagram_check_consistency(dgr);
+#endif
+
+	/*
+		Finally we calculate the acceptance ratio for the update.
+	*/
+
+	newlength=arc->endtau-arc->starttau;
+
+	acceptance_ratio=weightratio;
+	acceptance_ratio*=phonon_truncated_pdf(dgr->phonon_ctx,arc->lambda,minlength,maxlength,oldlength);
+	acceptance_ratio/=phonon_truncated_pdf(dgr->phonon_ctx,arc->lambda,minlength,maxlength,newlength);
+
+	is_accepted=(gsl_rng_uniform(dgr->rng_ctx)<acceptance_ratio)?(true):(false);
+
+	if(is_accepted==false)
+	{
+		left->endtau=oldtau;
+		right->starttau=oldtau;
+		*((double *)(vlist_get_element(dgr->midpoints,target)))=oldtau;
+		
+		if(startshere==true)
+			arc->starttau=oldtau;
+		else
+			arc->endtau=oldtau;
+
+#ifndef NDEBUG
+		if(isfinite(oldweight)&&isfinite(diagram_weight(dgr)))
+			assert(almost_same_float(oldweight,diagram_weight(dgr))==true);
+#endif
+
+		return UPDATE_REJECTED;
+	}
+
+	return UPDATE_ACCEPTED;
+}
+
+int update_swap_deltajs(struct diagram_t *dgr,struct configuration_t *cfg)
+{
+	int target,deltaj1,deltaj2;
+	double acceptance_ratio,weightratio;
+	bool is_accepted;
+
+	struct arc_t *arc;
+
+#ifndef NDEBUG
+	double oldweight=diagram_weight(dgr);
+#endif
+
+	if(get_nr_phonons(dgr)<=0)
+		return UPDATE_UNPHYSICAL;
+
+	target=gsl_rng_uniform_int(dgr->rng_ctx,get_nr_phonons(dgr));
+	arc=get_phonon_line(dgr,target);
+	
+	deltaj1=deltaj(dgr,arc->startmidpoint);
+	deltaj2=deltaj(dgr,arc->endmidpoint);
+
+	/*
+		We swap the Delta_j's
+	*/
+
+
+	weightratio=1.0f/calculate_propagators_and_vertices(dgr,0,get_nr_vertices(dgr)-1);
+
+	change_deltaj(dgr,arc->endmidpoint,deltaj1);
+	change_deltaj(dgr,arc->startmidpoint,deltaj2);
+
+	if(propagators_are_allowed(dgr)==false)
+	{	
+		change_deltaj(dgr,arc->endmidpoint,deltaj2);
+		change_deltaj(dgr,arc->startmidpoint,deltaj1);
+
+#ifndef NDEBUG
+		if(isfinite(oldweight)&&isfinite(diagram_weight(dgr)))
+			assert(almost_same_float(oldweight,diagram_weight(dgr))==true);
+#endif
+
+		return UPDATE_REJECTED;
+	}
+
+	weightratio*=calculate_propagators_and_vertices(dgr,0,get_nr_vertices(dgr)-1);
+
+	/*
+		Acceptance ratio is just the weight ratio.
+	*/
+
+	acceptance_ratio=fabs(weightratio);
+
+	is_accepted=(gsl_rng_uniform(dgr->rng_ctx)<acceptance_ratio)?(true):(false);
+
+	if(is_accepted==false)
+	{
+		change_deltaj(dgr,arc->endmidpoint,deltaj2);
+		change_deltaj(dgr,arc->startmidpoint,deltaj1);
+
+#ifndef NDEBUG
+		if(isfinite(oldweight)&&isfinite(diagram_weight(dgr)))
+			assert(almost_same_float(oldweight,diagram_weight(dgr))==true);
+#endif
+
+		return UPDATE_REJECTED;
+	}
+
+	if(weightratio<0.0f)
+		dgr->sign*=-1;
+
+	return UPDATE_ACCEPTED;
+}
+
+int update_change_mu(struct diagram_t *dgr,struct configuration_t *cfg)
+{
+	int c,target,oldmu,newmu;
+	double acceptance_ratio,weightratio;
+	bool is_accepted;
+
+	struct arc_t *arc;
+
+#ifndef NDEBUG
+	double oldweight=diagram_weight(dgr);
+#endif
+
+	if(get_nr_phonons(dgr)<=0)
+		return UPDATE_UNPHYSICAL;
+
+#warning It would be better to select only arcs with \lambda != 0
+
+	target=gsl_rng_uniform_int(dgr->rng_ctx,get_nr_phonons(dgr));
+	arc=get_phonon_line(dgr,target);
+	oldmu=arc->mu;
+	newmu=gsl_rng_uniform_int(dgr->rng_ctx,1+2*arc->lambda)-arc->lambda;
+
+	weightratio=1.0f/calculate_propagators_and_vertices(dgr,0,get_nr_vertices(dgr)-1);
+
+	for(c=arc->startmidpoint+1;c<=arc->endmidpoint;c++)
+		get_free_propagator(dgr,c)->m-=newmu-oldmu;
+
+	if(propagators_are_allowed(dgr)==false)
+	{
+		arc->mu=oldmu;
+
+		for(c=arc->startmidpoint+1;c<=arc->endmidpoint;c++)
+			get_free_propagator(dgr,c)->m+=newmu-oldmu;
+
+#ifndef NDEBUG
+		if(isfinite(oldweight)&&isfinite(diagram_weight(dgr)))
+			assert(almost_same_float(oldweight,diagram_weight(dgr))==true);
+#endif
+
+		return UPDATE_REJECTED;
+	}
+
+	weightratio*=calculate_propagators_and_vertices(dgr,0,get_nr_vertices(dgr)-1);
+
+	/*
+		Acceptance ratio is just the weight ratio.
+	*/
+
+	acceptance_ratio=fabs(weightratio);
+
+	is_accepted=(gsl_rng_uniform(dgr->rng_ctx)<acceptance_ratio)?(true):(false);
+
+	if(is_accepted==false)
+	{
+		arc->mu=oldmu;
+
+		for(c=arc->startmidpoint+1;c<=arc->endmidpoint;c++)
+			get_free_propagator(dgr,c)->m+=newmu-oldmu;
+
+#ifndef NDEBUG
+		if(isfinite(oldweight)&&isfinite(diagram_weight(dgr)))
+			assert(almost_same_float(oldweight,diagram_weight(dgr))==true);
+#endif
+
+		return UPDATE_REJECTED;
+	}
+
+	if(weightratio<0.0f)
+		dgr->sign*=-1;
 
 	return UPDATE_ACCEPTED;
 }
@@ -534,19 +717,28 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 	int proposed[DIAGRAM_NR_UPDATES],accepted[DIAGRAM_NR_UPDATES],rejected[DIAGRAM_NR_UPDATES];
 	int total_proposed,total_accepted,total_rejected;
 	long long int avgorder[2];
+	long long int physical_updates,unphysical_updates;
 	double avglength[2];
 
 	/*
 		We set up the updates we will be using
 	*/
 
+#warning More updates to check and enable!
+
 	updates[0]=update_length;
 	updates[1]=update_add_phonon_line;
 	updates[2]=update_remove_phonon_line;
+	//updates[3]=update_shift_vertex;
+	//updates[4]=update_swap_deltajs;
+	//updates[5]=update_change_mu;
 
 	update_names[0]="UpdateLength";
 	update_names[1]="AddPhononLine";
 	update_names[2]="RemovePhononLine";
+	//update_names[3]="ShiftVertex";
+	//update_names[4]="SwapDeltajs";
+	//update_names[5]="ChangeMu";
 
 	/*
 		We reset the update statistics
@@ -555,6 +747,8 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 	for(d=0;d<DIAGRAM_NR_UPDATES;d++)
 		proposed[d]=accepted[d]=rejected[d]=0;
 	
+	physical_updates=unphysical_updates=0;
+	
 	avgorder[0]=avgorder[1]=0;
 	avglength[0]=avglength[1]=0.0f;
 
@@ -562,7 +756,7 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 		We print some informative message, and then we open the log file
 	*/
 
-	fprintf(stderr,"Performing %d iterations, using %d thread(s)\n",config->iterations,config->nthreads);
+	fprintf(stderr,"Performing %d iterations, %d thermalization sweeps, using %d thread(s)\n",config->iterations,config->thermalization,config->nthreads);
 
 	snprintf(fname,1024,"%s.dat",config->prefix);
 	if(!(out=fopen(fname,"w+")))
@@ -610,7 +804,6 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 
 	gettimeofday(&starttime,NULL);
 
-
 	/*
 		We initialize the histograms
 	*/
@@ -643,7 +836,9 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 	{
 		int update_type,status;
 
-		update_type=gsl_rng_uniform_int(dgr->rng_ctx,DIAGRAM_NR_UPDATES);
+#warning DELME
+
+		update_type=gsl_rng_uniform_int(dgr->rng_ctx,3);
 		status=updates[update_type](dgr,config);
 
 		if((config->nthreads==1)&&(config->animate)&&(status==UPDATE_ACCEPTED)&&((update_type==1)||(update_type==2)))
@@ -652,7 +847,7 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 			{
 				int d,plines,flags;
 
-				flags=PRINT_TOPOLOGY|PRINT_INFO0;
+				flags=PRINT_TOPOLOGY|PRINT_PROPAGATORS|PRINT_INFO0;
 				plines=print_diagram(dgr,flags|PRINT_DRYRUN);
 	
 				for(d=plines;d<get_terminal_nr_lines();d++)
@@ -696,16 +891,28 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 		assert(angular_momentum_is_conserved(dgr)==true);
 #endif
 
-		gsl_histogram_accumulate(g,dgr->endtau,dgr->sign);
+		if(configuration_is_physical(dgr)==true)
+		{
+			if(c>config->thermalization)
+			{
+				gsl_histogram_accumulate(g,dgr->endtau,dgr->sign);
 
-		if(get_nr_phonons(dgr)==0)
-			gsl_histogram_accumulate(g0,dgr->endtau,dgr->sign);
+				if(get_nr_phonons(dgr)==0)
+					gsl_histogram_accumulate(g0,dgr->endtau,dgr->sign);
 
-		if(get_nr_phonons(dgr)==1)
-			gsl_histogram_accumulate(g1,dgr->endtau,dgr->sign);
+				if(get_nr_phonons(dgr)==1)
+					gsl_histogram_accumulate(g1,dgr->endtau,dgr->sign);
 
-		if(get_nr_phonons(dgr)==2)
-			gsl_histogram_accumulate(g2,dgr->endtau,dgr->sign);
+				if(get_nr_phonons(dgr)==2)
+					gsl_histogram_accumulate(g2,dgr->endtau,dgr->sign);
+			}
+
+			physical_updates++;
+		}
+		else
+		{
+			unphysical_updates++;
+		}
 
 		avgorder[0]+=get_nr_phonons(dgr);
 		avgorder[1]++;
@@ -720,12 +927,14 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 			
 			if(config->progressbar)
 			{
-				double avg1,avg2;
+				double avg1,avg2,ratio;
 
 				avg1=((double)(avgorder[0]))/((double)(avgorder[1]));
 				avg2=((double)(avglength[0]))/((double)(avglength[1]));
 
-				snprintf(progressbar_text,1024,"Progress (avg. order: %f, avg. length: %f)",avg1,avg2);
+				ratio=((double)(physical_updates))/((double)(physical_updates+unphysical_updates));
+
+				snprintf(progressbar_text,1024,"Progress (avg. order: %f, avg. length: %f, P/(P+U): %f)",avg1,avg2,ratio);
 
 				progressbar_update_label(progress,progressbar_text);
 				progressbar_inc(progress);
@@ -796,6 +1005,7 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 	fprintf(out,"#\n");
 	fprintf(out,"# Sampled quantity: Green's function (G)\n");
 	fprintf(out,"# Iterations: %d\n",config->iterations);
+	fprintf(out,"# Thermalization sweeps: %d\n",config->thermalization);
 
 	/*
 		FIXME Poco elegante!
@@ -819,21 +1029,21 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 	fprintf(out,"# (last bin is overflow)\n");
 	fprintf(out,"#\n");
 
-	fprintf(out,"# <Bin center> <Average> <Stddev> <Free rotor>\n");
+	fprintf(out,"# <Bin center> <G(tau)> <Free rotor> <G0(tau)> <G1(tau)> <G2(tau)>\n");
 
 	/*
 		We normalize the histogram...
 	*/
-	
+
 	{
 		double lower,upper,bin0center,Ej,scalefactor;
-	
+
 		gsl_histogram_get_range(g,0,&lower,&upper);
-	
+
 		bin0center=(lower+upper)/2.0f;
 		Ej=config->j*(config->j+1)-config->chempot;
 		scalefactor=exp(-Ej*bin0center)/gsl_histogram_get(g,0);
-	
+
 		gsl_histogram_scale(g,scalefactor);
 		gsl_histogram_scale(g0,scalefactor);
 		gsl_histogram_scale(g1,scalefactor);

@@ -53,4 +53,6 @@ bool almost_same_float(double a,double b);
 void init_terminal_data(void);
 int get_terminal_nr_lines(void);
 
+int isign(int x);
+
 #endif //__AUX_H__
