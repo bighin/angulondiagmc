@@ -81,6 +81,52 @@ int update_length(struct diagram_t *dgr,struct configuration_t *cfg)
 	return UPDATE_ACCEPTED;
 }
 
+int get_nr_available_phonons(struct diagram_t *dgr)
+{
+	int c,available;
+
+	for(c=available=0;c<get_nr_phonons(dgr);c++)
+	{
+		int startmidpoint,endmidpoint;
+		
+		startmidpoint=get_phonon_line(dgr,c)->startmidpoint;
+		endmidpoint=get_phonon_line(dgr,c)->endmidpoint;
+		
+		if(deltaj(dgr,startmidpoint)==-deltaj(dgr,endmidpoint))
+			available++;
+	}
+	
+	return available;
+}
+
+int get_random_available_phonon(struct diagram_t *dgr)
+{
+	int c,available,target;
+
+	available=0;
+	target=gsl_rng_uniform_int(dgr->rng_ctx,get_nr_available_phonons(dgr));
+
+	for(c=0;c<get_nr_phonons(dgr);c++)
+	{
+		int startmidpoint,endmidpoint;
+		
+		startmidpoint=get_phonon_line(dgr,c)->startmidpoint;
+		endmidpoint=get_phonon_line(dgr,c)->endmidpoint;
+		
+		if(deltaj(dgr,startmidpoint)==-deltaj(dgr,endmidpoint))
+		{
+			if(available==target)
+				return c;
+			
+			available++;
+		}
+	}
+
+	assert(false);
+	
+	return -1;
+}
+
 #define MAXLAMBDA	(1)
 
 int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
@@ -183,7 +229,7 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	acceptance_ratio/=1.0f/(1+lambda);
 	acceptance_ratio/=1.0f/dgr->endtau;
 	acceptance_ratio/=phonon_pdf(dgr->phonon_ctx,lambda,tau2-tau1);
-	acceptance_ratio*=1.0f/get_nr_phonons(dgr);
+	acceptance_ratio*=1.0f/get_nr_available_phonons(dgr);
 
 	is_accepted=(gsl_rng_uniform(dgr->rng_ctx)<acceptance_ratio)?(true):(false);
 
@@ -219,12 +265,12 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	double oldweight=diagram_weight(dgr);
 #endif
 
-	nr_available_phonons=get_nr_phonons(dgr);
+	nr_available_phonons=get_nr_available_phonons(dgr);
 
 	if(nr_available_phonons<=0)
 		return UPDATE_UNPHYSICAL;
 
-	target=gsl_rng_uniform_int(dgr->rng_ctx,get_nr_phonons(dgr));
+	target=get_random_available_phonon(dgr);
 	arc=get_phonon_line(dgr,target);
 	targetweight=calculate_arc_weight(dgr,arc);
 
@@ -298,6 +344,54 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 
 		return UPDATE_REJECTED;
 	}
+
+	return UPDATE_ACCEPTED;
+}
+
+int update_shuffle(struct diagram_t *dgr,struct configuration_t *cfg)
+{
+	int nr_vertices;
+	double weightratio,acceptance_ratio;
+	bool is_accepted;
+
+#ifndef NDEBUG
+	bool result;
+#endif
+
+	struct diagram_t *old;
+
+	nr_vertices=get_nr_vertices(dgr);
+	
+	if(nr_vertices<1)
+		return UPDATE_UNPHYSICAL;
+
+	old=diagram_clone(dgr);
+
+#ifndef NDEBUG
+	result=recouple(dgr,0,nr_vertices-1);
+	assert(result==true);
+#else
+	recouple(dgr,0,nr_vertices-1);
+#endif
+
+	weightratio=calculate_propagators_and_vertices(dgr,0,nr_vertices-1);
+	weightratio/=calculate_propagators_and_vertices(old,0,nr_vertices-1);
+
+	acceptance_ratio=weightratio;
+
+	//assert(almost_same_float(weightratio,diagram_weight(dgr)/diagram_weight(old)));
+
+	is_accepted=(gsl_rng_uniform(dgr->rng_ctx)<acceptance_ratio)?(true):(false);
+
+	if(is_accepted==false)
+	{
+		diagram_copy(old,dgr);
+		fini_diagram(old);
+
+		return UPDATE_REJECTED;
+	}
+
+	fini_diagram(old);
 
 	return UPDATE_ACCEPTED;
 }
