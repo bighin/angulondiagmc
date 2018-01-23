@@ -25,6 +25,52 @@
 #include "libprogressbar/progressbar.h"
 #include "gnuplot_i/gnuplot_i.h"
 
+int get_nr_available_phonons(struct diagram_t *dgr)
+{
+	int c,available;
+
+	for(c=available=0;c<get_nr_phonons(dgr);c++)
+	{
+		int startmidpoint,endmidpoint;
+		
+		startmidpoint=get_phonon_line(dgr,c)->startmidpoint;
+		endmidpoint=get_phonon_line(dgr,c)->endmidpoint;
+		
+		if(deltaj(dgr,startmidpoint)==-deltaj(dgr,endmidpoint))
+			available++;
+	}
+	
+	return available;
+}
+
+int get_random_available_phonon(struct diagram_t *dgr)
+{
+	int c,available,target;
+
+	available=0;
+	target=gsl_rng_uniform_int(dgr->rng_ctx,get_nr_available_phonons(dgr));
+
+	for(c=0;c<get_nr_phonons(dgr);c++)
+	{
+		int startmidpoint,endmidpoint;
+		
+		startmidpoint=get_phonon_line(dgr,c)->startmidpoint;
+		endmidpoint=get_phonon_line(dgr,c)->endmidpoint;
+		
+		if(deltaj(dgr,startmidpoint)==-deltaj(dgr,endmidpoint))
+		{
+			if(available==target)
+				return c;
+			
+			available++;
+		}
+	}
+
+	assert(false);
+	
+	return -1;
+}
+
 /*
 	Now it's time to start with all the different updates!
 */
@@ -79,52 +125,6 @@ int update_length(struct diagram_t *dgr,struct configuration_t *cfg)
 	}
 	
 	return UPDATE_ACCEPTED;
-}
-
-int get_nr_available_phonons(struct diagram_t *dgr)
-{
-	int c,available;
-
-	for(c=available=0;c<get_nr_phonons(dgr);c++)
-	{
-		int startmidpoint,endmidpoint;
-		
-		startmidpoint=get_phonon_line(dgr,c)->startmidpoint;
-		endmidpoint=get_phonon_line(dgr,c)->endmidpoint;
-		
-		if(deltaj(dgr,startmidpoint)==-deltaj(dgr,endmidpoint))
-			available++;
-	}
-	
-	return available;
-}
-
-int get_random_available_phonon(struct diagram_t *dgr)
-{
-	int c,available,target;
-
-	available=0;
-	target=gsl_rng_uniform_int(dgr->rng_ctx,get_nr_available_phonons(dgr));
-
-	for(c=0;c<get_nr_phonons(dgr);c++)
-	{
-		int startmidpoint,endmidpoint;
-		
-		startmidpoint=get_phonon_line(dgr,c)->startmidpoint;
-		endmidpoint=get_phonon_line(dgr,c)->endmidpoint;
-		
-		if(deltaj(dgr,startmidpoint)==-deltaj(dgr,endmidpoint))
-		{
-			if(available==target)
-				return c;
-			
-			available++;
-		}
-	}
-
-	assert(false);
-	
-	return -1;
 }
 
 #define MAXLAMBDA	(1)
@@ -872,7 +872,7 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 		mean=block_histogram_get_mean(sst->bhs[0],d);
 		sigma=sqrtf(block_histogram_get_variance(sst->bhs[0],d));
 
-#warning Check the following six lines, they are probably wrong!
+#warning Check the following six assignments!
 
 		mean*=I0*gstats;
 		mean/=g0stats;
