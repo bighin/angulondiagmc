@@ -33,6 +33,7 @@ struct configuration_t
 	double timelimit;
 	int bins;
 	double width;
+	int decorrelation;
 
 	/* "parallel" section */
 	

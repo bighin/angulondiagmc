@@ -40,6 +40,7 @@ struct g0_t
 	*/
 
 	int arcs_over_me;
+	int arcs_over_me_lambda1;
 };
 
 /*

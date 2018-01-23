@@ -125,6 +125,7 @@ void diagram_add_start_midpoint(struct diagram_t *dgr,int c,double tau,struct ar
 	rightline->j=leftline->j;
 	rightline->m=leftline->m;
 	rightline->arcs_over_me=leftline->arcs_over_me;
+	rightline->arcs_over_me_lambda1=leftline->arcs_over_me_lambda1;
 }
 
 void diagram_add_end_midpoint(struct diagram_t *dgr,int c,double tau,struct arc_t *phononline)
@@ -189,6 +190,27 @@ void diagram_add_end_midpoint(struct diagram_t *dgr,int c,double tau,struct arc_
 	leftline->j=rightline->j;
 	leftline->m=rightline->m;
 	leftline->arcs_over_me=rightline->arcs_over_me;
+	leftline->arcs_over_me_lambda1=rightline->arcs_over_me_lambda1;
+}
+
+int tau_binary_search(struct diagram_t *dgr,double tau)
+{
+	int start,end;
+	
+	start=0;
+	end=get_nr_midpoints(dgr)-1;
+	
+	while(start<=end)
+	{
+		int mid=(start+end)/2;	
+	
+		if(tau<get_midpoint(dgr,mid))
+			end=mid-1;
+		else
+			start=mid+1;
+	}
+
+	return start;
 }
 
 void diagram_add_phonon_line(struct diagram_t *dgr,double tau1,double tau2,int lambda,int mu)
@@ -215,15 +237,25 @@ void diagram_add_phonon_line(struct diagram_t *dgr,double tau1,double tau2,int l
 		Next we locate the insertion point...
 	*/
 
-	lo=get_nr_midpoints(dgr);
-	for(c=0;c<get_nr_midpoints(dgr);c++)
-	{		
-		if(tau1<get_midpoint(dgr,c))
-		{
-			lo=c;
-			break;
+	lo=tau_binary_search(dgr,tau1);
+
+#ifndef NDEBUG
+	{
+		int altlo;
+
+		altlo=get_nr_midpoints(dgr);
+		for(c=0;c<get_nr_midpoints(dgr);c++)
+		{		
+			if(tau1<get_midpoint(dgr,c))
+			{
+				altlo=c;
+				break;
+			}
 		}
+
+		assert(altlo==lo);
 	}
+#endif
 
 	/*
 		...and we attach a new midpoint and vertex there!
@@ -242,15 +274,25 @@ void diagram_add_phonon_line(struct diagram_t *dgr,double tau1,double tau2,int l
 		phonon arc to the main diagram.
 	*/
 
-	hi=get_nr_midpoints(dgr);
-	for(c=0;c<get_nr_midpoints(dgr);c++)
+	hi=tau_binary_search(dgr,tau2);
+
+#ifndef NDEBUG
 	{
-		if(tau2<get_midpoint(dgr,c))
+		int althi;
+		
+		althi=get_nr_midpoints(dgr);
+		for(c=0;c<get_nr_midpoints(dgr);c++)
 		{
-			hi=c;
-			break;
+			if(tau2<get_midpoint(dgr,c))
+			{
+				althi=c;
+				break;
+			}
 		}
+
+		assert(althi==hi);
 	}
+#endif
 
 	diagram_add_end_midpoint(dgr,hi,tau2,arc);
 	diagram_update_xrefs(dgr,hi);
@@ -258,6 +300,12 @@ void diagram_add_phonon_line(struct diagram_t *dgr,double tau1,double tau2,int l
 
 	for(c=arc->startmidpoint;c<arc->endmidpoint;c++)
 		get_right_neighbour(dgr,c)->arcs_over_me++;
+
+	if(lambda>=1)
+	{
+		for(c=arc->startmidpoint;c<arc->endmidpoint;c++)
+			get_right_neighbour(dgr,c)->arcs_over_me_lambda1++;
+	}
 
 	assert(hi>lo);
 
@@ -402,6 +450,12 @@ void diagram_remove_phonon_line(struct diagram_t *dgr,int position)
 
 	for(c=arc->startmidpoint;c<arc->endmidpoint;c++)
 		get_right_neighbour(dgr,c)->arcs_over_me--;
+
+	if(arc->lambda>=1)
+	{
+		for(c=arc->startmidpoint;c<arc->endmidpoint;c++)
+			get_right_neighbour(dgr,c)->arcs_over_me_lambda1--;
+	}
 
 	/*
 		Then we fix the m quantum numbers of the free propagators

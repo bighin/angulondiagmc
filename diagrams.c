@@ -80,6 +80,7 @@ struct diagram_t *init_diagram(struct diagram_parameters_t *dpars,bool verbose)
 	g0->endtau=dpars->endtau;
 	
 	g0->arcs_over_me=0;
+	g0->arcs_over_me_lambda1=0;
 
 	ret->sign=1;
 	
@@ -345,7 +346,27 @@ void diagram_check_consistency(struct diagram_t *dgr)
 			
 			assert(get_right_neighbour(dgr,c)->arcs_over_me==count);
 		}
-		
+
+		assert(count==0);
+
+		for(c=0;c<get_nr_vertices(dgr);c++)
+		{
+			struct arc_t *thisline=get_vertex(dgr,c)->phononline;
+			
+			assert((c==thisline->startmidpoint)||(c==thisline->endmidpoint));
+
+			if(thisline->lambda>=1)
+			{
+
+				if(thisline->startmidpoint==c)
+					count++;
+				else
+					count--;
+			}
+			
+			assert(get_right_neighbour(dgr,c)->arcs_over_me_lambda1==count);
+		}
+
 		assert(count==0);
 	}
 

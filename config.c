@@ -111,6 +111,10 @@ int configuration_handler(void *user,const char *section,const char *name,const 
 	{	
 		pconfig->width=atof(value);
 	}
+	else if(MATCH("sampling","decorrelation"))
+	{
+		pconfig->decorrelation=atof(value);
+	}
 	else if(MATCH("parallel","parallel"))
 	{
 		if(!strcmp(value,"true"))

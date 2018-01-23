@@ -532,9 +532,7 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 	{
 		int update_type,status;
 
-#warning DELME
-
-		update_type=gsl_rng_uniform_int(dgr->rng_ctx,3);
+		update_type=gsl_rng_uniform_int(dgr->rng_ctx,DIAGRAM_NR_UPDATES);
 		status=updates[update_type](dgr,config);
 
 		if((config->nthreads==1)&&(config->animate)&&(status==UPDATE_ACCEPTED)&&((update_type==1)||(update_type==2)))
@@ -588,11 +586,8 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 #endif
 
 		if(configuration_is_physical(dgr)==true)
-		{
-
-#warning The 25 factor needs to be documented! Should I call it decorrelation time?
-
-			if((c>config->thermalization)&&((physical_updates%25)==0))
+		{	
+			if((c>config->thermalization)&&((physical_updates%config->decorrelation)==0))
 			{
 				super_sampler_add_time_sample(sst,dgr->endtau,dgr->sign);
 				
