@@ -4,10 +4,6 @@
 #include <stdbool.h>
 #include <gsl/gsl_rng.h>
 
-#include "rbitree/rbtree.h"
-#include "rbitree/rbtree_augmented.h"
-#include "rbitree/interval_tree_generic.h"
-
 /*
     GCC does not define M_PI in C11 mode
 */
@@ -26,24 +22,7 @@ struct arc_t
 
 	int startmidpoint,endmidpoint;
 	double starttau,endtau;
-
-	/*
-		The following two fields are needed for the interval tree
-	*/
-
-	struct rb_node rb;
-	double subtree_last;
 };
-
-/*
-	The following routines are used by the interval tree created with phonons
-	arcs with \lambda >= 1
-*/
-
-void interval_tree_insert(struct arc_t *node,struct rb_root_cached *root);
-void interval_tree_remove(struct arc_t *node,struct rb_root_cached *root);
-struct arc_t *interval_tree_iter_first(struct rb_root_cached *root,double start,double end);
-struct arc_t *interval_tree_iter_next(struct arc_t *node,double start, double end);
 
 /*
 	A free propagator
@@ -149,14 +128,6 @@ struct diagram_t
 	*/
 
 	int sign;
-	
-	/*
-		The interval tree structure we use to keep track of overlapping
-		arcs with \lambda >= 1. Note that there's no need of keeping track
-		of overlapping arcs with \lambda = 0.
-	*/
-	
-	struct rb_root_cached treeroot;
 };
 
 struct diagram_t *init_diagram(struct diagram_parameters_t *dpars,bool verbose);
