@@ -20,6 +20,7 @@
 #include "phonon.h"
 #include "debug.h"
 #include "config.h"
+#include "histograms.h"
 #include "inih/ini.h"
 #include "libprogressbar/progressbar.h"
 #include "gnuplot_i/gnuplot_i.h"
@@ -700,6 +701,11 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 
 	gsl_histogram *g,*g0,*g1,*g2;
 
+#define NR_BLOCKSIZES	(1)
+
+	int blocksizes[NR_BLOCKSIZES]={25000};
+	struct super_sampler_t *sst;
+
 	int c,d;
 	FILE *out;
 	char fname[1024],progressbar_text[1024];
@@ -709,15 +715,17 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 
 	struct timeval starttime;
 
-#define DIAGRAM_NR_UPDATES	(3)
+#define DIAGRAM_NR_UPDATES	(6)
 
 	int (*updates[DIAGRAM_NR_UPDATES])(struct diagram_t *,struct configuration_t *);
 	char *update_names[DIAGRAM_NR_UPDATES];
 
 	int proposed[DIAGRAM_NR_UPDATES],accepted[DIAGRAM_NR_UPDATES],rejected[DIAGRAM_NR_UPDATES];
 	int total_proposed,total_accepted,total_rejected;
+	
 	long long int avgorder[2];
 	long long int physical_updates,unphysical_updates;
+	long long int g0stats=0,gstats=0;
 	double avglength[2];
 
 	/*
@@ -729,16 +737,16 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 	updates[0]=update_length;
 	updates[1]=update_add_phonon_line;
 	updates[2]=update_remove_phonon_line;
-	//updates[3]=update_shift_vertex;
-	//updates[4]=update_swap_deltajs;
-	//updates[5]=update_change_mu;
+	updates[3]=update_shift_vertex;
+	updates[4]=update_swap_deltajs;
+	updates[5]=update_change_mu;
 
 	update_names[0]="UpdateLength";
 	update_names[1]="AddPhononLine";
 	update_names[2]="RemovePhononLine";
-	//update_names[3]="ShiftVertex";
-	//update_names[4]="SwapDeltajs";
-	//update_names[5]="ChangeMu";
+	update_names[3]="ShiftVertex";
+	update_names[4]="SwapDeltajs";
+	update_names[5]="ChangeMu";
 
 	/*
 		We reset the update statistics
@@ -818,6 +826,8 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 	gsl_histogram_set_ranges_uniform(g1,0.0f,config->bins*config->width);
 	gsl_histogram_set_ranges_uniform(g2,0.0f,config->bins*config->width);
 
+	sst=init_super_sampler(blocksizes,NR_BLOCKSIZES,config->bins,config->width);
+
 	/*
 		We initialize the random number generator, and we seed it in case a NON deterministic seed is requested.
 	*/
@@ -893,9 +903,19 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 
 		if(configuration_is_physical(dgr)==true)
 		{
-			if(c>config->thermalization)
+
+#warning The 25 factor needs to be documented! Should I call it decorrelation time?
+
+			if((c>config->thermalization)&&((physical_updates%25)==0))
 			{
+				super_sampler_add_time_sample(sst,dgr->endtau,dgr->sign);
+				
 				gsl_histogram_accumulate(g,dgr->endtau,dgr->sign);
+
+				gstats++;
+
+				if(get_nr_phonons(dgr)==0)
+					g0stats++;
 
 				if(get_nr_phonons(dgr)==0)
 					gsl_histogram_accumulate(g0,dgr->endtau,dgr->sign);
@@ -1007,6 +1027,8 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 	fprintf(out,"# Iterations: %d\n",config->iterations);
 	fprintf(out,"# Thermalization sweeps: %d\n",config->thermalization);
 
+	fprintf(out,"# Thermalization sweeps: %d\n",config->thermalization);
+
 	/*
 		FIXME Poco elegante!
 	*/
@@ -1057,6 +1079,7 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 	for(d=0;d<config->bins;d++)
 	{
 		double lower,upper,bincenter,Ej;
+		double mean,sigma,I0;
 
 		gsl_histogram_get_range(g,d,&lower,&upper);
 		bincenter=(lower+upper)/2.0f;
@@ -1064,9 +1087,27 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 		assert(almost_same_float(bincenter,config->width*d+config->width/2.0f)==true);
 
 		Ej=config->j*(config->j+1)-config->chempot;
+		I0=(1.0f-exp(-Ej*config->maxtau))/Ej;
 
-		fprintf(out,"%f %f %f ",bincenter,gsl_histogram_get(g,d),exp(-Ej*bincenter));
-		fprintf(out,"%f %f %f\n",gsl_histogram_get(g0,d),gsl_histogram_get(g1,d),gsl_histogram_get(g2,d));
+		//fprintf(out,"%f %f %f ",bincenter,gsl_histogram_get(g,d),exp(-Ej*bincenter));
+		//fprintf(out,"%f %f %f\n",gsl_histogram_get(g0,d),gsl_histogram_get(g1,d),gsl_histogram_get(g2,d));
+
+#warning Here we implicitly select the first blocksize
+
+		mean=block_histogram_get_mean(sst->bhs[0],d);
+		sigma=sqrtf(block_histogram_get_variance(sst->bhs[0],d));
+
+#warning Check the following six lines, they are probably wrong!
+
+		mean*=I0*gstats;
+		mean/=g0stats;
+		mean/=(upper-lower);
+
+		sigma*=I0*gstats;
+		sigma/=g0stats;
+		sigma/=(upper-lower);
+
+		fprintf(out,"%f %f %f %f\n",bincenter,mean,sigma,exp(-Ej*bincenter));
 	}
 
 	/*
@@ -1087,6 +1128,8 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 	gsl_histogram_free(g0);
 	gsl_histogram_free(g1);
 	gsl_histogram_free(g2);
+
+	fini_super_sampler(sst);
 
 	if(config->liveplot)
 		gnuplot_close(gp);

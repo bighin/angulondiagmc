@@ -1,7 +1,7 @@
 TARGET = diagmc
 LIBS = -lncurses -lgsl -lm
-CC = gcc
-#CC = clang-mp-5.0
+#CC = gcc
+CC = clang-mp-5.0
 #CC = /opt/local/libexec/llvm-5.0/libexec/ccc-analyzer
 CFLAGS = -DNDEBUG -O2 -Wall -std=gnu11 -I/opt/local/include/
 #CFLAGS =  -Wall -std=gnu11 -O0 -g -I/opt/local/include/

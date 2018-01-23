@@ -83,8 +83,12 @@ double calculate_vertex_weight(struct diagram_t *dgr,int index)
 
 	coupling=sqrtf((2.0f*j1+1)*(2.0f*j2+1)*(2.0f*j3+1)/(4.0f*M_PI));
 	coupling*=gsl_sf_coupling_3j(2*j1,2*j2,2*j3,0,0,0);
+	
+	/*
+		The unphysical penalty is zero. This means that no unphysical states will be visited.
+	*/
 
-	unphysical_penalty=1.0f;
+	unphysical_penalty=0.0f;
 
 	if((thisvertex->left->j<0)||(thisvertex->right->j<0))
 		coupling*=unphysical_penalty;
@@ -107,16 +111,9 @@ double calculate_vertex_weight(struct diagram_t *dgr,int index)
 	return coupling;
 }
 
-/*
-	In the current scheme all free rotor propagators are allowed after an update, even unphysical
-	ones with j < 0 or with |m| > j.
-*/
-
 bool propagators_are_allowed(struct diagram_t *dgr)
 {
 	int c;
-
-#warning return true here!
 
 	for(c=0;c<get_nr_free_propagators(dgr);c++)
 	{

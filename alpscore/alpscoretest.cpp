@@ -72,7 +72,9 @@ class angulon_diagmc : public alps::mcbase
 
 	angulon_diagmc(parameters_type const &params, std::size_t seed_offset);
 	~angulon_diagmc();
-	
+
+	int random_int(void);
+
 	void update(void);
 	void fill_histograms(void);
 	void reset_histograms(void);
@@ -82,7 +84,7 @@ class angulon_diagmc : public alps::mcbase
 	double histogram_bin_center(int index);	
 	double histogram_index_time(double time);
 
-	void print_data(const alps::results_type<angulon_diagmc>::type &results);
+	void output_data(const alps::results_type<angulon_diagmc>::type &results, alps::hdf5::archive& ar);
 };
 
 /*
@@ -110,11 +112,11 @@ angulon_diagmc::angulon_diagmc(parameters_type const &params, std::size_t seed_o
 
 	binwidth=config.maxtau/nbins;
 
-	measurements << alps::accumulators::FullBinningAccumulator<std::vector<double>>("G");
-	measurements << alps::accumulators::FullBinningAccumulator<std::vector<double>>("G0");
-	measurements << alps::accumulators::FullBinningAccumulator<std::vector<double>>("G1");
-	measurements << alps::accumulators::FullBinningAccumulator<double>("intG0");
-	measurements << alps::accumulators::FullBinningAccumulator<double>("order");
+	measurements << alps::accumulators::LogBinningAccumulator<std::vector<double>>("G");
+	measurements << alps::accumulators::LogBinningAccumulator<std::vector<double>>("G0");
+	measurements << alps::accumulators::LogBinningAccumulator<std::vector<double>>("G1");
+	measurements << alps::accumulators::LogBinningAccumulator<double>("intG0");
+	measurements << alps::accumulators::LogBinningAccumulator<double>("order");
         measurements << alps::accumulators::MeanAccumulator<std::vector<double>>("order_frequencies");
 
 	updates.push_back(std::make_pair(update_length,"UpdateLength"));
@@ -169,6 +171,14 @@ angulon_diagmc::~angulon_diagmc()
 	fini_diagram(dgr);
 }
 
+/*
+	Returns a random int between 0 and (n-1)
+*/
+
+int random_int(int n)
+{
+	return int(random()%n);
+}
 
 /*
 	 This performs the actual calculation at each MC step.
@@ -184,7 +194,7 @@ void angulon_diagmc::update(void)
 		{
 			int update_type,status;
 		
-			update_type=int(3*random())%3;
+			update_type=::random_int(3);
 
 			status=updates[update_type].first(dgr,&config);
 
@@ -219,7 +229,7 @@ void angulon_diagmc::update(void)
 	}
 }
 
-void angulon_diagmc::fill_histograms()
+void angulon_diagmc::fill_histograms(void)
 {
 	int itime=histogram_index_time(dgr->endtau);
 
@@ -242,7 +252,7 @@ void angulon_diagmc::fill_histograms()
 	}
 }
 
-void angulon_diagmc::reset_histograms()
+void angulon_diagmc::reset_histograms(void)
 {
 	for(int i=0;i<nbins;i++)
 	{
@@ -326,7 +336,7 @@ double angulon_diagmc::histogram_index_time(double time)
 	return index;
 }
 
-void angulon_diagmc::print_data(const alps::results_type<angulon_diagmc>::type &results)
+void angulon_diagmc::output_data(const alps::results_type<angulon_diagmc>::type &results, alps::hdf5::archive& ar)
 {
 	double Ej=config.j*(config.j+1.0f);
 	double I0=(1.0f-exp(-(Ej-config.chempot)*config.maxtau))/(Ej-config.chempot);
@@ -346,6 +356,12 @@ void angulon_diagmc::print_data(const alps::results_type<angulon_diagmc>::type &
 		std::cout << Gnorm.error<std::vector<double>>()[c] << " ";
 		std::cout << exp(-(free_rotor_energy-config.chempot)*bincenter) << std::endl;
 	}
+
+        // save to archive
+        ar["/simulation/normed/Greenfun_0"] << G0norm;
+        ar["/simulation/normed/Greenfun_1"] << G1norm;
+        ar["/simulation/normed/Greenfun"] << Gnorm;
+        ar["/simulation/normed/log(Greenfun)"] << logGnorm;
 }
 
 /*
@@ -365,8 +381,8 @@ int main(int argc, char **argv)
 		Define the parameters for our simulation
 	*/
 
-	params.define<unsigned long>("mc.totalsweeps", 100000, "Total number of sweeps");
-	params.define<unsigned long>("mc.thermalization_sweeps", 50, "Number of thermalization sweeps");
+	params.define<unsigned long>("mc.totalsweeps", 1000, "Total number of sweeps");
+	params.define<unsigned long>("mc.thermalization_sweeps", 250, "Number of thermalization sweeps");
 	params.define<size_t>("mc.nloop", 1000, "Number of histogram samples gathered before measuring");
 	params.define<size_t>("mc.nhist", 1,"Number of updates until counting configuration towards histograms.");
 	params.define<size_t>("mc.nbins", 10000, "Number of bins");
@@ -400,7 +416,6 @@ int main(int argc, char **argv)
 	{	
 		mysim=new angulon_diagmc(params);
 		mysim->run(alps::stop_callback(0));
-		//mysim->run([]{return false;});
 	}
 	catch(const std::exception&)
 	{
@@ -414,7 +429,6 @@ int main(int argc, char **argv)
 	std::cout << "Collecting and printing results..." << std::endl;
 
 	alps::results_type<angulon_diagmc>::type results = alps::collect_results(*mysim);
-	mysim->print_data(results);
 
 	/*
 		Saving to the output file
@@ -424,9 +438,11 @@ int main(int argc, char **argv)
 
 	std::string output_file = params["general.outputfile"];
 	alps::hdf5::archive ar(output_file, "w");
+
+	mysim->output_data(results,ar);
 	ar["/parameters"] << params;
 	ar["/simulation/results"] << results;
-	
+
 	delete mysim;
 	
 	return EXIT_SUCCESS;

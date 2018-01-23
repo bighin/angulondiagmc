@@ -94,7 +94,7 @@ struct diagram_t *init_diagram(struct diagram_parameters_t *dpars,bool verbose)
 		Finally we initialize the phonon context
 	*/
 
-	ret->phonon_ctx=init_phonon_ctx(120.0f,128*1024,dpars->n,verbose);
+	ret->phonon_ctx=init_phonon_ctx(30.0f,128*1024,dpars->n,verbose);
 
 	return ret;
 }

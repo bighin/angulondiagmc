@@ -21,9 +21,13 @@ include_directories(SYSTEM ${MPI_INCLUDE_PATH})
 
 find_package(Curses REQUIRED)
 find_package(GSL REQUIRED)
+find_package(MPI REQUIRED)
+
+include_directories(SYSTEM ${MPI_INCLUDE_PATH})
 
 # we only have one cpp file: it's called linking.cpp
 add_executable(${PROJECT_NAME} alpscoretest.cpp)
+add_executable(${PROJECT_NAME}_mpi alpscoretest_mpi.cpp)
 
 # Use ALPSCore_LIBRARIES variable to link to ALPSCore 
 target_link_libraries(${PROJECT_NAME} ${ALPSCore_LIBRARIES})
@@ -31,3 +35,10 @@ target_link_libraries(${PROJECT_NAME} ${MPI_CXX_LIBRARIES})
 target_link_libraries(${PROJECT_NAME} ${CURSES_LIBRARIES})
 target_link_libraries(${PROJECT_NAME} ${GSL_LIBRARIES})
 target_link_libraries(${PROJECT_NAME} ${CMAKE_SOURCE_DIR}/../libangulon.a)
+
+target_link_libraries(${PROJECT_NAME}_mpi ${ALPSCore_LIBRARIES})
+target_link_libraries(${PROJECT_NAME}_mpi ${MPI_CXX_LIBRARIES})
+target_link_libraries(${PROJECT_NAME}_mpi ${CURSES_LIBRARIES})
+target_link_libraries(${PROJECT_NAME}_mpi ${GSL_LIBRARIES})
+target_link_libraries(${PROJECT_NAME}_mpi ${CMAKE_SOURCE_DIR}/../libangulon.a)
+target_link_libraries(${PROJECT_NAME}_mpi ${MPI_CXX_LIBRARIES})
