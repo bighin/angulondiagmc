@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <gsl/gsl_rng.h>
 #include <assert.h>
+#include <float.h>
 
 #include "phonon.h"
 #include "aux.h"
@@ -191,7 +192,7 @@ double chi_lambda(struct phonon_ctx_t *ctx,int lambda,double deltatau)
 
 double phonon_dist(gsl_rng *rctx,struct phonon_ctx_t *ctx,int lambda)
 {
-        double x=gsl_rng_uniform_pos(rctx);
+        double retval,x=gsl_rng_uniform_pos(rctx);
 	struct interpolation_t *it;
 
 	assert((lambda==0)||(lambda==1));
@@ -215,7 +216,12 @@ double phonon_dist(gsl_rng *rctx,struct phonon_ctx_t *ctx,int lambda)
 		break;
 	}
 
-	return get_point(it,x);
+	retval=get_point(it,x);
+
+	if(retval<=DBL_EPSILON)
+		return DBL_EPSILON;
+
+	return retval;
 }
 
 double phonon_pdf(struct phonon_ctx_t *ctx,int lambda,double deltatau)

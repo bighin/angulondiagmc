@@ -172,7 +172,7 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	if(tau1>=tau2)
 	{
-		fprintf(stderr,"Unexpected negative return value from phonon_dist(). Please debug me!\n");
+		fprintf(stderr,"Unexpected negative return value from phonon_dist(). Please debug me! (%f %f)\n",tau1,tau2);
 		exit(0);
 	}
 
