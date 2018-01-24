@@ -516,7 +516,7 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 
 	int proposed[DIAGRAM_NR_UPDATES],accepted[DIAGRAM_NR_UPDATES],rejected[DIAGRAM_NR_UPDATES];
 	int total_proposed,total_accepted,total_rejected;
-	
+
 	long long int avgorder[2];
 	long long int physical_updates,unphysical_updates;
 	long long int g0stats=0,gstats=0;
@@ -832,7 +832,18 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 	fprintf(out,"# (last bin is overflow)\n");
 	fprintf(out,"#\n");
 
-	fprintf(out,"# <Bin center> <G(tau)> <Free rotor> <G0(tau)> <G1(tau)> <G2(tau)>\n");
+	fprintf(out,"# Blocksizes: ");
+	
+	for(int k=0;k<NR_BLOCKSIZES;k++)
+	{
+		fprintf(out,"%d",blocksizes[k]);
+		
+		if((k+1)!=NR_BLOCKSIZES)
+			fprintf(out,", ");
+	}
+	
+	fprintf(out,"\n#\n");
+	fprintf(out,"# <Bin center> <G blocksize[0]> <Sigma_G blocksize[0]> ... <G blocksize[N]> <Sigma_G blocksize[N]> <G0>\n");
 
 	/*
 		We normalize the histogram...
@@ -870,25 +881,27 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 		Ej=config->j*(config->j+1)-config->chempot;
 		I0=(1.0f-exp(-Ej*config->maxtau))/Ej;
 
-		//fprintf(out,"%f %f %f ",bincenter,gsl_histogram_get(g,d),exp(-Ej*bincenter));
-		//fprintf(out,"%f %f %f\n",gsl_histogram_get(g0,d),gsl_histogram_get(g1,d),gsl_histogram_get(g2,d));
+		fprintf(out,"%f ",bincenter);
 
-#warning Here we implicitly select the first blocksize
-
-		mean=block_histogram_get_mean(sst->bhs[0],d);
-		sigma=sqrtf(block_histogram_get_variance(sst->bhs[0],d));
+		for(int k=0;k<NR_BLOCKSIZES;k++)
+		{
+			mean=block_histogram_get_mean(sst->bhs[k],d);
+			sigma=sqrtf(block_histogram_get_variance(sst->bhs[k],d));
 
 #warning Check the following six assignments!
 
-		mean*=I0*gstats;
-		mean/=g0stats;
-		mean/=(upper-lower);
+			mean*=I0*gstats;
+			mean/=g0stats;
+			mean/=(upper-lower);
 
-		sigma*=I0*gstats;
-		sigma/=g0stats;
-		sigma/=(upper-lower);
+			sigma*=I0*gstats;
+			sigma/=g0stats;
+			sigma/=(upper-lower);
 
-		fprintf(out,"%f %f %f %f\n",bincenter,mean,sigma,exp(-Ej*bincenter));
+			fprintf(out,"%f %f ",mean,sigma);
+		}
+
+		fprintf(out,"%f\n",exp(-Ej*bincenter));
 	}
 
 	/*
