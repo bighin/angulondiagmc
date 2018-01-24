@@ -74,6 +74,28 @@ int main(int argc,char *argv[])
 			continue;
 		}
 
+		if(strcmp(argv[c],"--stressphonons")==0)
+		{
+			struct phonon_ctx_t *ctx=init_phonon_ctx(120.0f,128*1024,exp(-10),true);
+			gsl_rng *rctx=gsl_rng_alloc(gsl_rng_mt19937);
+
+			for(int d=0;d<1000000000;d++)
+			{
+				double res0,res1;
+
+				res0=phonon_dist(rctx,ctx,0);
+				res1=phonon_dist(rctx,ctx,1);
+			
+				if((res0<0)||(res1<0))
+				{
+					printf("Error detected!");
+					exit(0);
+				}
+			}
+
+			continue;
+		}
+
 		if(strcmp(argv[c],"--tuning")==0)
 		{
 			double targetlength;

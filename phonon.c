@@ -17,7 +17,7 @@ struct phonon_ctx_t *init_phonon_ctx(double maxtau,int nsteps,double n,bool verb
 {
 	struct phonon_ctx_t *ret;
 
-	int c,nsteps0,nsteps1;;
+	int c;
 	double step;
 
 	assert(nsteps>0);
@@ -120,33 +120,11 @@ struct phonon_ctx_t *init_phonon_ctx(double maxtau,int nsteps,double n,bool verb
 		Since most of datapoints will be 1.0f, we can use a smaller number of steps, saving memory and time.
 	*/
 
-	nsteps0=nsteps1=c;
+	ret->ncy0int=init_interpolation(ret->x,ret->ncy0,nsteps);
+	ret->ncy1int=init_interpolation(ret->x,ret->ncy1,nsteps);
 
-	for(c=0;c<nsteps;c++)
-	{
-		if(ret->ncy0[c]>=1.0f)
-		{
-			nsteps0=c;
-			break;
-		}
-	}
-
-	for(c=0;c<nsteps;c++)
-	{
-		if(ret->ncy1[c]>=1.0f)
-		{
-			nsteps1=c;
-			break;
-		}
-	}
-
-	nsteps0=nsteps1=c;
-
-	ret->ncy0int=init_interpolation(ret->x,ret->ncy0,nsteps0);
-	ret->ncy1int=init_interpolation(ret->x,ret->ncy1,nsteps1);
-
-	ret->invncy0int=init_interpolation(ret->ncy0,ret->x,nsteps0);
-	ret->invncy1int=init_interpolation(ret->ncy1,ret->x,nsteps1);
+	ret->invncy0int=init_interpolation(ret->ncy0,ret->x,nsteps);
+	ret->invncy1int=init_interpolation(ret->ncy1,ret->x,nsteps);
 
 	/*
 		ncy0int will contain the normalized, cumulative phonon distribution, and similarly for ncy1int.
@@ -271,7 +249,7 @@ double phonon_pdf(struct phonon_ctx_t *ctx,int lambda,double deltatau)
 void test_phonon_ctx(struct phonon_ctx_t *ctx)
 {
 	FILE *out;
-	gsl_rng *rctx=gsl_rng_alloc(gsl_rng_taus);
+	gsl_rng *rctx=gsl_rng_alloc(gsl_rng_mt19937);
 	int lambda;
 	
 	/*
