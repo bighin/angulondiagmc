@@ -170,7 +170,7 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	tau1=dgr->endtau*gsl_rng_uniform_pos(dgr->rng_ctx);
 	tau2=tau1+phonon_dist(dgr->rng_ctx,dgr->phonon_ctx,lambda);
 
-	if(tau1>=tau2)
+	if(tau1>tau2)
 	{
 		fprintf(stderr,"Unexpected negative return value from phonon_dist(). Please debug me! (%f %f)\n",tau1,tau2);
 		exit(0);
@@ -388,12 +388,14 @@ void identify_lambda1_clusters(struct diagram_t *dgr,int *clusters,int *icluster
 
 			end=c;
 
+#if 0
 			printf("Found cluster starting and %d and ending at %d. ",start,end);
 
 			if(cluster_has_more_than_one_phonon==true)
 				printf("The cluster has more than one phonon.\n");
 			else
 				printf("The cluster has one phonon.\n");
+#endif
 
 			if(cluster_has_more_than_one_phonon==true)
 			{
@@ -443,8 +445,9 @@ int update_shuffle(struct diagram_t *dgr,struct configuration_t *cfg)
 	assert(MAX_NR_CLUSTERS>=cfg->maxorder);
 	identify_lambda1_clusters(dgr,clusters,&iclusters,MAX_NR_CLUSTERS);
 
-#warning Debug code, remove as soon as possible!
+#warning Debug this function! Use the check below and other checks!
 
+#if 0
 	{
 		if((nr_vertices>20)&&(iclusters>1))
 		{
@@ -456,6 +459,7 @@ int update_shuffle(struct diagram_t *dgr,struct configuration_t *cfg)
 			exit(0);
 		}
 	}
+#endif
 
 	if(iclusters==0)
 		return UPDATE_UNPHYSICAL;
