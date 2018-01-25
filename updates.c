@@ -555,6 +555,47 @@ void diagram_update_length(struct diagram_t *dgr,double newendtau)
 	get_free_propagator(dgr,nr_free_propagators-1)->endtau=newendtau;
 }
 
+void save_free_propagators(struct diagram_t *dgr,struct free_propagators_ctx_t *fpc,int lo,int hi)
+{
+	int c;
+
+	assert(fpc);
+	assert(hi>=lo);
+
+	fpc->nr_free_propagators=hi-lo+1;
+	fpc->lo=lo;
+	fpc->hi=hi;
+
+	fpc->js=malloc(sizeof(int)*fpc->nr_free_propagators);
+
+	for(c=lo;c<hi;c++)
+	{
+		fpc->js[c-lo]=get_right_neighbour(dgr,c)->j;
+	}
+}
+
+void release_free_propagators_ctx(struct free_propagators_ctx_t *fpc)
+{
+	if(fpc)
+	{
+		if(fpc->js)
+			free(fpc->js);
+	}
+}
+
+void restore_free_propagators(struct diagram_t *dgr,struct free_propagators_ctx_t *fpc)
+{
+	int c;
+
+	assert(fpc);
+	assert(fpc->js);
+
+	for(c=fpc->lo;c<fpc->hi;c++)
+		get_right_neighbour(dgr,c)->j=fpc->js[c-fpc->lo];
+
+	release_free_propagators_ctx(fpc);
+}
+
 bool check_triangle_condition_and_parity_from_js(int j1,int j2,int j3)
 {
 	bool result=true;
@@ -685,7 +726,7 @@ bool recouple(struct diagram_t *dgr,int lo,int hi)
 	/*
 		We have tried to get a deltalist summing to 0 for MAX_TRIES times.
 
-		If we didn't managed to do so, it is time to throw an error...
+		If we didn't manage to do so, it is time to throw an error...
 	*/
 
 	if(d==MAX_TRIES)

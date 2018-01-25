@@ -6,6 +6,7 @@
 #include <gsl/gsl_rng.h>
 #include <curses.h>
 #include <term.h>
+#include <float.h>
 
 #include "aux.h"
 #include "spline.h"
@@ -200,6 +201,7 @@ void vlist_copy(struct vlist_t *src,struct vlist_t *dst)
 struct interpolation_t *init_interpolation(double *x,double *y,int n)
 {
 	struct interpolation_t *ret;
+	int cnt;
 	
 	if(!(ret=malloc(sizeof(struct interpolation_t))))
 		return NULL;
@@ -241,10 +243,33 @@ struct interpolation_t *init_interpolation(double *x,double *y,int n)
 		return NULL;
 	}
 
-	memcpy(ret->x,x,sizeof(double)*n);
-	memcpy(ret->y,y,sizeof(double)*n);
-	ret->n=n;
-	
+	/*
+		We do not need to take into account points that are too close,
+		actually they will make the spline interpolation return NaN.
+	*/
+
+	cnt=0;
+	ret->x[0]=x[0];
+	ret->y[0]=y[0];
+
+	for(int c=1;c<n;c++)
+	{
+		if(fabs(x[c]-ret->x[cnt])<=DBL_EPSILON)
+			continue;
+
+		if(fabs(y[c]-ret->y[cnt])<=DBL_EPSILON)
+			continue;
+
+		cnt++;
+		ret->x[cnt]=x[c];
+		ret->y[cnt]=y[c];
+	}
+
+	cnt++;
+	ret->x=realloc(ret->x,sizeof(double)*cnt);
+	ret->y=realloc(ret->y,sizeof(double)*cnt);
+	ret->n=cnt;
+
 	spline(ret->x,ret->y,ret->n,0.0f,0.0f,ret->y2);
 
 	return ret;

@@ -354,6 +354,69 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	return UPDATE_ACCEPTED;
 }
 
+void identify_lambda1_clusters(struct diagram_t *dgr,int *clusters,int *iclusters,int maxnrclusters)
+{
+	int nr_vertices=get_nr_vertices(dgr);
+
+	bool in_cluster=false;
+	bool cluster_has_more_than_one_phonon=false;
+	int start=-1,end=-1;
+
+	*iclusters=0;
+
+	for(int c=0;c<nr_vertices;c++)
+	{
+		struct vertex_t *thisvertex=get_vertex(dgr,c);
+		
+		/*
+			We are entering a new cluster
+		*/
+		
+		if((thisvertex->left->arcs_over_me_lambda1==0)&&(thisvertex->right->arcs_over_me_lambda1>0))
+		{
+			in_cluster=true;
+			start=c;
+		}
+
+		/*
+			We are leaving a cluster
+		*/
+
+		if((thisvertex->left->arcs_over_me_lambda1>0)&&(thisvertex->right->arcs_over_me_lambda1==0))
+		{
+			assert(in_cluster==true);
+
+			end=c;
+
+			printf("Found cluster starting and %d and ending at %d. ",start,end);
+
+			if(cluster_has_more_than_one_phonon==true)
+				printf("The cluster has more than one phonon.\n");
+			else
+				printf("The cluster has one phonon.\n");
+
+			if(cluster_has_more_than_one_phonon==true)
+			{
+				clusters[(*iclusters)*2]=start;
+				clusters[(*iclusters)*2+1]=end;
+				(*iclusters)++;
+			
+				assert((*iclusters)<maxnrclusters);
+			}
+
+			in_cluster=false;
+			cluster_has_more_than_one_phonon=false;
+		}
+
+		/*
+			The cluster we are in has more than one phonon inside.
+		*/
+
+		if((in_cluster==true)&&(thisvertex->right->arcs_over_me_lambda1>1))
+			cluster_has_more_than_one_phonon=true;
+	}
+}
+
 int update_shuffle(struct diagram_t *dgr,struct configuration_t *cfg)
 {
 	int nr_vertices;
@@ -361,43 +424,86 @@ int update_shuffle(struct diagram_t *dgr,struct configuration_t *cfg)
 	bool is_accepted;
 
 #ifndef NDEBUG
-	bool result;
+	double oldweight=diagram_weight(dgr);
 #endif
 
-	struct diagram_t *old;
+#define MAX_NR_CLUSTERS	(1024)
+
+	int clusters[2*MAX_NR_CLUSTERS];
+	int iclusters;
+	int target,targetstart,targetend;
+
+	struct free_propagators_ctx_t *fpc;
 
 	nr_vertices=get_nr_vertices(dgr);
 	
 	if(nr_vertices<1)
 		return UPDATE_UNPHYSICAL;
 
-	old=diagram_clone(dgr);
+	assert(MAX_NR_CLUSTERS>=cfg->maxorder);
+	identify_lambda1_clusters(dgr,clusters,&iclusters,MAX_NR_CLUSTERS);
 
-#ifndef NDEBUG
-	result=recouple(dgr,0,nr_vertices-1);
-	assert(result==true);
-#else
-	recouple(dgr,0,nr_vertices-1);
-#endif
+#warning Debug code, remove as soon as possible!
 
-	weightratio=calculate_propagators_and_vertices(dgr,0,nr_vertices-1);
-	weightratio/=calculate_propagators_and_vertices(old,0,nr_vertices-1);
+	{
+		if((nr_vertices>20)&&(iclusters>1))
+		{
+			print_diagram(dgr,PRINT_TOPOLOGY|PRINT_PROPAGATORS);
+		
+			for(int d=0;d<iclusters;d++)
+				printf("%d %d\n",clusters[2*d],clusters[2*d+1]);
+	
+			exit(0);
+		}
+	}
+
+	if(iclusters==0)
+		return UPDATE_UNPHYSICAL;
+
+	target=gsl_rng_uniform_int(dgr->rng_ctx,iclusters);
+	targetstart=clusters[2*target];
+	targetend=clusters[2*target+1];
+
+	assert(targetstart>=0);
+	assert(targetend>=0);
+	assert(targetstart<nr_vertices);
+	assert(targetend<nr_vertices);
+	assert(targetend>targetstart);
+
+	fpc=malloc(sizeof(struct free_propagators_ctx_t));
+	assert(fpc!=NULL);
+
+	save_free_propagators(dgr,fpc,targetstart,targetend);
+
+	weightratio=1.0f;
+	weightratio/=calculate_propagators_and_vertices(dgr,targetstart,targetend);
+
+	recouple(dgr,targetstart,targetend);
+
+	weightratio*=calculate_propagators_and_vertices(dgr,targetstart,targetend);
 
 	acceptance_ratio=weightratio;
-
-	//assert(almost_same_float(weightratio,diagram_weight(dgr)/diagram_weight(old)));
 
 	is_accepted=(gsl_rng_uniform(dgr->rng_ctx)<acceptance_ratio)?(true):(false);
 
 	if(is_accepted==false)
 	{
-		diagram_copy(old,dgr);
-		fini_diagram(old);
+		restore_free_propagators(dgr,fpc);
+
+#ifndef NDEBUG
+		if(isfinite(oldweight)&&isfinite(diagram_weight(dgr)))
+			assert(almost_same_float(oldweight,diagram_weight(dgr))==true);
+#endif
+		if(fpc)
+			free(fpc);
 
 		return UPDATE_REJECTED;
 	}
 
-	fini_diagram(old);
+	release_free_propagators_ctx(fpc);
+
+	if(fpc)
+		free(fpc);
 
 	return UPDATE_ACCEPTED;
 }
@@ -509,7 +615,7 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 
 	struct timeval starttime;
 
-#define DIAGRAM_NR_UPDATES	(3)
+#define DIAGRAM_NR_UPDATES	(4)
 
 	int (*updates[DIAGRAM_NR_UPDATES])(struct diagram_t *,struct configuration_t *);
 	char *update_names[DIAGRAM_NR_UPDATES];
@@ -529,10 +635,12 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 	updates[0]=update_length;
 	updates[1]=update_add_phonon_line;
 	updates[2]=update_remove_phonon_line;
+	updates[3]=update_shuffle;
 
 	update_names[0]="UpdateLength";
 	update_names[1]="AddPhononLine";
 	update_names[2]="RemovePhononLine";
+	update_names[3]="Shuffle";
 
 	/*
 		We reset the update statistics

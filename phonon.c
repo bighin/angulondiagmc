@@ -218,6 +218,12 @@ double phonon_dist(gsl_rng *rctx,struct phonon_ctx_t *ctx,int lambda)
 
 	retval=get_point(it,x);
 
+	if(!isfinite(retval))
+	{
+		printf("Error condition: phonon_dist() did not return a finite value! (x=%f, retval=%f)\n",x,retval);
+		exit(0);
+	}
+
 	if(retval<=DBL_EPSILON)
 		return DBL_EPSILON;
 

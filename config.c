@@ -15,6 +15,8 @@ int configuration_handler(void *user,const char *section,const char *name,const 
 {
 	struct configuration_t *pconfig=(struct configuration_t *)(user);
 
+	extern double u0,u1,r0,r1,abb;
+
 #define MATCH(s,n) ((strcmp(section,s)==0)&&(strcmp(name,n)==0))
 
 	if(MATCH("general","prefix"))
@@ -89,6 +91,26 @@ int configuration_handler(void *user,const char *section,const char *name,const 
 	else if(MATCH("potential","logn"))
 	{
 		pconfig->n=exp(atof(value));
+	}
+	else if(MATCH("potential","u0"))
+	{
+		u0=atof(value);
+	}
+	else if(MATCH("potential","u1"))
+	{
+		u1=atof(value);
+	}
+	else if(MATCH("potential","r0"))
+	{
+		r0=atof(value);
+	}
+	else if(MATCH("potential","r1"))
+	{
+		r1=atof(value);
+	}
+	else if(MATCH("potential","abb"))
+	{
+		abb=atof(value);
 	}
 	else if(MATCH("sampling","bins"))
 	{

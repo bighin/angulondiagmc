@@ -60,10 +60,10 @@ struct diagram_t *init_diagram(struct diagram_parameters_t *dpars,bool verbose)
 
 	ret->n=dpars->n;
 
-	ret->phonons=init_vlist(sizeof(struct arc_t),16*1024);
-	ret->midpoints=init_vlist(sizeof(double),16*1024);
-	ret->free_propagators=init_vlist(sizeof(struct g0_t),1+32*1024);
-	ret->vertices=init_vlist(sizeof(struct vertex_t),32*1024);
+	ret->phonons=init_vlist(sizeof(struct arc_t),MAX_NR_PHONONS);
+	ret->midpoints=init_vlist(sizeof(double),2*MAX_NR_PHONONS);
+	ret->free_propagators=init_vlist(sizeof(struct g0_t),1+2*MAX_NR_PHONONS);
+	ret->vertices=init_vlist(sizeof(struct vertex_t),2*MAX_NR_PHONONS);
 
 	/*
 		We add the initial, lone propagator.
@@ -649,10 +649,10 @@ struct diagram_t *diagram_clone(struct diagram_t *src)
 	if(!(ret=malloc(sizeof(struct diagram_t))))
 		return NULL;
 
-	ret->phonons=init_vlist(sizeof(struct arc_t),16*1024);
-	ret->midpoints=init_vlist(sizeof(double),16*1024);
-	ret->free_propagators=init_vlist(sizeof(struct g0_t),1+32*1024);
-	ret->vertices=init_vlist(sizeof(struct vertex_t),32*1024);
+	ret->phonons=init_vlist(sizeof(struct arc_t),MAX_NR_PHONONS);
+	ret->midpoints=init_vlist(sizeof(double),2*MAX_NR_PHONONS);
+	ret->free_propagators=init_vlist(sizeof(struct g0_t),1+2*MAX_NR_PHONONS);
+	ret->vertices=init_vlist(sizeof(struct vertex_t),2*MAX_NR_PHONONS);
 
 	diagram_copy(src,ret);
 

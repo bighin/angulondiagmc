@@ -11,8 +11,16 @@ void diagram_remove_phonon_line(struct diagram_t *dgr,int c);
 void diagram_add_phonon_line(struct diagram_t *dgr,double tau1,double tau2,int lambda,int mu);
 void diagram_update_length(struct diagram_t *dgr,double newendtau);
 
-bool diagram_add_worm(struct diagram_t *dgr,int target1,int target2,int deltalambda);
-bool diagram_remove_worm(struct diagram_t *dgr,int index);
+struct free_propagators_ctx_t
+{
+	int nr_free_propagators;
+	int lo,hi;
+	int *js;
+};
+
+void save_free_propagators(struct diagram_t *dgr,struct free_propagators_ctx_t *fpc,int lo,int hi);
+void release_free_propagators_ctx(struct free_propagators_ctx_t *fpc);
+void restore_free_propagators(struct diagram_t *dgr,struct free_propagators_ctx_t *fpc);
 
 bool recouple(struct diagram_t *dgr,int lo,int hi);
 

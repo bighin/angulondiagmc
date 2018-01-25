@@ -91,7 +91,14 @@ struct diagram_parameters_t
 
 /*
 	This structure defines a diagram
+
+	Note that MAX_NR_PHONONS is the maximum number of phonons
+	that a diagram_t structure can accommodate due to memory constrains.
+	Then in the MC routines we will limit the sampling process to a much
+	lower limit.
 */
+
+#define MAX_NR_PHONONS	(8*1024)
 
 struct diagram_t
 {
