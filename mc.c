@@ -920,8 +920,6 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 	fprintf(out,"# Iterations: %d\n",config->iterations);
 	fprintf(out,"# Thermalization sweeps: %d\n",config->thermalization);
 
-	fprintf(out,"# Thermalization sweeps: %d\n",config->thermalization);
-
 	/*
 		FIXME Poco elegante!
 	*/

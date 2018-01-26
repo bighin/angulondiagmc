@@ -116,7 +116,7 @@ int main(int argc,char *argv[])
 
 			j=config.j;
 
-			lo=-10.0f+j*(j+1);
+			lo=-15.0f+j*(j+1);
 			hi=0.0f+j*(j+1);
 
 			for(d=0;d<=10;d++)
