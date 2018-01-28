@@ -122,7 +122,7 @@ int main(int argc,char *argv[])
 
 			fprintf(stderr,"Diagrammatic Monte Carlo for the angulon (automatic chemical potential tuning)\n");
 
-			targetlength=5.0f;
+			targetlength=7.5f;
 
 			j=config.j;
 
