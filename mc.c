@@ -953,7 +953,7 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 	}
 	
 	fprintf(out,"\n#\n");
-	fprintf(out,"# <Bin center> <G blocksize[0]> <Sigma_G blocksize[0]> ... <G blocksize[N]> <Sigma_G blocksize[N]> <G0>\n");
+	fprintf(out,"# <Bin center> <G> <Sigma_G blocksize[0]> ... <Sigma_G blocksize[N]> <G0>\n");
 
 	/*
 		We normalize the histogram...
@@ -1008,7 +1008,10 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 			sigma/=g0stats;
 			sigma/=(upper-lower);
 
-			fprintf(out,"%f %f ",mean,sigma);
+			if(k==0)
+				fprintf(out,"%f %f ",mean,sigma);
+			else
+				fprintf(out,"%f ",sigma);
 		}
 
 		fprintf(out,"%f\n",exp(-Ej*bincenter));
