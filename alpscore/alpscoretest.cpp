@@ -112,25 +112,23 @@ angulon_diagmc::angulon_diagmc(parameters_type const &params, std::size_t seed_o
 
 	binwidth=config.maxtau/nbins;
 
-	measurements << alps::accumulators::LogBinningAccumulator<std::vector<double>>("G");
-	measurements << alps::accumulators::LogBinningAccumulator<std::vector<double>>("G0");
-	measurements << alps::accumulators::LogBinningAccumulator<std::vector<double>>("G1");
-	measurements << alps::accumulators::LogBinningAccumulator<double>("intG0");
-	measurements << alps::accumulators::LogBinningAccumulator<double>("order");
+	measurements << alps::accumulators::FullBinningAccumulator<std::vector<double>>("G");
+	measurements << alps::accumulators::FullBinningAccumulator<std::vector<double>>("G0");
+	measurements << alps::accumulators::FullBinningAccumulator<std::vector<double>>("G1");
+	measurements << alps::accumulators::FullBinningAccumulator<double>("intG0");
+	measurements << alps::accumulators::FullBinningAccumulator<double>("order");
         measurements << alps::accumulators::MeanAccumulator<std::vector<double>>("order_frequencies");
 
 	updates.push_back(std::make_pair(update_length,"UpdateLength"));
 	updates.push_back(std::make_pair(update_add_phonon_line,"AddPhononLine"));
 	updates.push_back(std::make_pair(update_remove_phonon_line,"RemovePhononLine"));
-	updates.push_back(std::make_pair(update_shift_vertex,"ShiftVertex"));
-	updates.push_back(std::make_pair(update_swap_deltajs,"SwapDeltajs"));
-	updates.push_back(std::make_pair(update_change_mu,"ChangeMu"));
+	updates.push_back(std::make_pair(update_shuffle,"Shuffle"));
 
 	int nr_updates=updates.size();
-	
+
 	accepted.resize(nr_updates);
 	rejected.resize(nr_updates);
-	
+
 	physical_updates.resize(1+config.maxorder);
 	unphysical_updates.resize(1+config.maxorder);
 
@@ -346,7 +344,7 @@ void angulon_diagmc::output_data(const alps::results_type<angulon_diagmc>::type 
         const alps::accumulators::result_wrapper& Gnorm=I0*results["G"]/results["intG0"];
         const alps::accumulators::result_wrapper& logGnorm=log(Gnorm);
 
-	for(int c=0;c<nbins/10;c++)
+	for(int c=0;c<nbins;c++)
 	{
 		double bincenter=histogram_bin_center(c);
 		double free_rotor_energy=config.j*(config.j+1.0f);

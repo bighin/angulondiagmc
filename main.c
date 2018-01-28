@@ -19,7 +19,10 @@
 #include "selfenergies.h"
 #include "config.h"
 
-double try_diagmc_and_get_length(struct configuration_t *config,double chempot)
+#define RETURN_AVGLENGTH	(22)
+#define RETURN_AVGORDER		(23)
+
+double try_diagmc_and_get_length(struct configuration_t *config,double chempot,short retval)
 {
 	struct mc_output_data_t output;
 
@@ -32,7 +35,14 @@ double try_diagmc_and_get_length(struct configuration_t *config,double chempot)
 	
 	printf("Result: (chempot, avglength) = (%f %f)\n\n",config->chempot,output.avglength);
 	
-	return output.avglength;
+	if(retval==RETURN_AVGLENGTH)
+		return output.avglength;
+
+	if(retval==RETURN_AVGORDER)
+		return output.avgorder;
+
+	printf("Error in try_diagmc_and_get_length()!\n");
+	exit(0);
 }
 
 void usage(char *argv0)
@@ -112,7 +122,7 @@ int main(int argc,char *argv[])
 
 			fprintf(stderr,"Diagrammatic Monte Carlo for the angulon (automatic chemical potential tuning)\n");
 
-			targetlength=10.0f;
+			targetlength=5.0f;
 
 			j=config.j;
 
@@ -125,7 +135,7 @@ int main(int argc,char *argv[])
 				
 				mid=(lo+hi)/2.0f;
 				load_configuration(argv[c],&config);
-				fmid=try_diagmc_and_get_length(&config,mid);
+				fmid=try_diagmc_and_get_length(&config,mid,RETURN_AVGLENGTH);
 
 				if(fmid<targetlength)
 				{
@@ -135,7 +145,59 @@ int main(int argc,char *argv[])
 				{
 					hi=mid;
 				}
-			}	
+			}
+
+			printf("Performing final run with full time control\n");
+
+			load_configuration(argv[c],&config);
+			config.chempot=(lo+hi)/2.0f;
+			do_diagmc(&config,&output);
+
+			printf("Final result: (chempot, avglength) = (%f %f)\n\n",config.chempot,output.avglength);
+
+			continue;
+		}
+
+		if(strcmp(argv[c],"--alttuning")==0)
+		{
+			double targetorder;
+			double lo,hi,mid;
+			int d,j;
+			
+			if((c+1)>=argc)
+				usage(argv[0]);
+
+			c++;
+
+			if(load_configuration(argv[c],&config)==false)
+				exit(0);
+
+			fprintf(stderr,"Diagrammatic Monte Carlo for the angulon (automatic chemical potential tuning, alternate version)\n");
+
+			targetorder=30.0f;
+
+			j=config.j;
+
+			lo=-15.0f+j*(j+1);
+			hi=0.0f+j*(j+1);
+
+			for(d=0;d<=10;d++)
+			{
+				double fmid;
+				
+				mid=(lo+hi)/2.0f;
+				load_configuration(argv[c],&config);
+				fmid=try_diagmc_and_get_length(&config,mid,RETURN_AVGORDER);
+
+				if(fmid<targetorder)
+				{
+					lo=mid;
+				}
+				else
+				{
+					hi=mid;
+				}
+			}
 
 			printf("Performing final run with full time control\n");
 
