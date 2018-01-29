@@ -13,6 +13,7 @@ bool configuration_is_physical(struct diagram_t *dgr);
 bool angular_momentum_is_conserved(struct diagram_t *dgr);
 
 double calculate_propagators_and_vertices(struct diagram_t *dgr,int startmidpoint,int endmidpoint);
+double calculate_propagators_and_vertices_except_at_borders(struct diagram_t *dgr,int startmidpoint,int endmidpoint);
 
 int deltaj(struct diagram_t *dgr,int vertex);
 void change_deltaj(struct diagram_t *dgr,int index,int newdeltaj);

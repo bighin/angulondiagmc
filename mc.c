@@ -183,18 +183,18 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 		We save the current diagram and the line is added...
 	*/
 
-	weightratio=1.0f/calculate_propagators_and_vertices(dgr,0,get_nr_vertices(dgr)-1);
-
-	diagram_add_phonon_line(dgr,tau1,tau2,lambda,mu);
+	diagram_add_phonon_line(dgr,tau1,tau2,lambda,mu,&weightratio);
+	weightratio=1.0f/weightratio;
 
 	/*
 		...and finally we fix the \Delta_j's at every vertex
 	*/
 
 	thisline=get_phonon_line(dgr,get_nr_phonons(dgr)-1);
+
 	change_deltaj(dgr,thisline->endmidpoint,deltaj2);
 	change_deltaj(dgr,thisline->startmidpoint,deltaj1);
-	45
+
 	if(propagators_are_allowed(dgr)==false)
 	{
 		change_deltaj(dgr,thisline->endmidpoint,0);
@@ -215,7 +215,7 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	*/
 
 	weightratio*=calculate_arc_weight(dgr,thisline);
-	weightratio*=calculate_propagators_and_vertices(dgr,0,get_nr_vertices(dgr)-1);
+	weightratio*=calculate_propagators_and_vertices(dgr,thisline->startmidpoint,thisline->endmidpoint);
 
 	if(weightratio<0.0f)
 		dgr->sign*=-1;
@@ -289,7 +289,7 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	deltaj1=deltaj(dgr,startmidpoint);
 	deltaj2=deltaj(dgr,endmidpoint);
 
-	weightratio=1.0f/calculate_propagators_and_vertices(dgr,0,get_nr_vertices(dgr)-1);
+	weightratio=1.0f/calculate_propagators_and_vertices(dgr,startmidpoint,endmidpoint);
 
 	change_deltaj(dgr,endmidpoint,0);
 	change_deltaj(dgr,startmidpoint,0);
@@ -297,7 +297,7 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	if(propagators_are_allowed(dgr)==false)
 	{
-		diagram_add_phonon_line(dgr,tau1,tau2,lambda,mu);
+		diagram_add_phonon_line(dgr,tau1,tau2,lambda,mu,NULL);
 		change_deltaj(dgr,endmidpoint,deltaj2);
 		change_deltaj(dgr,startmidpoint,deltaj1);
 
@@ -310,7 +310,7 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	}
 
 	weightratio/=targetweight;
-	weightratio*=calculate_propagators_and_vertices(dgr,0,get_nr_vertices(dgr)-1);
+	weightratio*=calculate_propagators_and_vertices(dgr,startmidpoint,endmidpoint-2);
 
 	if(weightratio<0.0f)
 		dgr->sign*=-1;
@@ -336,7 +336,7 @@ int update_remove_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 
 	if(is_accepted==false)
 	{
-		diagram_add_phonon_line(dgr,tau1,tau2,lambda,mu);
+		diagram_add_phonon_line(dgr,tau1,tau2,lambda,mu,NULL);
 		change_deltaj(dgr,endmidpoint,deltaj2);
 		change_deltaj(dgr,startmidpoint,deltaj1);
 

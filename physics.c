@@ -204,7 +204,7 @@ bool angular_momentum_is_conserved(struct diagram_t *dgr)
 double calculate_propagators_and_vertices(struct diagram_t *dgr,int startmidpoint,int endmidpoint)
 {
 	double ret=1.0f;
-	int c;
+	int c=0;
 
 	for(c=startmidpoint;c<=endmidpoint;c++)
 	{
@@ -212,7 +212,34 @@ double calculate_propagators_and_vertices(struct diagram_t *dgr,int startmidpoin
 		ret*=calculate_vertex_weight(dgr,c);
 	}
 
-	ret*=calculate_free_propagator_weight(dgr,get_right_neighbour(dgr,endmidpoint));
+	if(c==0)
+		ret*=calculate_free_propagator_weight(dgr,get_free_propagator(dgr,0));
+	else
+		ret*=calculate_free_propagator_weight(dgr,get_right_neighbour(dgr,endmidpoint));
+
+	return ret;
+}
+
+double calculate_propagators_and_vertices_except_at_borders(struct diagram_t *dgr,int startmidpoint,int endmidpoint)
+{
+	double ret=1.0f;
+	int c;
+
+	for(c=startmidpoint;c<=endmidpoint;c++)
+	{
+		if(c==startmidpoint)
+			ret*=fabs(calculate_free_propagator_weight(dgr,get_left_neighbour(dgr,c)));
+		else
+			ret*=calculate_free_propagator_weight(dgr,get_left_neighbour(dgr,c));
+
+		if((c!=startmidpoint)&&(c!=endmidpoint))
+			ret*=calculate_vertex_weight(dgr,c);
+	}
+
+	if(c==0)
+		ret*=fabs(calculate_free_propagator_weight(dgr,get_free_propagator(dgr,0)));
+	else
+		ret*=fabs(calculate_free_propagator_weight(dgr,get_right_neighbour(dgr,endmidpoint)));
 
 	return ret;
 }

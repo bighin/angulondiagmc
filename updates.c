@@ -10,6 +10,7 @@
 #include "debug.h"
 #include "updates.h"
 #include "phonon.h"
+#include "physics.h"
 
 /*
 	This function updates all the cross-referencing inside a diagram,
@@ -230,7 +231,7 @@ int tau_binary_search_failsafe(struct diagram_t *dgr,double tau)
 	return val;
 }
 
-void diagram_add_phonon_line(struct diagram_t *dgr,double tau1,double tau2,int lambda,int mu)
+void diagram_add_phonon_line(struct diagram_t *dgr,double tau1,double tau2,int lambda,int mu,double *weight)
 {
 	struct arc_t *arc;
 	int c,lo,hi;
@@ -291,6 +292,9 @@ void diagram_add_phonon_line(struct diagram_t *dgr,double tau1,double tau2,int l
 	}
 
 	assert(hi>lo);
+
+	if(weight!=NULL)
+		(*weight)=calculate_propagators_and_vertices_except_at_borders(dgr,arc->startmidpoint,arc->endmidpoint);	
 
 	/*
 		We update the m quantum number of the free
