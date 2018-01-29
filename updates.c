@@ -299,11 +299,6 @@ void diagram_add_phonon_line(struct diagram_t *dgr,double tau1,double tau2,int l
 
 	for(c=arc->startmidpoint+1;c<=arc->endmidpoint;c++)
 		get_free_propagator(dgr,c)->m-=mu;
-
-	/*
-		Finally if \lambda >= 1 we add the present propagator as a node
-		to an interval tree
-	*/
 }
 
 void diagram_remove_start_midpoint(struct diagram_t *dgr,int c)

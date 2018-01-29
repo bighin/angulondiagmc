@@ -190,11 +190,11 @@ int update_add_phonon_line(struct diagram_t *dgr,struct configuration_t *cfg)
 	/*
 		...and finally we fix the \Delta_j's at every vertex
 	*/
-	
+
 	thisline=get_phonon_line(dgr,get_nr_phonons(dgr)-1);
 	change_deltaj(dgr,thisline->endmidpoint,deltaj2);
 	change_deltaj(dgr,thisline->startmidpoint,deltaj1);
-
+	45
 	if(propagators_are_allowed(dgr)==false)
 	{
 		change_deltaj(dgr,thisline->endmidpoint,0);
