@@ -498,6 +498,9 @@ int update_shuffle(struct diagram_t *dgr,struct configuration_t *cfg)
 		if(isfinite(oldweight)&&isfinite(diagram_weight(dgr)))
 			assert(almost_same_float(oldweight,diagram_weight(dgr))==true);
 #endif
+
+#warning DO WE NEED A CALL TO release_free_propagators_ctx(fpc) here?
+
 		if(fpc)
 			free(fpc);
 
@@ -603,7 +606,7 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 	struct diagram_t *dgr;
 	struct diagram_parameters_t dpars;
 
-	gsl_histogram *g,*g0,*g1,*g2;
+	gsl_histogram *g,*g0,*g1,*g2,*gplus,*gminus;
 
 #define NR_BLOCKSIZES	(5)
 
@@ -718,11 +721,15 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 	g0=gsl_histogram_alloc(config->bins);
 	g1=gsl_histogram_alloc(config->bins);
 	g2=gsl_histogram_alloc(config->bins);
+	gplus=gsl_histogram_alloc(config->bins);
+	gminus=gsl_histogram_alloc(config->bins);
 
 	gsl_histogram_set_ranges_uniform(g,0.0f,config->bins*config->width);
 	gsl_histogram_set_ranges_uniform(g0,0.0f,config->bins*config->width);
 	gsl_histogram_set_ranges_uniform(g1,0.0f,config->bins*config->width);
 	gsl_histogram_set_ranges_uniform(g2,0.0f,config->bins*config->width);
+	gsl_histogram_set_ranges_uniform(gplus,0.0f,config->bins*config->width);
+	gsl_histogram_set_ranges_uniform(gminus,0.0f,config->bins*config->width);
 
 	sst=init_super_sampler(blocksizes,NR_BLOCKSIZES,config->bins,config->width);
 
@@ -802,8 +809,13 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 			if((c>config->thermalization)&&((physical_updates%config->decorrelation)==0))
 			{
 				super_sampler_add_time_sample(sst,dgr->endtau,dgr->sign);
-				
+
 				gsl_histogram_accumulate(g,dgr->endtau,dgr->sign);
+
+				if(dgr->sign>0.0f)
+					gsl_histogram_increment(gplus,dgr->endtau);
+				else
+					gsl_histogram_increment(gminus,dgr->endtau);
 
 				gstats++;
 
@@ -1014,7 +1026,20 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 				fprintf(out,"%f ",sigma);
 		}
 
-		fprintf(out,"%f\n",exp(-Ej*bincenter));
+		fprintf(out,"%f",exp(-Ej*bincenter));
+
+		{
+			double plus,minus,ratio;
+		
+			plus=gsl_histogram_get(gplus,d);
+			minus=gsl_histogram_get(gminus,d);
+
+			ratio=plus/(plus+minus);
+		
+			fprintf(out," %f",ratio);
+		}
+
+		fprintf(out,"\n");
 	}
 
 	/*
@@ -1035,6 +1060,8 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 	gsl_histogram_free(g0);
 	gsl_histogram_free(g1);
 	gsl_histogram_free(g2);
+	gsl_histogram_free(gplus);
+	gsl_histogram_free(gminus);
 
 	fini_super_sampler(sst);
 
