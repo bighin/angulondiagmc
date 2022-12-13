@@ -445,8 +445,6 @@ int update_shuffle(struct diagram_t *dgr,struct configuration_t *cfg)
 	assert(MAX_NR_CLUSTERS>=cfg->maxorder);
 	identify_lambda1_clusters(dgr,clusters,&iclusters,MAX_NR_CLUSTERS);
 
-#warning Debug this function! Use the check below and other checks!
-
 #if 0
 	{
 		if((nr_vertices>20)&&(iclusters>1))
@@ -498,8 +496,6 @@ int update_shuffle(struct diagram_t *dgr,struct configuration_t *cfg)
 		if(isfinite(oldweight)&&isfinite(diagram_weight(dgr)))
 			assert(almost_same_float(oldweight,diagram_weight(dgr))==true);
 #endif
-
-#warning DO WE NEED A CALL TO release_free_propagators_ctx(fpc) here?
 
 		if(fpc)
 			free(fpc);
@@ -1009,8 +1005,6 @@ int do_diagmc(struct configuration_t *config,struct mc_output_data_t *output)
 		{
 			mean=block_histogram_get_mean(sst->bhs[k],d);
 			sigma=sqrtf(block_histogram_get_variance(sst->bhs[k],d));
-
-#warning Check the following six assignments!
 
 			mean*=I0*gstats;
 			mean/=g0stats;
