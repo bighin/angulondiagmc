@@ -60,6 +60,7 @@ struct graph_t
 	*/
 
 	FORMULA f;
+
 };
 
 void emit_6j(struct graph_t *gt,int a,int b,int c,int d,int e,int f);
